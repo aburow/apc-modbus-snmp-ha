@@ -12,6 +12,7 @@ build/
 
 # Test files and exploratory code
 localonly/
+docs/
 
 # Exploratory documentation
 PROTOCOL_COMPARISON.md
