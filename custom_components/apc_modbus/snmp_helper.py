@@ -32,10 +32,21 @@ OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.1.1.2.2.0"
 
 
 async def async_get_snmp_value(
-    host: str, oid: str, community: str = "public", timeout: int = 3
+    host: str, oid: str, community: str = "public", timeout: int = 5
 ) -> str | None:
-    """Query single SNMP OID and return string value."""
+    """Query single SNMP OID and return string value.
+
+    Args:
+        host: IP address of SNMP device
+        oid: SNMP OID to query
+        community: SNMP community string (default: "public")
+        timeout: Query timeout in seconds (default: 5)
+
+    Returns:
+        String value from OID or None if query failed
+    """
     try:
+        _LOGGER.debug("SNMP query to %s OID %s (timeout=%ds)", host, oid, timeout)
         iterator = await get_cmd(
             SnmpEngine(),
             CommunityData(community, mpModel=1),  # SNMPv2c
@@ -47,17 +58,25 @@ async def async_get_snmp_value(
         errorIndication, errorStatus, errorIndex, varBinds = iterator
 
         if errorIndication:
-            _LOGGER.debug("SNMP error: %s", errorIndication)
+            _LOGGER.debug("SNMP error from %s (OID %s): %s", host, oid, errorIndication)
             return None
         elif errorStatus:
-            _LOGGER.debug("SNMP error status: %s at %s", errorStatus, errorIndex)
+            _LOGGER.debug("SNMP error status from %s (OID %s): %s at index %s", host, oid, errorStatus, errorIndex)
             return None
         else:
             for varBind in varBinds:
-                return str(varBind[1])
+                value = str(varBind[1])
+                _LOGGER.debug("SNMP query succeeded: %s=%s", oid, value[:50] if len(value) > 50 else value)
+                return value
 
+        _LOGGER.debug("SNMP query returned no value for OID %s", oid)
+        return None
+
+    except asyncio.TimeoutError:
+        _LOGGER.warning("SNMP query to %s timed out after %ds for OID %s", host, timeout, oid)
+        return None
     except Exception as err:
-        _LOGGER.debug("SNMP query failed for %s: %s", oid, err)
+        _LOGGER.debug("SNMP query failed for %s (OID %s): %s (%s)", host, oid, err, type(err).__name__)
         return None
 
 
