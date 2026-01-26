@@ -10,14 +10,14 @@ import asyncio
 import logging
 from typing import Any
 
-from pysnmp.hlapi.v3arch.asyncio import (
+from pysnmp.hlapi.asyncio import (
     CommunityData,
     ContextData,
     ObjectIdentity,
     ObjectType,
     SnmpEngine,
     UdpTransportTarget,
-    get_cmd,
+    getCmd,
 )
 
 from .device_types import APCDeviceType
@@ -47,14 +47,12 @@ async def async_get_snmp_value(
     """
     try:
         _LOGGER.debug("SNMP query to %s OID %s (timeout=%ds)", host, oid, timeout)
-        # Create transport target (async operation)
-        transport_target = await UdpTransportTarget.create(host, 161)
         # Use asyncio.wait_for to enforce timeout on the SNMP query
         iterator = await asyncio.wait_for(
-            get_cmd(
+            getCmd(
                 SnmpEngine(),
                 CommunityData(community, mpModel=1),  # SNMPv2c
-                transport_target,
+                UdpTransportTarget(host, 161),
                 ContextData(),
                 ObjectType(ObjectIdentity(oid)),
             ),
