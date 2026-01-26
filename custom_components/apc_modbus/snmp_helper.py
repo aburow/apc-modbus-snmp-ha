@@ -10,14 +10,14 @@ import asyncio
 import logging
 from typing import Any
 
-from pysnmp.hlapi.asyncio import (
+from pysnmp.hlapi.v3arch.asyncio import (
     CommunityData,
     ContextData,
     ObjectIdentity,
     ObjectType,
     SnmpEngine,
     UdpTransportTarget,
-    getCmd,
+    get_cmd,
 )
 
 from .device_types import APCDeviceType
@@ -36,7 +36,7 @@ async def async_get_snmp_value(
 ) -> str | None:
     """Query single SNMP OID and return string value."""
     try:
-        iterator = await getCmd(
+        iterator = await get_cmd(
             SnmpEngine(),
             CommunityData(community, mpModel=1),  # SNMPv2c
             UdpTransportTarget((host, 161), timeout=timeout),
