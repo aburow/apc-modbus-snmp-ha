@@ -47,12 +47,16 @@ async def async_get_snmp_value(
     """
     try:
         _LOGGER.debug("SNMP query to %s OID %s (timeout=%ds)", host, oid, timeout)
-        iterator = await get_cmd(
-            SnmpEngine(),
-            CommunityData(community, mpModel=1),  # SNMPv2c
-            UdpTransportTarget((host, 161), timeout=timeout),
-            ContextData(),
-            ObjectType(ObjectIdentity(oid)),
+        # Use asyncio.wait_for to enforce timeout on the SNMP query
+        iterator = await asyncio.wait_for(
+            get_cmd(
+                SnmpEngine(),
+                CommunityData(community, mpModel=1),  # SNMPv2c
+                UdpTransportTarget((host, 161)),
+                ContextData(),
+                ObjectType(ObjectIdentity(oid)),
+            ),
+            timeout=timeout,
         )
 
         errorIndication, errorStatus, errorIndex, varBinds = iterator
