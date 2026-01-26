@@ -52,7 +52,7 @@ async def async_get_snmp_value(
             get_cmd(
                 SnmpEngine(),
                 CommunityData(community, mpModel=1),  # SNMPv2c
-                UdpTransportTarget(host, 161),
+                UdpTransportTarget.create(host, 161),
                 ContextData(),
                 ObjectType(ObjectIdentity(oid)),
             ),
