@@ -14,6 +14,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 
 from .const import (
     CONF_DEVICE_NAME,
+    CONF_DEVICE_TYPE,
     CONF_SNMP_COMMUNITY,
     CONF_UNIT,
     DEFAULT_NAME,
@@ -23,16 +24,23 @@ from .const import (
     DEFAULT_UNIT,
     DOMAIN,
 )
+from .device_types import APCDeviceType
 
 
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
+        vol.Required(CONF_SNMP_COMMUNITY, default=DEFAULT_SNMP_COMMUNITY): str,
+        vol.Required(CONF_DEVICE_TYPE): vol.In(
+            {
+                APCDeviceType.SMART_UPS.value: "Smart-UPS",
+                APCDeviceType.RACK_PDU.value: "NetShelter Rack PDU",
+            }
+        ),
         vol.Optional(CONF_DEVICE_NAME, default=DEFAULT_NAME): str,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
         vol.Optional(CONF_UNIT, default=DEFAULT_UNIT): int,
-        vol.Optional(CONF_SNMP_COMMUNITY, default=DEFAULT_SNMP_COMMUNITY): str,
     }
 )
 

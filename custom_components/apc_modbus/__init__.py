@@ -22,6 +22,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT
 
 from .const import (
     CONF_DEVICE_NAME,
+    CONF_DEVICE_TYPE,
     CONF_SNMP_COMMUNITY,
     CONF_UNIT,
     DEFAULT_NAME,
@@ -36,14 +37,7 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 from .register_factory import get_registers_for_device
-
-try:
-    from .snmp_helper import async_get_device_metadata, detect_device_type
-    SNMP_AVAILABLE = True
-except ImportError:
-    SNMP_AVAILABLE = False
-    async_get_device_metadata = None
-    detect_device_type = None
+from .snmp_helper import async_get_device_metadata
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -58,6 +52,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     device_name = entry.data.get(CONF_DEVICE_NAME, DEFAULT_NAME)
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
+    device_type_str = entry.data.get(CONF_DEVICE_TYPE, APCDeviceType.SMART_UPS.value)
+    # Convert string to enum
+    device_type = APCDeviceType(device_type_str) if device_type_str else APCDeviceType.SMART_UPS
 
     # Create client with timeout to prevent hung connections
     client = ModbusTcpClient(host=host, port=port, timeout=5)
@@ -67,27 +64,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = APCModbusCoordinator(hass, client, unit, device_name)
 
-    # Query SNMP for device metadata and detect device type (non-blocking, fails gracefully)
-    device_type = APCDeviceType.SMART_UPS  # default
-    if SNMP_AVAILABLE and async_get_device_metadata and detect_device_type:
-        try:
-            metadata = await async_get_device_metadata(host, snmp_community)
-            coordinator.set_device_metadata(
-                hw_model=metadata.get("model"),
-                serial_number=metadata.get("serial_number"),
-                fw_version=metadata.get("firmware_version"),
-                fw_date=metadata.get("firmware_date"),
-            )
-            # Detect device type from model string
-            device_type = detect_device_type(metadata.get("model"))
-            coordinator.set_device_type(device_type)
-        except Exception as err:
-            _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
-            # Continue without metadata - Modbus sensors still work, default to Smart-UPS
-            coordinator.set_device_type(APCDeviceType.SMART_UPS)
-    else:
-        _LOGGER.debug("SNMP not available, defaulting device type to Smart-UPS")
-        coordinator.set_device_type(APCDeviceType.SMART_UPS)
+    # Set device type from config
+    coordinator.set_device_type(device_type)
+
+    # Query SNMP for device metadata (required)
+    try:
+        metadata = await async_get_device_metadata(host, snmp_community)
+        coordinator.set_device_metadata(
+            hw_model=metadata.get("model"),
+            serial_number=metadata.get("serial_number"),
+            fw_version=metadata.get("firmware_version"),
+            fw_date=metadata.get("firmware_date"),
+        )
+    except Exception as err:
+        _LOGGER.error("Failed to query SNMP metadata from %s: %s", host, err)
+        raise ConfigEntryNotReady(f"Failed to query SNMP metadata: {err}") from err
 
     # Load registers for detected device type
     registers, blocks, reg_map = get_registers_for_device(coordinator.device_type)
