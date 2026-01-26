@@ -71,7 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Query SNMP for device metadata (async, non-blocking)
     try:
         _LOGGER.debug("Querying SNMP metadata from %s", host)
-        metadata = await async_get_device_metadata(host, snmp_community)
+        metadata = await async_get_device_metadata(host, snmp_community, device_type)
         if metadata and any([metadata.get("model"), metadata.get("serial_number"), metadata.get("firmware_version")]):
             _LOGGER.info("SNMP metadata retrieved: model=%s, serial=%s", metadata.get("model"), metadata.get("serial_number"))
             coordinator.set_device_metadata(

@@ -350,6 +350,12 @@ REGISTER_BLOCKS = [
         "count": 7,
         "registers": [0x00CF, 0x00D0, 0x00D1, 0x00D2, 0x00D3, 0x00D4],
     },
+    {
+        "name": "phase_L1_measurements",
+        "start_address": 0x029B,
+        "count": 6,
+        "registers": [0x029B, 0x029C, 0x029D, 0x029E, 0x029F, 0x02A0],
+    },
 ]
 
 # Lookup map: address -> descriptor

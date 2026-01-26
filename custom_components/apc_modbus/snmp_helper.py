@@ -24,11 +24,17 @@ from .device_types import APCDeviceType
 
 _LOGGER = logging.getLogger(__name__)
 
-# APC UPS SNMP OIDs
-OID_MODEL = "1.3.6.1.4.1.318.1.1.1.1.1.1.0"
-OID_SERIAL = "1.3.6.1.4.1.318.1.1.1.1.2.3.0"
-OID_FIRMWARE = "1.3.6.1.4.1.318.1.1.1.1.2.1.0"
-OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.1.1.2.2.0"
+# APC Smart-UPS SNMP OIDs (1.3.6.1.4.1.318.1.1.1.*)
+SMARTUPS_OID_MODEL = "1.3.6.1.4.1.318.1.1.1.1.1.1.0"
+SMARTUPS_OID_SERIAL = "1.3.6.1.4.1.318.1.1.1.1.2.3.0"
+SMARTUPS_OID_FIRMWARE = "1.3.6.1.4.1.318.1.1.1.1.2.1.0"
+SMARTUPS_OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.1.1.2.2.0"
+
+# APC Rack PDU SNMP OIDs (1.3.6.1.4.1.318.1.1.12.1.*)
+RACKPDU_OID_MODEL = "1.3.6.1.4.1.318.1.1.12.1.5.0"
+RACKPDU_OID_SERIAL = "1.3.6.1.4.1.318.1.1.12.1.6.0"
+RACKPDU_OID_FIRMWARE = "1.3.6.1.4.1.318.1.1.12.1.3.0"
+RACKPDU_OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.12.1.4.0"
 
 
 async def async_get_snmp_value(
@@ -90,25 +96,38 @@ async def async_get_snmp_value(
 
 
 async def async_get_device_metadata(
-    host: str, community: str = "public"
+    host: str, community: str = "public", device_type: APCDeviceType = APCDeviceType.SMART_UPS
 ) -> dict[str, Any]:
     """Query all device metadata via SNMP.
 
     Args:
-        host: UPS IP address
+        host: Device IP address
         community: SNMP community string (default: "public")
+        device_type: Type of APC device (default: SMART_UPS)
 
     Returns dict with keys: model, serial_number, firmware_version, firmware_date
     All values are None if SNMP fails.
     """
-    _LOGGER.debug("Querying SNMP metadata from %s (community: %s)", host, community)
+    _LOGGER.debug("Querying SNMP metadata from %s (community: %s, device_type: %s)", host, community, device_type.value)
+
+    # Select OIDs based on device type
+    if device_type == APCDeviceType.RACK_PDU:
+        oid_model = RACKPDU_OID_MODEL
+        oid_serial = RACKPDU_OID_SERIAL
+        oid_firmware = RACKPDU_OID_FIRMWARE
+        oid_firmware_date = RACKPDU_OID_FIRMWARE_DATE
+    else:  # SMART_UPS or UNKNOWN
+        oid_model = SMARTUPS_OID_MODEL
+        oid_serial = SMARTUPS_OID_SERIAL
+        oid_firmware = SMARTUPS_OID_FIRMWARE
+        oid_firmware_date = SMARTUPS_OID_FIRMWARE_DATE
 
     # Query all OIDs in parallel
     results = await asyncio.gather(
-        async_get_snmp_value(host, OID_MODEL, community),
-        async_get_snmp_value(host, OID_SERIAL, community),
-        async_get_snmp_value(host, OID_FIRMWARE, community),
-        async_get_snmp_value(host, OID_FIRMWARE_DATE, community),
+        async_get_snmp_value(host, oid_model, community),
+        async_get_snmp_value(host, oid_serial, community),
+        async_get_snmp_value(host, oid_firmware, community),
+        async_get_snmp_value(host, oid_firmware_date, community),
         return_exceptions=True,
     )
 
