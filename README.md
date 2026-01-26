@@ -72,18 +72,25 @@ After installation, set up the integration through the UI:
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
 
-### SNMP Requirement
+### SNMP Requirements
 
-SNMP is **mandatory** for all device types. The integration requires SNMP access to:
-- Retrieve device model and identification
-- Get firmware version information
-- Obtain serial number
-- Gather device-specific metadata for proper configuration
+SNMP is **required to be enabled** on the device, but metadata retrieval is optional:
+- The integration will retry SNMP queries 3 times at startup
+- If SNMP queries fail, setup proceeds without device metadata (Modbus still works)
+- Device info (model, serial, firmware) will be empty until SNMP succeeds
+- Once SNMP becomes available, metadata is retrieved on next restart
 
-**Requirements:**
-- SNMP service enabled on the device (port 161)
-- Correct SNMP community string (usually "public")
-- Network access to SNMP port from Home Assistant
+**Recommended Setup:**
+- Ensure SNMP is enabled on the device (port 161)
+- Use the correct SNMP community string (usually "public")
+- Ensure network path is open between Home Assistant and device port 161
+- If setup fails, check Home Assistant logs for SNMP error details
+
+**Fallback Behavior:**
+- If SNMP is unavailable at startup, the integration will still function
+- All Modbus sensors will work normally
+- Device info will show as unavailable until SNMP is accessible
+- No loss of Modbus monitoring functionality
 
 ## Supported Devices
 
@@ -145,14 +152,20 @@ Entity creation is dynamic based on device capabilities:
 
 ## Troubleshooting
 
-### SNMP Connection Failed
-- **Error**: "Failed to query SNMP metadata"
+### SNMP Connection Failed (Device Info Not Populated)
+- **Symptom**: Device model, serial number, and firmware info are not shown
+- **Check logs for**: "Unable to retrieve SNMP metadata after 3 attempts"
+- **Impact**: Integration still works - all Modbus sensors function normally, but device info is empty
 - **Solution**:
-  - Verify SNMP is enabled on the device
-  - Check SNMP community string (usually "public" by default)
-  - Verify network connectivity: `ping <device-ip>`
-  - Check firewall rules allow port 161 (UDP)
-  - Test SNMP manually: `snmpget -v 2c -c public <device-ip> 1.3.6.1.4.1.318.1.1.1.1.1.1.0`
+  1. Verify SNMP is enabled on the device (check device configuration)
+  2. Check SNMP community string (usually "public" by default)
+  3. Verify network connectivity: `ping <device-ip>`
+  4. Check firewall rules allow port 161 (UDP)
+  5. Verify no network path issues: `timeout 5 nc -u <device-ip> 161`
+  6. Test SNMP manually: `snmpget -v 2c -c public <device-ip> 1.3.6.1.4.1.318.1.1.1.1.1.1.0`
+  7. Once fixed, restart Home Assistant or reload the integration
+
+**Note:** The integration will retry SNMP queries 3 times with delays, but won't block setup.
 
 ### Modbus Connection Issues
 - **Error**: "Unable to connect to APC device"
@@ -187,7 +200,14 @@ Entity creation is dynamic based on device capabilities:
 
 ## Version History
 
-### v0.2.0 (Current)
+### v0.2.1 (Current)
+- 🔧 Improved SNMP metadata reliability with retry logic (3 attempts)
+- 🔧 Increased SNMP timeout from 3s to 5s for slower devices
+- 🔧 SNMP metadata now optional at startup (doesn't block setup)
+- 📝 Updated docs clarifying SNMP fallback behavior
+- 🐛 Fixed SNMP query failures blocking integration setup
+
+### v0.2.0
 - ✨ Added multi-device-type support (Smart-UPS + Rack PDU)
 - ✨ Added device type selection in config flow
 - ✨ Made SNMP mandatory for all device types
