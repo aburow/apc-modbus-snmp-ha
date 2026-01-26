@@ -1,0 +1,33 @@
+.venv/
+test_venv/
+__pycache__/
+*.pyc
+*.log
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+*.egg
+
+# Test files and exploratory code
+localonly/
+
+# Exploratory documentation
+PROTOCOL_COMPARISON.md
+TEST_README.md
+AGENTS.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation and resources
+*.pdf
+*.xls
+*.xlsx
+docs/

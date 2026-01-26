@@ -1,0 +1,6 @@
+{
+  "name": "APC SmartUPS Modbus",
+  "domains": ["apc_modbus"],
+  "content_in_root": false,
+  "render_readme": true
+}
