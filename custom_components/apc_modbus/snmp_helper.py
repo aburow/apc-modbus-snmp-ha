@@ -6,11 +6,10 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
-from pysnmp.hlapi.asyncio import (
+from pysnmp.hlapi import (
     CommunityData,
     ContextData,
     ObjectIdentity,
@@ -31,41 +30,47 @@ OID_FIRMWARE = "1.3.6.1.4.1.318.1.1.1.1.2.1.0"
 OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.1.1.2.2.0"
 
 
-async def async_get_snmp_value(
-    host: str, oid: str, community: str = "public", timeout: int = 5
+def get_snmp_value(
+    host: str, oid: str, community: str = "public", timeout: int = 5, retries: int = 3
 ) -> str | None:
-    """Query single SNMP OID and return string value.
+    """Query single SNMP OID and return string value (synchronous).
+
+    This is a blocking call - should be run via hass.async_add_executor_job()
 
     Args:
         host: IP address of SNMP device
         oid: SNMP OID to query
         community: SNMP community string (default: "public")
         timeout: Query timeout in seconds (default: 5)
+        retries: Number of retries (default: 3)
 
     Returns:
         String value from OID or None if query failed
     """
     try:
-        _LOGGER.debug("SNMP query to %s OID %s (timeout=%ds)", host, oid, timeout)
-        # Use asyncio.wait_for to enforce timeout on the SNMP query
-        iterator = await asyncio.wait_for(
+        _LOGGER.debug("SNMP query to %s OID %s (timeout=%ds, retries=%d)", host, oid, timeout, retries)
+
+        errorIndication, errorStatus, errorIndex, varBinds = next(
             getCmd(
                 SnmpEngine(),
                 CommunityData(community, mpModel=1),  # SNMPv2c
-                UdpTransportTarget(host, 161),
+                UdpTransportTarget((host, 161), timeout=timeout, retries=retries),
                 ContextData(),
                 ObjectType(ObjectIdentity(oid)),
-            ),
-            timeout=timeout,
+            )
         )
-
-        errorIndication, errorStatus, errorIndex, varBinds = iterator
 
         if errorIndication:
             _LOGGER.debug("SNMP error from %s (OID %s): %s", host, oid, errorIndication)
             return None
         elif errorStatus:
-            _LOGGER.debug("SNMP error status from %s (OID %s): %s at index %s", host, oid, errorStatus, errorIndex)
+            _LOGGER.debug(
+                "SNMP error status from %s (OID %s): %s at index %s",
+                host,
+                oid,
+                errorStatus.prettyPrint(),
+                errorIndex,
+            )
             return None
         else:
             for varBind in varBinds:
@@ -76,18 +81,17 @@ async def async_get_snmp_value(
         _LOGGER.debug("SNMP query returned no value for OID %s", oid)
         return None
 
-    except asyncio.TimeoutError:
-        _LOGGER.warning("SNMP query to %s timed out after %ds for OID %s", host, timeout, oid)
-        return None
     except Exception as err:
         _LOGGER.debug("SNMP query failed for %s (OID %s): %s (%s)", host, oid, err, type(err).__name__)
         return None
 
 
-async def async_get_device_metadata(
+def get_device_metadata(
     host: str, community: str = "public"
 ) -> dict[str, Any]:
-    """Query all device metadata via SNMP.
+    """Query all device metadata via SNMP (synchronous).
+
+    This is a blocking call - should be run via hass.async_add_executor_job()
 
     Args:
         host: UPS IP address
@@ -98,19 +102,11 @@ async def async_get_device_metadata(
     """
     _LOGGER.debug("Querying SNMP metadata from %s (community: %s)", host, community)
 
-    # Query all OIDs in parallel
-    results = await asyncio.gather(
-        async_get_snmp_value(host, OID_MODEL, community),
-        async_get_snmp_value(host, OID_SERIAL, community),
-        async_get_snmp_value(host, OID_FIRMWARE, community),
-        async_get_snmp_value(host, OID_FIRMWARE_DATE, community),
-        return_exceptions=True,
-    )
-
-    # Handle exceptions in results
-    model, serial, firmware, fw_date = [
-        r if not isinstance(r, Exception) else None for r in results
-    ]
+    # Query all OIDs sequentially (blocking)
+    model = get_snmp_value(host, OID_MODEL, community)
+    serial = get_snmp_value(host, OID_SERIAL, community)
+    firmware = get_snmp_value(host, OID_FIRMWARE, community)
+    fw_date = get_snmp_value(host, OID_FIRMWARE_DATE, community)
 
     metadata = {
         "model": model,

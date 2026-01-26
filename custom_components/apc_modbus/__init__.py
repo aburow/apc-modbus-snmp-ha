@@ -38,7 +38,7 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 from .register_factory import get_registers_for_device
-from .snmp_helper import async_get_device_metadata
+from .snmp_helper import get_device_metadata
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,37 +68,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set device type from config
     coordinator.set_device_type(device_type)
 
-    # Query SNMP for device metadata (with retry logic)
-    metadata = None
-    max_retries = 3
-    retry_count = 0
-
-    while retry_count < max_retries and metadata is None:
-        try:
-            _LOGGER.debug("Querying SNMP metadata (attempt %d/%d)", retry_count + 1, max_retries)
-            metadata = await async_get_device_metadata(host, snmp_community)
-            if metadata and any([metadata.get("model"), metadata.get("serial_number"), metadata.get("firmware_version")]):
-                _LOGGER.info("SNMP metadata retrieved: model=%s, serial=%s", metadata.get("model"), metadata.get("serial_number"))
-                coordinator.set_device_metadata(
-                    hw_model=metadata.get("model"),
-                    serial_number=metadata.get("serial_number"),
-                    fw_version=metadata.get("firmware_version"),
-                    fw_date=metadata.get("firmware_date"),
-                )
-                break
-            else:
-                _LOGGER.debug("SNMP query returned empty metadata")
-                metadata = None
-        except Exception as err:
-            retry_count += 1
-            _LOGGER.warning("Failed to query SNMP metadata from %s (attempt %d/%d): %s", host, retry_count, max_retries, err)
-            if retry_count < max_retries:
-                # Wait before retrying (brief delay)
-                await asyncio.sleep(1)
-
-    if metadata is None:
-        _LOGGER.warning("Unable to retrieve SNMP metadata after %d attempts - proceeding without device info", max_retries)
-        # Don't fail setup - continue with Modbus access
+    # Query SNMP for device metadata (using executor for blocking call)
+    try:
+        _LOGGER.debug("Querying SNMP metadata from %s", host)
+        metadata = await hass.async_add_executor_job(
+            get_device_metadata, host, snmp_community
+        )
+        if metadata and any([metadata.get("model"), metadata.get("serial_number"), metadata.get("firmware_version")]):
+            _LOGGER.info("SNMP metadata retrieved: model=%s, serial=%s", metadata.get("model"), metadata.get("serial_number"))
+            coordinator.set_device_metadata(
+                hw_model=metadata.get("model"),
+                serial_number=metadata.get("serial_number"),
+                fw_version=metadata.get("firmware_version"),
+                fw_date=metadata.get("firmware_date"),
+            )
+        else:
+            _LOGGER.debug("SNMP query returned empty metadata")
+    except Exception as err:
+        _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
+        # Continue without metadata - Modbus sensors still work
 
     # Load registers for detected device type
     registers, blocks, reg_map = get_registers_for_device(coordinator.device_type)
