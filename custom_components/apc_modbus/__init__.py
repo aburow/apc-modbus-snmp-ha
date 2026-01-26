@@ -38,7 +38,7 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 from .register_factory import get_registers_for_device
-from .snmp_helper import get_device_metadata
+from .snmp_helper import async_get_device_metadata
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,12 +68,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set device type from config
     coordinator.set_device_type(device_type)
 
-    # Query SNMP for device metadata (using executor for blocking call)
+    # Query SNMP for device metadata (async, non-blocking)
     try:
         _LOGGER.debug("Querying SNMP metadata from %s", host)
-        metadata = await hass.async_add_executor_job(
-            get_device_metadata, host, snmp_community
-        )
+        metadata = await async_get_device_metadata(host, snmp_community)
         if metadata and any([metadata.get("model"), metadata.get("serial_number"), metadata.get("firmware_version")]):
             _LOGGER.info("SNMP metadata retrieved: model=%s, serial=%s", metadata.get("model"), metadata.get("serial_number"))
             coordinator.set_device_metadata(
