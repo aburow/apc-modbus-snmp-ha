@@ -61,7 +61,7 @@ After installation, set up the integration through the UI:
 2. Click **Create Integration**
 3. Search for and select **APC UPS Modbus**
 4. Fill in the required configuration:
-   - **IP Address**: Modbus/TCP host address of the device
+   - **Host**: Modbus/TCP host name or address of the device
    - **SNMP Community**: SNMP community string (default: "public")
    - **Device Type**: Select from dropdown:
      - **Smart-UPS** - for APC Smart-UPS devices
@@ -159,10 +159,10 @@ Entity creation is dynamic based on device capabilities:
 - **Solution**:
   1. Verify SNMP is enabled on the device (check device configuration)
   2. Check SNMP community string (usually "public" by default)
-  3. Verify network connectivity: `ping <device-ip>`
+  3. Verify network connectivity: `ping <device-host>`
   4. Check firewall rules allow port 161 (UDP)
-  5. Verify no network path issues: `timeout 5 nc -u <device-ip> 161`
-  6. Test SNMP manually: `snmpget -v 2c -c public <device-ip> 1.3.6.1.4.1.318.1.1.1.1.1.1.0`
+  5. Verify no network path issues: `timeout 5 nc -u <device-host> 161`
+  6. Test SNMP manually: `snmpget -v 2c -c public <device-host> 1.3.6.1.4.1.318.1.1.1.1.1.1.0`
   7. Once fixed, restart Home Assistant or reload the integration
 
 **Note:** The integration will retry SNMP queries 3 times with delays, but won't block setup.
@@ -170,11 +170,11 @@ Entity creation is dynamic based on device capabilities:
 ### Modbus Connection Issues
 - **Error**: "Unable to connect to APC device"
 - **Solution**:
-  - Verify device IP address and port are correct
-  - Check network connectivity: `ping <device-ip>`
+  - Verify device host and port are correct
+  - Check network connectivity: `ping <device-host>`
   - Ensure Modbus/TCP is enabled on the device
   - Check firewall rules allow port 502 (TCP)
-  - Verify Home Assistant can reach port 502: `telnet <device-ip> 502`
+  - Verify Home Assistant can reach port 502: `telnet <device-host> 502`
 
 ### Missing Rack PDU Sensors
 - **Issue**: Fewer outlet/bank sensors than expected
@@ -189,7 +189,7 @@ Entity creation is dynamic based on device capabilities:
   - Reduce scan interval setting if too frequent
   - Check Home Assistant system performance
   - For Rack PDU with many outlets, expect longer update cycles
-  - Verify network latency to device: `ping <device-ip>`
+  - Verify network latency to device: `ping <device-host>`
 
 ### Device Type Not Detected
 - **Issue**: Setup asks for device type instead of auto-detecting
