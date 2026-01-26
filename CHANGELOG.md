@@ -2,6 +2,19 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.4] - 2026-01-26
+
+### Added
+- APC Modbus branded icons for the integration
+- Rack PDU SNMP OIDs and phase sensor block reads for improved coverage
+
+### Changed
+- Integration icon updated to `mdi:uninterruptible-power-supply`
+
+### Fixed
+- SNMP async API usage updated for pysnmp v3arch compatibility (PySnmp 7.1.22)
+- Removed invalid manifest icon reference
+
 ## [0.1.0] - 2026-01-25
 
 ### Added

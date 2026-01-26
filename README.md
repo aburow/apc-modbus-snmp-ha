@@ -63,7 +63,7 @@ After installation, set up the integration through the UI:
 4. Fill in the required configuration:
    - **Host**: Modbus/TCP host name or address of the device
    - **SNMP Community**: SNMP community string (default: "public")
-   - **Device Type**: Select from dropdown:
+   - **Device Type**: Select via radio buttons:
      - **Smart-UPS** - for APC Smart-UPS devices
      - **NetShelter Rack PDU** - for APC Rack PDU devices
 5. Optional advanced settings:
