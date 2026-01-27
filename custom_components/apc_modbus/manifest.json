@@ -2,7 +2,6 @@
   "domain": "apc_modbus",
   "name": "APC UPS Modbus",
   "version": "0.3.4",
-  "icon": "mdi:uninterruptible-power-supply",
   "documentation": "https://github.com/aburow/apc-modbus-snmp-ha",
   "requirements": [
     "pymodbus>=3.1.1"
