@@ -230,7 +230,6 @@ Entity creation is dynamic based on device capabilities:
 ## Support
 
 - **Issues**: Report bugs on [GitHub Issues](https://github.com/aburow/apc-modbus-snmp-ha/issues)
-- **Documentation**: See [docs/testing/](docs/testing/) for implementation details
 
 ## License
 
