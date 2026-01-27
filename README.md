@@ -2,9 +2,7 @@
 
 A Home Assistant integration for monitoring APC UPS and Rack PDU devices via Modbus/TCP protocol with SNMP device metadata.
 
-This custom-component does not require additional components such as NUT or APCUPSD
-https://wiki.archlinux.org/title/Network_UPS_Tools
-https://wiki.archlinux.org/title/APC_UPS
+This custom-component runs standalone and DOES NOT require additional components such as NUT or APCUPSD.
 
 Modbus/TCP is an extremely efficient method for collecting bulk data at a high rate and is used in industrial automation services for
 this purpose.
