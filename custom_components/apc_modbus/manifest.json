@@ -5,8 +5,8 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/aburow/apc-modbus-snmp-ha",
-  "issue_tracker": "https://github.com/aburow/apc-modbus-snmp-ha/issues",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/aburow/apc-modbus-snmp-ha/issues",
   "quality_scale": "internal",
   "requirements": [
     "pymodbus>=3.1.1"
