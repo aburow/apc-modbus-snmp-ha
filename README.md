@@ -43,6 +43,34 @@ this purpose.
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
 
+## Architecture
+
+```
+Home Assistant Core
+        |
+        |  (config entry)
+        v
+custom_components/apc_modbus
+        |
+        |  DataUpdateCoordinator (per device)
+        |  - serialized Modbus I/O per host:port
+        |  - block reads with fallback
+        |  - backoff on failures
+        |
+        +-------------------+
+        |                   |
+        v                   v
+   Modbus/TCP           SNMP (metadata)
+   (pymodbus)           (pysnmp in executor)
+        |                   |
+        v                   v
+   APC UPS / PDU       Model/Serial/FW
+        |
+        v
+ Home Assistant Entities
+ (sensors, binary_sensors)
+```
+
 ## Installation
 
 ### Using HACS (Recommended)
@@ -211,10 +239,12 @@ Entity creation is dynamic based on device capabilities:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v0.3.6-dev.6 (Current dev)
-- 🔧 Connect/close per update cycle; log connect/close timing
+### v0.4.0 (Current)
+- 🔧 Improved Modbus stability with per-endpoint serialization and per-cycle connect/close
+- 🔧 Added reconnect/backoff logic and richer debug timing logs
+- 🔧 SNMP metadata queries moved to executor to avoid loop blocking
 
-### v0.3.4 (Latest stable)
+### v0.3.4
 - 🧰 Rack PDU SNMP OIDs and phase sensor block reads
 
 ## Support

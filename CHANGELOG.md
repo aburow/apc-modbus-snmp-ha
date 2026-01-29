@@ -2,6 +2,19 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.4.0] - 2026-01-29
+
+### Added
+- Architecture overview and diagram in README
+
+### Changed
+- Modbus I/O is serialized per host:port and connects/closes per update cycle
+- SNMP metadata queries run in an executor to avoid event loop blocking
+
+### Fixed
+- Recreate Modbus client on socket errors; add reconnect and backoff handling
+- Added detailed timing logs for connect/close and block reads
+
 ## [0.3.6-dev.6] - 2026-01-29
 
 ### Fixed
