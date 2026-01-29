@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.6-dev.4] - 2026-01-29
+
+### Added
+- Extra debug logging for I/O lock acquisition and per-block timing
+
 ## [0.3.6-dev.3] - 2026-01-29
 
 ### Fixed

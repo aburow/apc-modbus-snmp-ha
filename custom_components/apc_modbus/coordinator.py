@@ -13,6 +13,7 @@ Note: pymodbus API compatibility
 from __future__ import annotations
 
 import asyncio
+import time
 import functools
 import logging
 from typing import Any
@@ -184,6 +185,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Serialize all client I/O to avoid concurrent Modbus socket use.
         async with self._io_lock:
+            cycle_start = time.monotonic()
+            _LOGGER.debug("[%s] Acquired I/O lock", self._log_ctx)
             # Try block reads first (optimized) with reconnection logic
             _LOGGER.debug("[%s] Attempting block reads", self._log_ctx)
             block_read_ok = await self._try_block_reads(data, errors)
@@ -210,6 +213,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Log successful data keys for debugging
         _LOGGER.debug("[%s] Successfully read %d registers: %s", self._log_ctx, len(data), ", ".join(sorted(data.keys())))
+        _LOGGER.debug("[%s] Update cycle complete in %.3fs", self._log_ctx, time.monotonic() - cycle_start)
 
         return data
 
@@ -219,6 +223,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         for block in self.register_blocks:
             try:
+                block_start = time.monotonic()
                 _LOGGER.debug(
                     "[%s] Reading block %s (addr 0x%04X, count %d)",
                     self._log_ctx,
@@ -251,7 +256,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     continue
 
                 # Block read successful, increment counter
-                _LOGGER.debug("[%s] Block read succeeded: %s", self._log_ctx, block["name"])
+                _LOGGER.debug(
+                    "[%s] Block read succeeded: %s (%.3fs)",
+                    self._log_ctx,
+                    block["name"],
+                    time.monotonic() - block_start,
+                )
                 block_success_count += 1
 
                 # Decode each register in the block
@@ -317,7 +327,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         result = await self.hass.async_add_executor_job(read_request)
 
                         if not self._is_error_response(result):
-                            _LOGGER.debug("[%s] Block read succeeded after reconnect: %s", self._log_ctx, block["name"])
+                            _LOGGER.debug(
+                                "[%s] Block read succeeded after reconnect: %s (%.3fs)",
+                                self._log_ctx,
+                                block["name"],
+                                time.monotonic() - block_start,
+                            )
                             block_success_count += 1
                             # Decode the registers from this successful block
                             for addr in block["registers"]:
