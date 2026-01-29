@@ -209,25 +209,13 @@ Entity creation is dynamic based on device capabilities:
 
 ## Version History
 
-### v0.2.1 (Current)
-- 🔧 Improved SNMP metadata reliability with retry logic (3 attempts)
-- 🔧 Increased SNMP timeout from 3s to 5s for slower devices
-- 🔧 SNMP metadata now optional at startup (doesn't block setup)
-- 📝 Updated docs clarifying SNMP fallback behavior
-- 🐛 Fixed SNMP query failures blocking integration setup
+For detailed release notes, see `CHANGELOG.md`.
 
-### v0.2.0
-- ✨ Added multi-device-type support (Smart-UPS + Rack PDU)
-- ✨ Added device type selection in config flow
-- ✨ Made SNMP mandatory for all device types
-- ✨ Added dynamic entity creation for Rack PDU
-- ✨ Added capability discovery for Rack PDU
-- 🔧 Refactored register management with factory pattern
-- 📝 Comprehensive documentation updates
+### v0.3.6-dev.1 (Current dev)
+- 🔧 Serialize Modbus socket access to prevent concurrent read disconnects
 
-### v0.1.0
-- Initial release with Smart-UPS support only
-- Optional SNMP metadata
+### v0.3.4 (Latest stable)
+- 🧰 Rack PDU SNMP OIDs and phase sensor block reads
 
 ## Support
 

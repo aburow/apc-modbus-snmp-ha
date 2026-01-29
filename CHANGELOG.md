@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.6-dev.1] - 2026-01-29
+
+### Fixed
+- Serialize Modbus socket access to prevent concurrent reads causing disconnects/broken pipe
+
 ## [0.3.4] - 2026-01-26
 
 ### Added

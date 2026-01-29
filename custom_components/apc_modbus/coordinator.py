@@ -12,6 +12,7 @@ Note: pymodbus API compatibility
 
 from __future__ import annotations
 
+import asyncio
 import functools
 import logging
 from typing import Any
@@ -47,6 +48,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.unit = unit
         self.device_name = device_name
+        # Serialize Modbus client access to avoid concurrent reads on one socket.
+        self._client_lock = asyncio.Lock()
         # Initialize data as empty dict to ensure it's always present
         self.data: dict[str, Any] = {}
         # Device metadata (populated via SNMP at startup)
@@ -121,22 +124,23 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             # Try to read capability registers
-            for cap_name, addr in capability_regs.items():
-                try:
-                    read_request = functools.partial(
-                        self.client.read_holding_registers,
-                        addr,
-                        count=1,
-                        device_id=self.unit,
-                    )
-                    result = await self.hass.async_add_executor_job(read_request)
+            async with self._client_lock:
+                for cap_name, addr in capability_regs.items():
+                    try:
+                        read_request = functools.partial(
+                            self.client.read_holding_registers,
+                            addr,
+                            count=1,
+                            device_id=self.unit,
+                        )
+                        result = await self.hass.async_add_executor_job(read_request)
 
-                    if not self._is_error_response(result) and result.registers:
-                        capabilities[cap_name] = result.registers[0]
-                    else:
-                        _LOGGER.debug("Failed to read capability register %s at 0x%04X", cap_name, addr)
-                except Exception as err:
-                    _LOGGER.debug("Error reading capability register %s: %s", cap_name, err)
+                        if not self._is_error_response(result) and result.registers:
+                            capabilities[cap_name] = result.registers[0]
+                        else:
+                            _LOGGER.debug("Failed to read capability register %s at 0x%04X", cap_name, addr)
+                    except Exception as err:
+                        _LOGGER.debug("Error reading capability register %s: %s", cap_name, err)
 
             if capabilities:
                 _LOGGER.info(
@@ -170,18 +174,20 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         _LOGGER.debug("Starting update cycle")
 
-        # Try block reads first (optimized) with reconnection logic
-        _LOGGER.debug("Attempting block reads")
-        block_read_ok = await self._try_block_reads(data, errors)
-        _LOGGER.debug("Block reads result: %s (data keys: %s)", "success" if block_read_ok else "failed", list(data.keys()))
+        # Serialize all client I/O to avoid concurrent Modbus socket use.
+        async with self._client_lock:
+            # Try block reads first (optimized) with reconnection logic
+            _LOGGER.debug("Attempting block reads")
+            block_read_ok = await self._try_block_reads(data, errors)
+            _LOGGER.debug("Block reads result: %s (data keys: %s)", "success" if block_read_ok else "failed", list(data.keys()))
 
-        # If block reads failed, fall back to individual reads with reconnection
-        if not block_read_ok:
-            _LOGGER.info("Block reads failed or incomplete, falling back to individual register reads")
-            # Don't clear data - preserve any partial data from successful block reads
-            await self._try_individual_reads(data, errors)
-            _LOGGER.debug("Individual reads fallback complete (data keys: %s)", list(data.keys()))
-            _LOGGER.debug("Individual reads fallback complete (data keys: %s)", list(data.keys()))
+            # If block reads failed, fall back to individual reads with reconnection
+            if not block_read_ok:
+                _LOGGER.info("Block reads failed or incomplete, falling back to individual register reads")
+                # Don't clear data - preserve any partial data from successful block reads
+                await self._try_individual_reads(data, errors)
+                _LOGGER.debug("Individual reads fallback complete (data keys: %s)", list(data.keys()))
+                _LOGGER.debug("Individual reads fallback complete (data keys: %s)", list(data.keys()))
 
         if not data:
             raise UpdateFailed(f"Unable to read any registers: {', '.join(errors)}")
