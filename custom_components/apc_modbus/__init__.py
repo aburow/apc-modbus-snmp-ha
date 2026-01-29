@@ -63,7 +63,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not connected:
         raise ConfigEntryNotReady("Unable to connect to APC UPS")
 
-    coordinator = APCModbusCoordinator(hass, client, unit, device_name)
+    # Shared lock per host:port to prevent overlapping I/O across entries for same device.
+    locks = hass.data[DOMAIN].setdefault("locks", {})
+    lock_key = f"{host}:{port}"
+    io_lock = locks.setdefault(lock_key, asyncio.Lock())
+
+    coordinator = APCModbusCoordinator(hass, client, unit, device_name, host, port, io_lock)
 
     # Set device type from config
     coordinator.set_device_type(device_type)

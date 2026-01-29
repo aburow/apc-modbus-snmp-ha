@@ -211,8 +211,8 @@ Entity creation is dynamic based on device capabilities:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v0.3.6-dev.1 (Current dev)
-- 🔧 Serialize Modbus socket access to prevent concurrent read disconnects
+### v0.3.6-dev.2 (Current dev)
+- 🔧 Serialize Modbus access per host:port to prevent overlapping reads across entries
 
 ### v0.3.4 (Latest stable)
 - 🧰 Rack PDU SNMP OIDs and phase sensor block reads

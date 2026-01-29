@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.6-dev.2] - 2026-01-29
+
+### Fixed
+- Serialize Modbus access per host:port to prevent overlapping reads across entries
+
 ## [0.3.6-dev.1] - 2026-01-29
 
 ### Fixed
