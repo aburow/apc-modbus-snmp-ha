@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.6-dev.3] - 2026-01-29
+
+### Fixed
+- Run SNMP metadata queries in an executor to avoid blocking the main event loop
+
 ## [0.3.6-dev.2] - 2026-01-29
 
 ### Fixed

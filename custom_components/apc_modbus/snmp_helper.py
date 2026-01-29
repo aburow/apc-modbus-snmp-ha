@@ -147,6 +147,13 @@ async def async_get_device_metadata(
     return metadata
 
 
+def get_device_metadata_sync(
+    host: str, community: str = "public", device_type: APCDeviceType = APCDeviceType.SMART_UPS
+) -> dict[str, Any]:
+    """Run SNMP metadata query in a dedicated event loop (sync wrapper)."""
+    return asyncio.run(async_get_device_metadata(host, community, device_type))
+
+
 def detect_device_type(model_string: str | None) -> APCDeviceType:
     """Detect device type from SNMP model string.
 

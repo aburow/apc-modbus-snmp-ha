@@ -39,6 +39,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         device_name: str,
         host: str,
         port: int,
+        entry_id: str,
         io_lock: asyncio.Lock,
     ) -> None:
         """Initialize the coordinator."""
@@ -53,6 +54,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.device_name = device_name
         self.host = host
         self.port = port
+        self.entry_id = entry_id
         self._log_ctx = f"{self.device_name} {self.host}:{self.port} (unit {self.unit})"
         # Serialize Modbus client access to avoid concurrent reads on one socket.
         self._io_lock = io_lock
@@ -178,10 +180,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data: dict[str, Any] = {}
         errors: list[str] = []
 
-        _LOGGER.debug("[%s] Starting update cycle", self._log_ctx)
+        _LOGGER.debug("[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id)
 
         # Serialize all client I/O to avoid concurrent Modbus socket use.
-            async with self._io_lock:
+        async with self._io_lock:
             # Try block reads first (optimized) with reconnection logic
             _LOGGER.debug("[%s] Attempting block reads", self._log_ctx)
             block_read_ok = await self._try_block_reads(data, errors)
