@@ -67,13 +67,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._backoff_base = 2.0
         self._backoff_max = 60.0
         # Small pacing delays for devices that drop connections on back-to-back reads.
-        # Rack PDU is typically slower to respond, so use longer delays.
-        if self.device_type == APCDeviceType.RACK_PDU:
-            self._post_connect_delay = 0.10
-            self._inter_block_delay = 0.10
-        else:
-            self._post_connect_delay = 0.05
-            self._inter_block_delay = 0.05
+        # Defaults for Smart-UPS; Rack PDU overrides in set_device_type().
+        self._post_connect_delay = 0.05
+        self._inter_block_delay = 0.05
         # Initialize data as empty dict to ensure it's always present
         self.data: dict[str, Any] = {}
         # Device metadata (populated via SNMP at startup)
@@ -112,6 +108,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Set the detected device type."""
         self.device_type = device_type
         _LOGGER.info("Device type set to: %s", device_type.value)
+        # Rack PDU is typically slower to respond, so use longer delays.
+        if self.device_type == APCDeviceType.RACK_PDU:
+            self._post_connect_delay = 0.10
+            self._inter_block_delay = 0.10
 
     def set_capabilities(self, capabilities: dict[str, int]) -> None:
         """Set device capabilities for dynamic entity generation (Rack PDU)."""

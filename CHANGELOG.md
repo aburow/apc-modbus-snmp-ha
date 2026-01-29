@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.4.2] - 2026-01-29
+
+### Fixed
+- Avoid accessing device_type before it is set during coordinator init
+
 ## [0.4.1] - 2026-01-29
 
 ### Fixed

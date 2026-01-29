@@ -239,7 +239,10 @@ Entity creation is dynamic based on device capabilities:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v0.4.1 (Current)
+### v0.4.2 (Current)
+- 🐛 Fix startup crash when device_type not yet set
+
+### v0.4.1
 - 🔧 Added pacing delays between block reads (longer for Rack PDU)
 
 ### v0.4.0
