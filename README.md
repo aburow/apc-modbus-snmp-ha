@@ -239,7 +239,10 @@ Entity creation is dynamic based on device capabilities:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v0.4.0 (Current)
+### v0.4.1 (Current)
+- 🔧 Added pacing delays between block reads (longer for Rack PDU)
+
+### v0.4.0
 - 🔧 Improved Modbus stability with per-endpoint serialization and per-cycle connect/close
 - 🔧 Added reconnect/backoff logic and richer debug timing logs
 - 🔧 SNMP metadata queries moved to executor to avoid loop blocking

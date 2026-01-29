@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.4.1] - 2026-01-29
+
+### Fixed
+- Add small pacing delays between block reads; longer delays for Rack PDU
+
 ## [0.4.0] - 2026-01-29
 
 ### Added
