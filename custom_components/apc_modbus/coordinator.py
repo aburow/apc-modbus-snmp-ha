@@ -41,6 +41,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         host: str,
         port: int,
         entry_id: str,
+        timeout: int,
         io_lock: asyncio.Lock,
     ) -> None:
         """Initialize the coordinator."""
@@ -56,9 +57,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.host = host
         self.port = port
         self.entry_id = entry_id
+        self.timeout = timeout
         self._log_ctx = f"{self.device_name} {self.host}:{self.port} (unit {self.unit})"
         # Serialize Modbus client access to avoid concurrent reads on one socket.
         self._io_lock = io_lock
+        # Connection/backoff tracking
+        self._connect_failures = 0
+        self._backoff_until: float | None = None
+        self._backoff_base = 2.0
+        self._backoff_max = 60.0
         # Initialize data as empty dict to ensure it's always present
         self.data: dict[str, Any] = {}
         # Device metadata (populated via SNMP at startup)
@@ -184,28 +191,44 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.debug("[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id)
 
         # Serialize all client I/O to avoid concurrent Modbus socket use.
+        lock_wait_start = time.monotonic()
         async with self._io_lock:
+            lock_wait = time.monotonic() - lock_wait_start
+            if lock_wait > 0:
+                _LOGGER.debug("[%s] Waited %.3fs for I/O lock", self._log_ctx, lock_wait)
             cycle_start = time.monotonic()
             _LOGGER.debug("[%s] Acquired I/O lock", self._log_ctx)
-            # Try block reads first (optimized) with reconnection logic
-            _LOGGER.debug("[%s] Attempting block reads", self._log_ctx)
-            block_read_ok = await self._try_block_reads(data, errors)
-            _LOGGER.debug(
-                "[%s] Block reads result: %s (data keys: %s)",
-                self._log_ctx,
-                "success" if block_read_ok else "failed",
-                list(data.keys()),
-            )
+            try:
+                if not self._should_run_now():
+                    raise UpdateFailed("Backoff active; skipping update cycle")
+                if not await self._ensure_connection():
+                    raise UpdateFailed("Unable to connect to APC UPS")
+                # Try block reads first (optimized) with reconnection logic
+                _LOGGER.debug("[%s] Attempting block reads", self._log_ctx)
+                block_read_ok = await self._try_block_reads(data, errors)
+                _LOGGER.debug(
+                    "[%s] Block reads result: %s (data keys: %s)",
+                    self._log_ctx,
+                    "success" if block_read_ok else "failed",
+                    list(data.keys()),
+                )
 
-            # If block reads failed, fall back to individual reads with reconnection
-            if not block_read_ok:
-                _LOGGER.info("[%s] Block reads failed or incomplete, falling back to individual register reads", self._log_ctx)
-                # Don't clear data - preserve any partial data from successful block reads
-                await self._try_individual_reads(data, errors)
-                _LOGGER.debug("[%s] Individual reads fallback complete (data keys: %s)", self._log_ctx, list(data.keys()))
-                _LOGGER.debug("[%s] Individual reads fallback complete (data keys: %s)", self._log_ctx, list(data.keys()))
+                # If block reads failed, fall back to individual reads with reconnection
+                if not block_read_ok:
+                    _LOGGER.info("[%s] Block reads failed or incomplete, falling back to individual register reads", self._log_ctx)
+                    # Don't clear data - preserve any partial data from successful block reads
+                    await self._try_individual_reads(data, errors)
+                    _LOGGER.debug("[%s] Individual reads fallback complete (data keys: %s)", self._log_ctx, list(data.keys()))
+                    _LOGGER.debug("[%s] Individual reads fallback complete (data keys: %s)", self._log_ctx, list(data.keys()))
+            except UpdateFailed as err:
+                self._register_failure(str(err))
+                raise
+            except Exception as err:
+                self._register_failure(str(err))
+                raise
 
         if not data:
+            self._register_failure("No data read")
             raise UpdateFailed(f"Unable to read any registers: {', '.join(errors)}")
 
         if errors:
@@ -214,8 +237,66 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Log successful data keys for debugging
         _LOGGER.debug("[%s] Successfully read %d registers: %s", self._log_ctx, len(data), ", ".join(sorted(data.keys())))
         _LOGGER.debug("[%s] Update cycle complete in %.3fs", self._log_ctx, time.monotonic() - cycle_start)
+        self._reset_backoff()
 
         return data
+
+    async def _ensure_connection(self) -> bool:
+        """Ensure Modbus client is connected before starting reads."""
+        try:
+            connect_request = functools.partial(self.client.connect)
+            ok = await self.hass.async_add_executor_job(connect_request)
+            _LOGGER.debug("[%s] client.connect() -> %s", self._log_ctx, ok)
+            if ok:
+                self._connect_failures = 0
+                return True
+            self._connect_failures += 1
+            if self._connect_failures >= 3:
+                _LOGGER.debug("[%s] Recreating Modbus client after %d connect failures", self._log_ctx, self._connect_failures)
+                await self._recreate_client()
+                self._connect_failures = 0
+                reconnect_request = functools.partial(self.client.connect)
+                ok = await self.hass.async_add_executor_job(reconnect_request)
+                _LOGGER.debug("[%s] client.connect() after recreate -> %s", self._log_ctx, ok)
+                return ok
+            return False
+        except Exception as err:
+            _LOGGER.debug("[%s] Connection attempt failed: %s", self._log_ctx, err)
+            return False
+
+    async def _recreate_client(self) -> None:
+        """Close and recreate the Modbus client to clear dead sockets."""
+        try:
+            close_request = functools.partial(self.client.close)
+            await self.hass.async_add_executor_job(close_request)
+        except Exception:
+            pass
+        self.client = ModbusTcpClient(host=self.host, port=self.port, timeout=self.timeout)
+
+    def _register_failure(self, reason: str) -> None:
+        """Apply exponential backoff on repeated failures."""
+        now = time.monotonic()
+        prev = self._backoff_until or now
+        if prev < now:
+            self._backoff_until = now + self._backoff_base
+        else:
+            delay = min(self._backoff_max, (prev - now) * self._backoff_base)
+            self._backoff_until = now + delay
+        if self._backoff_until:
+            _LOGGER.debug(
+                "[%s] Backoff set for %.1fs due to failure: %s",
+                self._log_ctx,
+                self._backoff_until - now,
+                reason,
+            )
+
+    def _reset_backoff(self) -> None:
+        self._backoff_until = None
+
+    def _should_run_now(self) -> bool:
+        if self._backoff_until is None:
+            return True
+        return time.monotonic() >= self._backoff_until
 
     async def _try_block_reads(self, data: dict[str, Any], errors: list[str]) -> bool:
         """Try to read data using block reads. Returns True if any blocks succeed, False if all fail."""
@@ -312,6 +393,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         # Close existing connection
                         close_request = functools.partial(self.client.close)
                         await self.hass.async_add_executor_job(close_request)
+
+                        # Recreate client on broken pipe / connection reset
+                        if "broken pipe" in err_str or "reset" in err_str:
+                            _LOGGER.debug("[%s] Recreating Modbus client after socket error", self._log_ctx)
+                            await self._recreate_client()
 
                         # Reconnect
                         connect_request = functools.partial(self.client.connect)
@@ -459,6 +545,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     pass  # Ignore close errors
 
                 try:
+                    if "broken pipe" in err_str or "reset" in err_str:
+                        _LOGGER.debug("[%s] Recreating Modbus client after socket error", self._log_ctx)
+                        await self._recreate_client()
                     # Reconnect
                     connect_request = functools.partial(self.client.connect)
                     await self.hass.async_add_executor_job(connect_request)

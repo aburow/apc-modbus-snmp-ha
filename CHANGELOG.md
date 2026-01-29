@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.6-dev.5] - 2026-01-29
+
+### Fixed
+- Recreate Modbus client immediately after broken pipe/reset errors
+
 ## [0.3.6-dev.4] - 2026-01-29
 
 ### Added

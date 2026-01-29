@@ -68,7 +68,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     lock_key = f"{host}:{port}"
     io_lock = locks.setdefault(lock_key, asyncio.Lock())
 
-    coordinator = APCModbusCoordinator(hass, client, unit, device_name, host, port, entry.entry_id, io_lock)
+    coordinator = APCModbusCoordinator(
+        hass,
+        client,
+        unit,
+        device_name,
+        host,
+        port,
+        entry.entry_id,
+        5,
+        io_lock,
+    )
 
     # Set device type from config
     coordinator.set_device_type(device_type)

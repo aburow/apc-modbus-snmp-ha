@@ -211,8 +211,8 @@ Entity creation is dynamic based on device capabilities:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v0.3.6-dev.4 (Current dev)
-- 🔧 Extra debug logging for I/O lock acquisition and per-block timing
+### v0.3.6-dev.5 (Current dev)
+- 🔧 Recreate Modbus client immediately after broken pipe/reset errors
 
 ### v0.3.4 (Latest stable)
 - 🧰 Rack PDU SNMP OIDs and phase sensor block reads
