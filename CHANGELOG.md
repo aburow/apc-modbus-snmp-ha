@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.3.6-dev.6] - 2026-01-29
+
+### Fixed
+- Connect/close per update cycle to avoid stale sockets; log connect/close timing
+
 ## [0.3.6-dev.5] - 2026-01-29
 
 ### Fixed

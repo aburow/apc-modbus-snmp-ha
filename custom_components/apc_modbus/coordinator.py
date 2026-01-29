@@ -226,6 +226,19 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as err:
                 self._register_failure(str(err))
                 raise
+            finally:
+                # Close per-cycle to avoid stale sockets on devices that drop idle connections.
+                close_start = time.monotonic()
+                try:
+                    close_request = functools.partial(self.client.close)
+                    await self.hass.async_add_executor_job(close_request)
+                    _LOGGER.debug(
+                        "[%s] Closed Modbus client after update (%.3fs)",
+                        self._log_ctx,
+                        time.monotonic() - close_start,
+                    )
+                except Exception as close_err:
+                    _LOGGER.debug("[%s] Error closing Modbus client: %s", self._log_ctx, close_err)
 
         if not data:
             self._register_failure("No data read")
@@ -244,9 +257,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""
         try:
+            connect_start = time.monotonic()
             connect_request = functools.partial(self.client.connect)
             ok = await self.hass.async_add_executor_job(connect_request)
-            _LOGGER.debug("[%s] client.connect() -> %s", self._log_ctx, ok)
+            _LOGGER.debug(
+                "[%s] client.connect() -> %s (%.3fs)",
+                self._log_ctx,
+                ok,
+                time.monotonic() - connect_start,
+            )
             if ok:
                 self._connect_failures = 0
                 return True
@@ -255,9 +274,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug("[%s] Recreating Modbus client after %d connect failures", self._log_ctx, self._connect_failures)
                 await self._recreate_client()
                 self._connect_failures = 0
+                reconnect_start = time.monotonic()
                 reconnect_request = functools.partial(self.client.connect)
                 ok = await self.hass.async_add_executor_job(reconnect_request)
-                _LOGGER.debug("[%s] client.connect() after recreate -> %s", self._log_ctx, ok)
+                _LOGGER.debug(
+                    "[%s] client.connect() after recreate -> %s (%.3fs)",
+                    self._log_ctx,
+                    ok,
+                    time.monotonic() - reconnect_start,
+                )
                 return ok
             return False
         except Exception as err:
