@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [0.4.2a] - 2026-02-06
+### Changed
+- Administrative updates and APC icon/logo refresh.
+
 ## [0.4.2] - 2026-01-29
 
 ### Fixed
