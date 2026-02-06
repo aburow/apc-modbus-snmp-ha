@@ -1,7 +1,7 @@
 # APC UPS Modbus Integration for Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)
-![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/validate.yml/badge.svg)
+![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hacs.yaml/badge.svg)
 ![Hassfest](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hassfest.yaml/badge.svg)
 
 A Home Assistant integration for monitoring APC UPS and Rack PDU devices via Modbus/TCP protocol with SNMP device metadata.
