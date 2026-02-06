@@ -48,12 +48,14 @@ this purpose.
 ```mermaid
 graph TD
   HA[Home Assistant Core] -->|config entry| CC[custom_components/apc_modbus]
-  CC -->|DataUpdateCoordinator per device<br/>- serialized Modbus I/O per host:port<br/>- block reads with fallback<br/>- backoff on failures| COORD[Coordinator]
-  COORD --> MODBUS[Modbus/TCP<br/>(pymodbus)]
-  COORD --> SNMP[SNMP metadata<br/>(pysnmp in executor)]
-  MODBUS --> DEVICE[APC UPS / PDU]
-  SNMP --> META[Model / Serial / FW]
-  DEVICE --> ENT[Home Assistant Entities<br/>(sensors, binary_sensors)]
+  CC --> COORD[Coordinator]
+  NOTE["DataUpdateCoordinator per device<br/>- serialized Modbus I/O per host:port<br/>- block reads with fallback<br/>- backoff on failures"]
+  COORD -.-> NOTE
+  COORD --> MODBUS["Modbus/TCP<br/>(pymodbus)"]
+  COORD --> SNMP["SNMP metadata<br/>(pysnmp in executor)"]
+  MODBUS --> DEVICE["APC UPS / PDU"]
+  SNMP --> META["Model / Serial / FW"]
+  DEVICE --> ENT["Home Assistant Entities<br/>(sensors, binary_sensors)"]
 ```
 
 ## Installation
