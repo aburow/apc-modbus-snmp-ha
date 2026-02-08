@@ -226,7 +226,10 @@ Entity creation is dynamic based on device capabilities:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v0.4.2a (Current)
+### v1.0.0 (Current)
+- 🧹 Administrative updates and APC icon/logo refresh
+
+### v0.4.2
 - 🐛 Fix startup crash when device_type not yet set
 
 ### v0.4.1
