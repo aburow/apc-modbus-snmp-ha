@@ -11,5 +11,6 @@ class APCDeviceType(Enum):
     """Enumeration of supported APC device types."""
 
     SMART_UPS = "smart_ups"
+    SMT_UPS = "smt_ups"
     RACK_PDU = "rack_pdu"
     UNKNOWN = "unknown"

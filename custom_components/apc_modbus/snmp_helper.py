@@ -177,7 +177,18 @@ def detect_device_type(model_string: str | None) -> APCDeviceType:
     if "AP8" in model_upper or model_upper.startswith("APDU") or "RACK PDU" in model_upper:
         return APCDeviceType.RACK_PDU
 
-    # Check for Smart-UPS patterns
+    # Check for SMT/SMX/SRT patterns (must come before generic Smart-UPS check)
+    if (
+        model_upper.startswith("SMT")
+        or model_upper.startswith("SMX")
+        or model_upper.startswith("SRT")
+        or "SMART-UPS SMT" in model_upper
+        or "SMART-UPS SMX" in model_upper
+        or "SMART-UPS SRT" in model_upper
+    ):
+        return APCDeviceType.SMT_UPS
+
+    # Check for legacy Smart-UPS patterns (SUA, SU, etc.)
     if "SMART-UPS" in model_upper or "SMART UPS" in model_upper:
         return APCDeviceType.SMART_UPS
 

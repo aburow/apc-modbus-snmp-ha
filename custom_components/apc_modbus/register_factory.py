@@ -30,6 +30,21 @@ def get_registers_for_device(device_type: APCDeviceType) -> tuple[list[dict[str,
             registers_smart_ups.REGISTER_BLOCKS,
             registers_smart_ups.REGISTER_MAP,
         )
+    elif device_type == APCDeviceType.SMT_UPS:
+        try:
+            from . import registers_smt_ups
+            return (
+                registers_smt_ups.REGISTERS,
+                registers_smt_ups.REGISTER_BLOCKS,
+                registers_smt_ups.REGISTER_MAP,
+            )
+        except ImportError:
+            _LOGGER.warning("SMT UPS register module not available, falling back to Smart-UPS")
+            return (
+                registers_smart_ups.REGISTERS,
+                registers_smart_ups.REGISTER_BLOCKS,
+                registers_smart_ups.REGISTER_MAP,
+            )
     elif device_type == APCDeviceType.RACK_PDU:
         # Import here to avoid circular imports and lazy-load Rack PDU registers
         try:

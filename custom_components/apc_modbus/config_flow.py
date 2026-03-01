@@ -33,7 +33,8 @@ DATA_SCHEMA = vol.Schema(
         vol.Required(CONF_SNMP_COMMUNITY, default=DEFAULT_SNMP_COMMUNITY): str,
         vol.Required(CONF_DEVICE_TYPE): vol.In(
             {
-                APCDeviceType.SMART_UPS.value: "Smart-UPS",
+                APCDeviceType.SMART_UPS.value: "Smart-UPS (legacy, excl. SMT/SMX/SRT)",
+                APCDeviceType.SMT_UPS.value: "Smart-UPS SMT / SMX / SRT",
                 APCDeviceType.RACK_PDU.value: "NetShelter Rack PDU",
             }
         ),
