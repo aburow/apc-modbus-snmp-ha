@@ -32,30 +32,43 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the APC UPS binary sensors."""
-    coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][KEY_COORDINATOR]
+    coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][
+        KEY_COORDINATOR
+    ]
 
     # Get device-type-specific binary sensor descriptions
     if coordinator.device_type == APCDeviceType.SMART_UPS:
         # Smart-UPS uses static binary sensor descriptions from const
         from .const import BINARY_SENSOR_DESCRIPTIONS
+
         binary_sensor_descriptions = BINARY_SENSOR_DESCRIPTIONS
     elif coordinator.device_type == APCDeviceType.SMT_UPS:
         # SMT/SMX/SRT uses static binary sensor descriptions from its register module
         from . import registers_smt_ups
+
         binary_sensor_descriptions = registers_smt_ups.BINARY_SENSOR_DESCRIPTIONS
     elif coordinator.device_type == APCDeviceType.RACK_PDU:
         # Rack PDU uses dynamic binary sensor descriptions based on capabilities
         from . import registers_rack_pdu
-        binary_sensor_descriptions = registers_rack_pdu.get_binary_sensor_descriptions(coordinator.device_capabilities)
+
+        binary_sensor_descriptions = registers_rack_pdu.get_binary_sensor_descriptions(
+            coordinator.device_capabilities
+        )
     else:
         # Unknown type defaults to Smart-UPS binary sensor descriptions
         from .const import BINARY_SENSOR_DESCRIPTIONS
+
         binary_sensor_descriptions = BINARY_SENSOR_DESCRIPTIONS
 
-    _LOGGER.debug("Setting up %d binary sensors for device type %s", len(binary_sensor_descriptions), coordinator.device_type.value)
+    _LOGGER.debug(
+        "Setting up %d binary sensors for device type %s",
+        len(binary_sensor_descriptions),
+        coordinator.device_type.value,
+    )
 
     async_add_entities(
-        APCModbusBinarySensor(coordinator, description, entry.entry_id) for description in binary_sensor_descriptions
+        APCModbusBinarySensor(coordinator, description, entry.entry_id)
+        for description in binary_sensor_descriptions
     )
 
 
@@ -64,7 +77,12 @@ class APCModbusBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
     has_entity_name = True
 
-    def __init__(self, coordinator: APCModbusCoordinator, description: APCModbusBinarySensorDescription, entry_id: str) -> None:
+    def __init__(
+        self,
+        coordinator: APCModbusCoordinator,
+        description: APCModbusBinarySensorDescription,
+        entry_id: str,
+    ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{entry_id}_{description.key}"
@@ -74,7 +92,9 @@ class APCModbusBinarySensor(CoordinatorEntity, BinarySensorEntity):
             manufacturer="APC",
             model=coordinator.hw_model or "Smart-UPS",
             serial_number=coordinator.serial_number,
-            sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})" if coordinator.fw_version and coordinator.fw_date else coordinator.fw_version,
+            sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})"
+            if coordinator.fw_version and coordinator.fw_date
+            else coordinator.fw_version,
         )
 
     @property

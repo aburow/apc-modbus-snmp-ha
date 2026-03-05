@@ -173,7 +173,18 @@ REGISTER_BLOCKS: list[dict] = [
         "name": "measurements",
         "start_address": 0x0080,
         "count": 24,
-        "registers": [0x0080, 0x0082, 0x0083, 0x0087, 0x0088, 0x008C, 0x008E, 0x0090, 0x0091, 0x0097],
+        "registers": [
+            0x0080,
+            0x0082,
+            0x0083,
+            0x0087,
+            0x0088,
+            0x008C,
+            0x008E,
+            0x0090,
+            0x0091,
+            0x0097,
+        ],
     },
 ]
 

@@ -2,6 +2,17 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.2] - 2026-03-05
+### Added
+- Support for Smart-UPS SMT/SMX/SRT models via a dedicated register map and entity set.
+
+### Changed
+- Config flow now offers separate Smart-UPS legacy vs SMT/SMX/SRT device type options.
+- Device type detection and register selection updated for SMT/SMX/SRT model families.
+
+### Credits
+- Initial SMT/SMX/SRT contribution by @brentavery.
+
 ## [1.0.0] - 2026-02-08
 ### Changed
 - Administrative updates and APC icon/logo refresh.

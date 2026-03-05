@@ -22,7 +22,6 @@ from .const import (
 )
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
-from .register_factory import get_registers_for_device
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,30 +32,43 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the APC UPS sensors for a config entry."""
-    coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][KEY_COORDINATOR]
+    coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][
+        KEY_COORDINATOR
+    ]
 
     # Get device-type-specific sensor descriptions
     if coordinator.device_type == APCDeviceType.SMART_UPS:
         # Smart-UPS uses static sensor descriptions from const
         from .const import SENSOR_DESCRIPTIONS
+
         sensor_descriptions = SENSOR_DESCRIPTIONS
     elif coordinator.device_type == APCDeviceType.SMT_UPS:
         # SMT/SMX/SRT uses static sensor descriptions from its register module
         from . import registers_smt_ups
+
         sensor_descriptions = registers_smt_ups.SENSOR_DESCRIPTIONS
     elif coordinator.device_type == APCDeviceType.RACK_PDU:
         # Rack PDU uses dynamic sensor descriptions based on capabilities
         from . import registers_rack_pdu
-        sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(coordinator.device_capabilities)
+
+        sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(
+            coordinator.device_capabilities
+        )
     else:
         # Unknown type defaults to Smart-UPS sensor descriptions
         from .const import SENSOR_DESCRIPTIONS
+
         sensor_descriptions = SENSOR_DESCRIPTIONS
 
-    _LOGGER.debug("Setting up %d sensors for device type %s", len(sensor_descriptions), coordinator.device_type.value)
+    _LOGGER.debug(
+        "Setting up %d sensors for device type %s",
+        len(sensor_descriptions),
+        coordinator.device_type.value,
+    )
 
     async_add_entities(
-        APCModbusSensor(coordinator, description, entry.entry_id) for description in sensor_descriptions
+        APCModbusSensor(coordinator, description, entry.entry_id)
+        for description in sensor_descriptions
     )
 
 
@@ -65,7 +77,12 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
 
     has_entity_name = True
 
-    def __init__(self, coordinator: APCModbusCoordinator, description: APCModbusSensorDescription, entry_id: str) -> None:
+    def __init__(
+        self,
+        coordinator: APCModbusCoordinator,
+        description: APCModbusSensorDescription,
+        entry_id: str,
+    ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{entry_id}_{description.key}"
@@ -75,7 +92,9 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             manufacturer="APC",
             model=coordinator.hw_model or "Smart-UPS",
             serial_number=coordinator.serial_number,
-            sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})" if coordinator.fw_version and coordinator.fw_date else coordinator.fw_version,
+            sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})"
+            if coordinator.fw_version and coordinator.fw_date
+            else coordinator.fw_version,
         )
 
     @property
