@@ -11,6 +11,7 @@ import logging
 
 try:
     import pymodbus
+
     PYMODBUS_VERSION = pymodbus.__version__
 except (ImportError, AttributeError):
     PYMODBUS_VERSION = "unknown"
@@ -55,7 +56,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
     device_type_str = entry.data.get(CONF_DEVICE_TYPE, APCDeviceType.SMART_UPS.value)
     # Convert string to enum
-    device_type = APCDeviceType(device_type_str) if device_type_str else APCDeviceType.SMART_UPS
+    device_type = (
+        APCDeviceType(device_type_str) if device_type_str else APCDeviceType.SMART_UPS
+    )
 
     # Create client with timeout to prevent hung connections
     client = ModbusTcpClient(host=host, port=port, timeout=5)
@@ -80,17 +83,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         io_lock,
     )
 
-    # Set device type from config
     coordinator.set_device_type(device_type)
 
     # Query SNMP for device metadata (async, non-blocking)
     try:
-        _LOGGER.debug("Querying SNMP metadata from %s (entry_id=%s)", host, entry.entry_id)
+        _LOGGER.debug(
+            "Querying SNMP metadata from %s (entry_id=%s)", host, entry.entry_id
+        )
         metadata = await hass.async_add_executor_job(
             get_device_metadata_sync, host, snmp_community, device_type
         )
-        if metadata and any([metadata.get("model"), metadata.get("serial_number"), metadata.get("firmware_version")]):
-            _LOGGER.info("SNMP metadata retrieved: model=%s, serial=%s", metadata.get("model"), metadata.get("serial_number"))
+        if metadata and any(
+            [
+                metadata.get("model"),
+                metadata.get("serial_number"),
+                metadata.get("firmware_version"),
+            ]
+        ):
+            _LOGGER.info(
+                "SNMP metadata retrieved: model=%s, serial=%s",
+                metadata.get("model"),
+                metadata.get("serial_number"),
+            )
             coordinator.set_device_metadata(
                 hw_model=metadata.get("model"),
                 serial_number=metadata.get("serial_number"),
@@ -99,7 +113,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         else:
             _LOGGER.debug("SNMP query returned empty metadata")
-    except Exception as err:
+    except (OSError, TimeoutError, RuntimeError, ValueError) as err:
         _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
         # Continue without metadata - Modbus sensors still work
 
@@ -113,7 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             capabilities = await coordinator.async_discover_capabilities()
             if capabilities:
                 coordinator.set_capabilities(capabilities)
-        except Exception as err:
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.warning("Failed to discover Rack PDU capabilities: %s", err)
             # Continue - will create entities with default capabilities
 
@@ -135,7 +149,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload an APC Modbus config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, SUPPORTED_PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, SUPPORTED_PLATFORMS
+    )
 
     if unload_ok:
         data = hass.data[DOMAIN].pop(entry.entry_id)

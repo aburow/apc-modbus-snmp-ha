@@ -55,7 +55,9 @@ async def async_get_snmp_value(
         _LOGGER.debug("SNMP query to %s OID %s (timeout=%ds)", host, oid, timeout)
 
         # Create UDP transport target
-        target = await UdpTransportTarget.create((host, 161), timeout=timeout, retries=3)
+        target = await UdpTransportTarget.create(
+            (host, 161), timeout=timeout, retries=3
+        )
 
         # Execute SNMP GET command
         errorIndication, errorStatus, errorIndex, varBinds = await get_cmd(
@@ -81,22 +83,36 @@ async def async_get_snmp_value(
         else:
             for varBind in varBinds:
                 value = str(varBind[1])
-                _LOGGER.debug("SNMP query succeeded: %s=%s", oid, value[:50] if len(value) > 50 else value)
+                _LOGGER.debug(
+                    "SNMP query succeeded: %s=%s",
+                    oid,
+                    value[:50] if len(value) > 50 else value,
+                )
                 return value
 
         _LOGGER.debug("SNMP query returned no value for OID %s", oid)
         return None
 
     except asyncio.TimeoutError:
-        _LOGGER.warning("SNMP query to %s timed out after %ds for OID %s", host, timeout, oid)
+        _LOGGER.warning(
+            "SNMP query to %s timed out after %ds for OID %s", host, timeout, oid
+        )
         return None
-    except Exception as err:
-        _LOGGER.debug("SNMP query failed for %s (OID %s): %s (%s)", host, oid, err, type(err).__name__)
+    except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+        _LOGGER.debug(
+            "SNMP query failed for %s (OID %s): %s (%s)",
+            host,
+            oid,
+            err,
+            type(err).__name__,
+        )
         return None
 
 
 async def async_get_device_metadata(
-    host: str, community: str = "public", device_type: APCDeviceType = APCDeviceType.SMART_UPS
+    host: str,
+    community: str = "public",
+    device_type: APCDeviceType = APCDeviceType.SMART_UPS,
 ) -> dict[str, Any]:
     """Query all device metadata via SNMP.
 
@@ -108,7 +124,12 @@ async def async_get_device_metadata(
     Returns dict with keys: model, serial_number, firmware_version, firmware_date
     All values are None if SNMP fails.
     """
-    _LOGGER.debug("Querying SNMP metadata from %s (community: %s, device_type: %s)", host, community, device_type.value)
+    _LOGGER.debug(
+        "Querying SNMP metadata from %s (community: %s, device_type: %s)",
+        host,
+        community,
+        device_type.value,
+    )
 
     # Select OIDs based on device type
     if device_type == APCDeviceType.RACK_PDU:
@@ -148,7 +169,9 @@ async def async_get_device_metadata(
 
 
 def get_device_metadata_sync(
-    host: str, community: str = "public", device_type: APCDeviceType = APCDeviceType.SMART_UPS
+    host: str,
+    community: str = "public",
+    device_type: APCDeviceType = APCDeviceType.SMART_UPS,
 ) -> dict[str, Any]:
     """Run SNMP metadata query in a dedicated event loop (sync wrapper)."""
     return asyncio.run(async_get_device_metadata(host, community, device_type))
@@ -174,7 +197,11 @@ def detect_device_type(model_string: str | None) -> APCDeviceType:
     model_upper = model_string.upper()
 
     # Check for Rack PDU patterns
-    if "AP8" in model_upper or model_upper.startswith("APDU") or "RACK PDU" in model_upper:
+    if (
+        "AP8" in model_upper
+        or model_upper.startswith("APDU")
+        or "RACK PDU" in model_upper
+    ):
         return APCDeviceType.RACK_PDU
 
     # Check for Smart-UPS patterns

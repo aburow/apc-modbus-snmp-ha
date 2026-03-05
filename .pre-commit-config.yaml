@@ -1,0 +1,28 @@
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: grain-lint
+        name: grain-lint
+        entry: grain check
+        language: python
+        additional_dependencies:
+          - grain-lint==0.2.0
+        types: [python]
+
+      - id: pytest
+        name: pytest
+        entry: pytest -q tests
+        language: python
+        additional_dependencies:
+          - pytest>=8,<9
+        pass_filenames: false
+        files: ^(custom_components/|tests/|scripts/).*\.(py|pyi)$
