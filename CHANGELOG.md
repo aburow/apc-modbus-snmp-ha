@@ -13,6 +13,13 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 ### Credits
 - Initial SMT/SMX/SRT contribution by @brentavery.
 
+## [1.1.0-dev.3] - 2026-03-06
+### Added
+- Expanded SMT/SMX/SRT register coverage: apparent power, phase 2/3 readings, and bypass metrics.
+
+### Changed
+- Updated SMT/SMX/SRT device detection documentation to reflect the supported model prefixes.
+
 ## [1.0.0] - 2026-02-08
 ### Changed
 - Administrative updates and APC icon/logo refresh.

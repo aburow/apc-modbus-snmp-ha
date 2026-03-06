@@ -181,9 +181,10 @@ def detect_device_type(model_string: str | None) -> APCDeviceType:
     """Detect device type from SNMP model string.
 
     Patterns:
-    - "AP8*" or "APDU*" or "*Rack PDU*" → RACK_PDU
-    - "Smart-UPS*" or "SMART-UPS*" → SMART_UPS
-    - None/unknown → SMART_UPS (backward compatibility default)
+    - "AP8*" or "APDU*" or "*Rack PDU*" -> RACK_PDU
+    - "SMT*", "SMX*", "SRT*", or matching Smart-UPS SMT/SMX/SRT -> SMT_UPS
+    - "Smart-UPS*" / "SMART UPS*" (legacy families) -> SMART_UPS
+    - None/unknown -> SMART_UPS (backward compatibility default)
 
     Args:
         model_string: The model string from SNMP query

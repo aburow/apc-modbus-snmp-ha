@@ -94,6 +94,22 @@ REGISTERS: list[dict] = [
         "type": "int16",
         "scale": 32,
     },
+    # Battery.Negative.VoltageDC (0x0084): negative bus voltage, raw/32 = V
+    {
+        "key": "battery_voltage_negative",
+        "address": 0x0084,
+        "count": 1,
+        "type": "int16",
+        "scale": 32,
+    },
+    # Battery.Date (0x0085): replacement date, days since 1999-01-01
+    {
+        "key": "battery_replacement_date_days",
+        "address": 0x0085,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
     # Battery.Temperature (0x0087): battery temperature, raw/128 = °C
     {
         "key": "battery_temperature",
@@ -110,6 +126,30 @@ REGISTERS: list[dict] = [
         "type": "uint16",
         "scale": 256,
     },
+    # Output[1].RealPower_Pct (0x0089): phase 2 real power %, raw/256 = %
+    {
+        "key": "output_load_percent_l2",
+        "address": 0x0089,
+        "count": 1,
+        "type": "uint16",
+        "scale": 256,
+    },
+    # Output[0].ApparentPower_Pct (0x008A): phase 1 apparent power %, raw/256 = %
+    {
+        "key": "output_apparent_power_percent",
+        "address": 0x008A,
+        "count": 1,
+        "type": "uint16",
+        "scale": 256,
+    },
+    # Output[1].ApparentPower_Pct (0x008B): phase 2 apparent power %, raw/256 = %
+    {
+        "key": "output_apparent_power_percent_l2",
+        "address": 0x008B,
+        "count": 1,
+        "type": "uint16",
+        "scale": 256,
+    },
     # Output[0].CurrentAC (0x008C): Phase 1 RMS current, raw/32 = A
     {
         "key": "output_current",
@@ -118,10 +158,26 @@ REGISTERS: list[dict] = [
         "type": "uint16",
         "scale": 32,
     },
+    # Output[1].CurrentAC (0x008D): Phase 2 RMS current, raw/32 = A
+    {
+        "key": "output_current_l2",
+        "address": 0x008D,
+        "count": 1,
+        "type": "uint16",
+        "scale": 32,
+    },
     # Output[0].VoltageAC (0x008E): Phase 1 output voltage, raw/64 = V
     {
         "key": "output_voltage",
         "address": 0x008E,
+        "count": 1,
+        "type": "uint16",
+        "scale": 64,
+    },
+    # Output[1].VoltageAC (0x008F): Phase 2 output voltage, raw/64 = V
+    {
+        "key": "output_voltage_l2",
+        "address": 0x008F,
         "count": 1,
         "type": "uint16",
         "scale": 64,
@@ -142,10 +198,58 @@ REGISTERS: list[dict] = [
         "type": "uint32",
         "scale": 1,
     },
+    # Bypass.InputStatus_BF (0x0093): bypass input status bitfield
+    {
+        "key": "bypass_input_status_bf",
+        "address": 0x0093,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
+    # Bypass.VoltageAC (0x0094): bypass voltage, raw/64 = V
+    {
+        "key": "bypass_voltage",
+        "address": 0x0094,
+        "count": 1,
+        "type": "uint16",
+        "scale": 64,
+    },
+    # Bypass.Frequency (0x0095): bypass frequency, raw/128 = Hz
+    {
+        "key": "bypass_frequency",
+        "address": 0x0095,
+        "count": 1,
+        "type": "uint16",
+        "scale": 128,
+    },
+    # Input.InputStatus_BF (0x0096): input status bitfield
+    {
+        "key": "input_status_bf",
+        "address": 0x0096,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
     # Input[0].VoltageAC (0x0097): Phase 1 input voltage, raw/64 = V
     {
         "key": "input_voltage",
         "address": 0x0097,
+        "count": 1,
+        "type": "uint16",
+        "scale": 64,
+    },
+    # Input[1].VoltageAC (0x0098): Phase 2 input voltage, raw/64 = V
+    {
+        "key": "input_voltage_l2",
+        "address": 0x0098,
+        "count": 1,
+        "type": "uint16",
+        "scale": 64,
+    },
+    # Input[2].VoltageAC (0x0099): Phase 3 input voltage, raw/64 = V
+    {
+        "key": "input_voltage_l3",
+        "address": 0x0099,
         "count": 1,
         "type": "uint16",
         "scale": 64,
@@ -168,22 +272,35 @@ REGISTER_BLOCKS: list[dict] = [
         "registers": [0x0000, 0x0013, 0x0014, 0x0016],
     },
     {
-        # Covers RunTimeRemaining (0x0080) through Input[0].VoltageAC (0x0097).
-        # count=24: addresses 0x0080-0x0097 inclusive (0x0097 is at offset 23).
+        # Covers RunTimeRemaining (0x0080) through Input[2].VoltageAC (0x0099).
+        # count=26: addresses 0x0080-0x0099 inclusive (0x0099 is at offset 25).
         "name": "measurements",
         "start_address": 0x0080,
-        "count": 24,
+        "count": 26,
         "registers": [
             0x0080,
             0x0082,
             0x0083,
+            0x0084,
+            0x0085,
             0x0087,
             0x0088,
+            0x0089,
+            0x008A,
+            0x008B,
             0x008C,
+            0x008D,
             0x008E,
+            0x008F,
             0x0090,
             0x0091,
+            0x0093,
+            0x0094,
+            0x0095,
+            0x0096,
             0x0097,
+            0x0098,
+            0x0099,
         ],
     },
 ]
@@ -224,6 +341,14 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         register_key="battery_voltage",
     ),
     APCModbusSensorDescription(
+        key="battery_voltage_negative",
+        name="Battery Voltage (Negative)",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="battery_voltage_negative",
+    ),
+    APCModbusSensorDescription(
         key="battery_temperature",
         name="Battery Temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -239,6 +364,27 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         register_key="output_load_percent",
     ),
     APCModbusSensorDescription(
+        key="output_load_percent_l2",
+        name="Output Load (Phase 2)",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="output_load_percent_l2",
+    ),
+    APCModbusSensorDescription(
+        key="output_apparent_power_percent",
+        name="Output Apparent Power",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="output_apparent_power_percent",
+    ),
+    APCModbusSensorDescription(
+        key="output_apparent_power_percent_l2",
+        name="Output Apparent Power (Phase 2)",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="output_apparent_power_percent_l2",
+    ),
+    APCModbusSensorDescription(
         key="output_current",
         name="Output Current",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -247,12 +393,28 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         register_key="output_current",
     ),
     APCModbusSensorDescription(
+        key="output_current_l2",
+        name="Output Current (Phase 2)",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="output_current_l2",
+    ),
+    APCModbusSensorDescription(
         key="output_voltage",
         name="Output Voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         register_key="output_voltage",
+    ),
+    APCModbusSensorDescription(
+        key="output_voltage_l2",
+        name="Output Voltage (Phase 2)",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="output_voltage_l2",
     ),
     APCModbusSensorDescription(
         key="output_frequency",
@@ -277,6 +439,38 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         register_key="input_voltage",
+    ),
+    APCModbusSensorDescription(
+        key="input_voltage_l2",
+        name="Input Voltage (Phase 2)",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="input_voltage_l2",
+    ),
+    APCModbusSensorDescription(
+        key="input_voltage_l3",
+        name="Input Voltage (Phase 3)",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="input_voltage_l3",
+    ),
+    APCModbusSensorDescription(
+        key="bypass_voltage",
+        name="Bypass Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="bypass_voltage",
+    ),
+    APCModbusSensorDescription(
+        key="bypass_frequency",
+        name="Bypass Frequency",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="bypass_frequency",
     ),
 ]
 
