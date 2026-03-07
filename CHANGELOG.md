@@ -20,6 +20,10 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 ### Changed
 - Updated SMT/SMX/SRT device detection documentation to reflect the supported model prefixes.
 
+## [1.1.0-dev.4] - 2026-03-07
+### Changed
+- Treat "Smart-UPS X" model strings as SMX for device detection.
+
 ## [1.0.0] - 2026-02-08
 ### Changed
 - Administrative updates and APC icon/logo refresh.

@@ -210,6 +210,8 @@ def detect_device_type(model_string: str | None) -> APCDeviceType:
         model_upper.startswith("SMT")
         or model_upper.startswith("SMX")
         or model_upper.startswith("SRT")
+        or "SMART-UPS X" in model_upper
+        or "SMART UPS X" in model_upper
         or "SMART-UPS SMT" in model_upper
         or "SMART-UPS SMX" in model_upper
         or "SMART-UPS SRT" in model_upper
