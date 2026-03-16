@@ -1,0 +1,10 @@
+generate_debug_dump:
+  name: Generate Debug Dump
+  description: Write a per-device debug dump JSON file to the Home Assistant config directory.
+  fields:
+    entry_id:
+      name: Config Entry ID
+      description: The config entry ID for the APC Modbus device.
+      required: true
+      selector:
+        text:

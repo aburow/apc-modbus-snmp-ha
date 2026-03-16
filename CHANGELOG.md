@@ -24,6 +24,10 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 ### Changed
 - Treat "Smart-UPS X" model strings as SMX for device detection.
 
+## [1.1.0-dev.5] - 2026-03-16
+### Added
+- Per-device debug dump option and service to export diagnostics to a JSON file.
+
 ## [1.0.0] - 2026-02-08
 ### Changed
 - Administrative updates and APC icon/logo refresh.

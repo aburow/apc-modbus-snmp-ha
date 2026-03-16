@@ -19,15 +19,21 @@ DEFAULT_PORT = 502
 DEFAULT_SCAN_INTERVAL = 10
 DEFAULT_UNIT = 1
 DEFAULT_SNMP_COMMUNITY = "public"
+DEFAULT_DEBUG_DUMP = False
 CONF_UNIT = "unit"
 CONF_DEVICE_NAME = "device_name"
 CONF_SNMP_COMMUNITY = "snmp_community"
 CONF_DEVICE_TYPE = "device_type"
+CONF_DEBUG_DUMP = "debug_dump"
+
+SERVICE_DEBUG_DUMP = "generate_debug_dump"
+SERVICE_FIELD_ENTRY_ID = "entry_id"
 
 KEY_CLIENT = "modbus_client"
 KEY_COORDINATOR = "coordinator"
 
 SUPPORTED_PLATFORMS = ["sensor", "binary_sensor"]
+
 
 @dataclass
 class APCModbusSensorDescription(SensorEntityDescription):
@@ -35,12 +41,14 @@ class APCModbusSensorDescription(SensorEntityDescription):
 
     register_key: str = ""
 
+
 @dataclass
 class APCModbusBinarySensorDescription(BinarySensorEntityDescription):
     """Describe an APC Modbus binary sensor."""
 
     register_key: str = ""
     bit_index: int = 0
+
 
 SENSOR_DESCRIPTIONS = [
     # Battery Sensors
