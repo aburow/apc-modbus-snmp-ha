@@ -15,10 +15,8 @@ from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 from .const import (
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
-    CONF_DEBUG_DUMP,
     CONF_SNMP_COMMUNITY,
     CONF_UNIT,
-    DEFAULT_DEBUG_DUMP,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
@@ -62,30 +60,3 @@ class APCModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             title=user_input.get(CONF_DEVICE_NAME, user_input[CONF_HOST]),
             data={**user_input},
         )
-
-    @staticmethod
-    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        return APCModbusOptionsFlowHandler(config_entry)
-
-
-class APCModbusOptionsFlowHandler(config_entries.OptionsFlow):
-    """Handle APC UPS Modbus options."""
-
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self._entry = entry
-
-    async def async_step_init(self, user_input: dict[str, Any] | None = None):
-        if user_input is None:
-            schema = vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_DEBUG_DUMP,
-                        default=self._entry.options.get(
-                            CONF_DEBUG_DUMP, DEFAULT_DEBUG_DUMP
-                        ),
-                    ): bool,
-                }
-            )
-            return self.async_show_form(step_id="init", data_schema=schema)
-
-        return self.async_create_entry(title="", data=user_input)
