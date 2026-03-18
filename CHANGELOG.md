@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.7] - 2026-03-18
+### Changed
+- Documented how to enable Home Assistant debug logging for this integration.
+- Added a link to the standalone `apc_modbus_debug` data collection repository.
+
 ## [1.1.0-dev.6] - 2026-03-18
 ### Changed
 - Added compatibility for both older and newer PyModbus client read APIs (`slave` and `device_id`).

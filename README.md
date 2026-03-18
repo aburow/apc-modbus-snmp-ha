@@ -176,6 +176,27 @@ Entity creation is dynamic based on device capabilities:
 
 ## Troubleshooting
 
+### Enable Home Assistant Debug Logging
+
+When diagnosing setup, SNMP, or Modbus issues, enable debug logging for this integration in `configuration.yaml`:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.apc_modbus: debug
+```
+
+After updating the logger configuration:
+- Restart Home Assistant
+- Reproduce the issue
+- Collect the relevant log lines from Home Assistant
+
+For deeper data collection outside Home Assistant, use the standalone debug tools here:
+- https://github.com/aburow/apc_modbus_debug
+
+That repository is intended for gathering raw SNMP and Modbus data for compatibility analysis.
+
 ### SNMP Connection Failed (Device Info Not Populated)
 - **Symptom**: Device model, serial number, and firmware info are not shown
 - **Check logs for**: "Unable to retrieve SNMP metadata after 3 attempts"
