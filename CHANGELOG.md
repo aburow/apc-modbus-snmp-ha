@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.6] - 2026-03-18
+### Changed
+- Added compatibility for both older and newer PyModbus client read APIs (`slave` and `device_id`).
+- Kept local lint and scan tooling out of version control while retaining a clean manual check flow.
+
 ## [1.1.0-dev.2] - 2026-03-05
 ### Added
 - Support for Smart-UPS SMT/SMX/SRT models via a dedicated register map and entity set.

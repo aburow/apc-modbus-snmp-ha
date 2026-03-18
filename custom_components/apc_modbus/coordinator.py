@@ -13,9 +13,10 @@ Note: pymodbus API compatibility
 from __future__ import annotations
 
 import asyncio
-import time
 import functools
+import inspect
 import logging
+import time
 from typing import Any
 
 from pymodbus.client import ModbusTcpClient
@@ -85,6 +86,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.registers: list[dict[str, Any]] = registers_smart_ups.REGISTERS
         self.register_blocks: list[dict[str, Any]] = registers_smart_ups.REGISTER_BLOCKS
         self.register_map: dict[int, dict[str, Any]] = registers_smart_ups.REGISTER_MAP
+        read_params = inspect.signature(self.client.read_holding_registers).parameters
+        self._device_kwarg_name = "device_id" if "device_id" in read_params else "slave"
 
     def set_device_metadata(
         self,
@@ -135,6 +138,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             len(register_blocks),
         )
 
+    def _build_read_request(self, address: int, count: int):
+        """Build a compatible read request for old and new pymodbus APIs."""
+        return functools.partial(
+            self.client.read_holding_registers,
+            address,
+            count=count,
+            **{self._device_kwarg_name: self.unit},
+        )
+
     async def async_discover_capabilities(self) -> dict[str, int]:
         """Discover device capabilities for Rack PDU (reads capability registers).
 
@@ -156,12 +168,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             async with self._io_lock:
                 for cap_name, addr in capability_regs.items():
                     try:
-                        read_request = functools.partial(
-                            self.client.read_holding_registers,
-                            addr,
-                            count=1,
-                            device_id=self.unit,
-                        )
+                        read_request = self._build_read_request(addr, 1)
                         result = await self.hass.async_add_executor_job(read_request)
 
                         if not self._is_error_response(result) and result.registers:
@@ -414,11 +421,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     block["start_address"],
                     block["count"],
                 )
-                read_request = functools.partial(
-                    self.client.read_holding_registers,
-                    block["start_address"],
-                    count=block["count"],
-                    device_id=self.unit,
+                read_request = self._build_read_request(
+                    block["start_address"], block["count"]
                 )
                 result = await self.hass.async_add_executor_job(read_request)
 
@@ -516,11 +520,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         await self.hass.async_add_executor_job(connect_request)
 
                         # Retry the block read
-                        read_request = functools.partial(
-                            self.client.read_holding_registers,
-                            block["start_address"],
-                            count=block["count"],
-                            device_id=self.unit,
+                        read_request = self._build_read_request(
+                            block["start_address"], block["count"]
                         )
                         result = await self.hass.async_add_executor_job(read_request)
 
@@ -659,11 +660,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Read a register with automatic reconnection on failure."""
         # Attempt read with current connection
         try:
-            read_request = functools.partial(
-                self.client.read_holding_registers,
-                descriptor["address"],
-                count=descriptor["count"],
-                device_id=self.unit,
+            read_request = self._build_read_request(
+                descriptor["address"], descriptor["count"]
             )
             result = await self.hass.async_add_executor_job(read_request)
             return result
@@ -709,11 +707,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self.hass.async_add_executor_job(connect_request)
 
                     # Retry the read
-                    read_request = functools.partial(
-                        self.client.read_holding_registers,
-                        descriptor["address"],
-                        count=descriptor["count"],
-                        device_id=self.unit,
+                    read_request = self._build_read_request(
+                        descriptor["address"], descriptor["count"]
                     )
                     result = await self.hass.async_add_executor_job(read_request)
                     _LOGGER.debug(
