@@ -1,28 +1,93 @@
 minimum_pre_commit_version: "3.5.0"
 
+exclude: >-
+  (?x)^(
+    \.cache/|
+    \.pytest_cache/|
+    \.ruff_cache/|
+    \.venv/|
+    node_modules/|
+    logs/|
+    localonly/|
+    __pycache__/|
+    .*\.log$
+  )
+
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.4
     hooks:
       - id: ruff
-        args: [--fix]
+        entry: scripts/run_uv_tool.sh ruff check
+        language: system
       - id: ruff-format
+        entry: scripts/run_uv_tool.sh ruff format
+        language: system
 
   - repo: local
     hooks:
       - id: grain-lint
-        name: grain-lint
-        entry: grain check
-        language: python
-        additional_dependencies:
-          - grain-lint==0.2.0
+        name: grain check
+        entry: scripts/run_uv_tool.sh grain check
+        language: system
         types: [python]
 
       - id: pytest
-        name: pytest
-        entry: pytest -q tests
-        language: python
-        additional_dependencies:
-          - pytest>=8,<9
+        name: pytest tests/ -q --tb=short
+        entry: scripts/run_uv_tool.sh pytest tests/ -q --tb=short
+        language: system
         pass_filenames: false
         files: ^(custom_components/|tests/|scripts/).*\.(py|pyi)$
+
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck
+        language: system
+        types: [shell]
+        stages: [manual]
+
+      - id: shfmt
+        name: shfmt
+        entry: shfmt -w -i 2 -ci
+        language: system
+        types: [shell]
+        stages: [manual]
+
+      - id: codeql
+        name: codeql security scan
+        entry: scripts/run_codeql.sh
+        language: system
+        pass_filenames: false
+        stages: [manual]
+
+      - id: yamllint
+        name: yamllint
+        entry: scripts/run_uv_tool.sh yamllint -s
+        language: system
+        files: \.(yaml|yml)$
+        stages: [manual]
+
+      - id: sqlfluff-lint
+        name: sqlfluff lint
+        entry: scripts/run_uv_tool.sh sqlfluff lint
+        language: system
+        files: \.sql$
+        stages: [manual]
+
+      - id: semgrep
+        name: semgrep
+        entry: scripts/run_semgrep.sh
+        language: system
+        pass_filenames: false
+        stages: [manual]

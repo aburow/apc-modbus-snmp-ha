@@ -29,11 +29,13 @@ KEY_COORDINATOR = "coordinator"
 
 SUPPORTED_PLATFORMS = ["sensor", "binary_sensor"]
 
+
 @dataclass
 class APCModbusSensorDescription(SensorEntityDescription):
     """Describe an APC Modbus sensor."""
 
     register_key: str = ""
+
 
 @dataclass
 class APCModbusBinarySensorDescription(BinarySensorEntityDescription):
@@ -41,6 +43,7 @@ class APCModbusBinarySensorDescription(BinarySensorEntityDescription):
 
     register_key: str = ""
     bit_index: int = 0
+
 
 SENSOR_DESCRIPTIONS = [
     # Battery Sensors

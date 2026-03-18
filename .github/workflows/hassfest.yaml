@@ -1,6 +1,7 @@
+---
 name: Hassfest
 
-on:
+"on":
   push:
   pull_request:
 

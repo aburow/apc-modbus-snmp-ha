@@ -15,6 +15,18 @@ localonly/
 docs/
 scripts/
 
+# Local lint/tooling
+.pre-commit-config.yaml
+Makefile
+semgrep/
+.tools/
+.sqlfluff
+.yamllint
+pyproject.toml
+uv.lock
+.codeql-db/
+codeql-results.sarif
+
 # Exploratory documentation
 PROTOCOL_COMPARISON.md
 TEST_README.md
