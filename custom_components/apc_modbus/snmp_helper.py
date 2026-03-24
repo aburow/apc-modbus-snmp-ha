@@ -112,27 +112,29 @@ async def async_get_snmp_value(
 async def async_get_device_metadata(
     host: str,
     community: str = "public",
-    device_type: APCDeviceType = APCDeviceType.SMART_UPS,
+    device_type: APCDeviceType | None = APCDeviceType.SMART_UPS,
 ) -> dict[str, Any]:
     """Query all device metadata via SNMP.
 
     Args:
         host: Device IP address
         community: SNMP community string (default: "public")
-        device_type: Type of APC device (default: SMART_UPS)
+        device_type: Type of APC device. `None` defaults to SMART_UPS OIDs.
 
     Returns dict with keys: model, serial_number, firmware_version, firmware_date
     All values are None if SNMP fails.
     """
+    effective_device_type = device_type or APCDeviceType.SMART_UPS
+
     _LOGGER.debug(
         "Querying SNMP metadata from %s (community: %s, device_type: %s)",
         host,
         community,
-        device_type.value,
+        effective_device_type.value,
     )
 
     # Select OIDs based on device type
-    if device_type == APCDeviceType.RACK_PDU:
+    if effective_device_type == APCDeviceType.RACK_PDU:
         oid_model = RACKPDU_OID_MODEL
         oid_serial = RACKPDU_OID_SERIAL
         oid_firmware = RACKPDU_OID_FIRMWARE

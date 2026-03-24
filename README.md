@@ -102,6 +102,7 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
 - If SNMP queries fail, setup proceeds without device metadata (Modbus still works)
 - Device info (model, serial, firmware) will be empty until SNMP succeeds
 - Once SNMP becomes available, metadata is retrieved on next restart
+- The integration relies on Home Assistant's bundled SNMP support and does not add a separate `pysnmp` dependency
 
 **Recommended Setup:**
 - Ensure SNMP is enabled on the device (port 161)

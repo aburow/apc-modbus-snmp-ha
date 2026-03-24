@@ -2,6 +2,14 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.9] - 2026-03-24
+### Fixed
+- Avoid crashing SNMP metadata lookup when device type is not yet known during auto-detection setup.
+
+### Changed
+- Track repo lint/security tooling and ignore local artifacts so git, pre-commit, Semgrep, and CodeQL operate on source files instead of local caches.
+- Keep Home Assistant runtime dependencies unchanged; no new integration libraries were added.
+
 ## [1.1.0-dev.8] - 2026-03-24
 ### Changed
 - Config flow now auto-detects device type instead of asking the user to choose UPS vs Rack PDU.
