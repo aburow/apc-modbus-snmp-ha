@@ -13,19 +13,15 @@ build/
 # Test files and exploratory code
 localonly/
 docs/
-scripts/
 
 # Local lint/tooling
-.pre-commit-config.yaml
-Makefile
-semgrep/
 .tools/
 .sqlfluff
 .yamllint
-pyproject.toml
 uv.lock
 .codeql-db/
 codeql-results.sarif
+scripts/backup_gitea.sh
 
 # Exploratory documentation
 PROTOCOL_COMPARISON.md

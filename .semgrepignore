@@ -1,0 +1,8 @@
+.tools/
+.venv/
+.codeql-db/
+.pytest_cache/
+.ruff_cache/
+localonly/
+docs/
+codeql-results.sarif
