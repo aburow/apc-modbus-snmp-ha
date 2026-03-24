@@ -100,6 +100,7 @@ The integration auto-detects whether the device is a UPS or Rack PDU, and for UP
 
 SNMP is **required to be enabled** on the device, but metadata retrieval is optional:
 - The integration will retry SNMP queries 3 times at startup
+- During auto-detect setup, metadata lookup queries both UPS and Rack PDU OID families to populate correct device info fields
 - If SNMP queries fail, setup proceeds without device metadata (Modbus still works)
 - Device info (model, serial, firmware) will be empty until SNMP succeeds
 - Once SNMP becomes available, metadata is retrieved on next restart

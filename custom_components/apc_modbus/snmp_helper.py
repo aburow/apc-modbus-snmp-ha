@@ -112,25 +112,24 @@ async def async_get_snmp_value(
 async def async_get_device_metadata(
     host: str,
     community: str = "public",
-    device_type: APCDeviceType | None = APCDeviceType.SMART_UPS,
+    device_type: APCDeviceType | None = None,
 ) -> dict[str, Any]:
     """Query all device metadata via SNMP.
 
     Args:
         host: Device IP address
         community: SNMP community string (default: "public")
-        device_type: Type of APC device. `None` defaults to SMART_UPS OIDs.
+        device_type: Type of APC device. `None` queries both Smart-UPS and
+            Rack PDU OIDs and picks the best metadata match.
 
     Returns dict with keys: model, serial_number, firmware_version, firmware_date
     All values are None if SNMP fails.
     """
-    effective_device_type = device_type or APCDeviceType.SMART_UPS
-
     _LOGGER.debug(
         "Querying SNMP metadata from %s (community: %s, device_type: %s)",
         host,
         community,
-        effective_device_type.value,
+        device_type.value if device_type else "auto",
     )
 
     async def query_metadata_for_type(query_type: APCDeviceType) -> dict[str, Any]:
@@ -162,7 +161,7 @@ async def async_get_device_metadata(
             "firmware_date": fw_date,
         }
 
-    if effective_device_type in (APCDeviceType.UPS, APCDeviceType.UNKNOWN):
+    if device_type in (None, APCDeviceType.UPS, APCDeviceType.UNKNOWN):
         smartups_metadata, rackpdu_metadata = await asyncio.gather(
             query_metadata_for_type(APCDeviceType.SMART_UPS),
             query_metadata_for_type(APCDeviceType.RACK_PDU),
@@ -171,7 +170,7 @@ async def async_get_device_metadata(
             rackpdu_metadata if rackpdu_metadata.get("model") else smartups_metadata
         )
     else:
-        metadata = await query_metadata_for_type(effective_device_type)
+        metadata = await query_metadata_for_type(device_type)
 
     _LOGGER.debug("SNMP metadata retrieved: %s", metadata)
     return metadata
@@ -180,7 +179,7 @@ async def async_get_device_metadata(
 def get_device_metadata_sync(
     host: str,
     community: str = "public",
-    device_type: APCDeviceType = APCDeviceType.SMART_UPS,
+    device_type: APCDeviceType | None = None,
 ) -> dict[str, Any]:
     """Run SNMP metadata query in a dedicated event loop (sync wrapper)."""
     return asyncio.run(async_get_device_metadata(host, community, device_type))

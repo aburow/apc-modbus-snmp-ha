@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.11] - 2026-03-24
+### Fixed
+- SNMP metadata lookup now uses auto OID selection when device type is unknown, so device info model/serial/firmware fields are populated correctly for both UPS and Rack PDU during auto-detect setup.
+
 ## [1.1.0-dev.10] - 2026-03-24
 ### Fixed
 - Improved first-run device classification for Rack PDU by treating Modbus exception responses as errors and requiring expected register counts in probe responses.
