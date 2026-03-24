@@ -20,7 +20,7 @@ from pymodbus.client import ModbusTcpClient
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 
 from .const import (
     CONF_DEVICE_NAME,
@@ -29,6 +29,7 @@ from .const import (
     CONF_UNIT,
     DEFAULT_NAME,
     DEFAULT_PORT,
+    DEFAULT_SCAN_INTERVAL,
     DEFAULT_SNMP_COMMUNITY,
     DEFAULT_UNIT,
     DOMAIN,
@@ -54,11 +55,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     device_name = entry.data.get(CONF_DEVICE_NAME, DEFAULT_NAME)
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
-    device_type_str = entry.data.get(CONF_DEVICE_TYPE, APCDeviceType.SMART_UPS.value)
-    # Convert string to enum
-    device_type = (
-        APCDeviceType(device_type_str) if device_type_str else APCDeviceType.SMART_UPS
-    )
+    scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    device_type_str = entry.data.get(CONF_DEVICE_TYPE)
+    device_type = APCDeviceType(device_type_str) if device_type_str else None
 
     # Create client with timeout to prevent hung connections
     client = ModbusTcpClient(host=host, port=port, timeout=5)
@@ -81,9 +80,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.entry_id,
         5,
         io_lock,
+        scan_interval,
     )
 
-    coordinator.set_device_type(device_type)
+    selected_device_type = device_type
 
     # Query SNMP for device metadata (async, non-blocking)
     try:
@@ -116,6 +116,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except (OSError, TimeoutError, RuntimeError, ValueError) as err:
         _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
         # Continue without metadata - Modbus sensors still work
+
+    # Concrete device types from older entries are still honored. Otherwise,
+    # auto-detect from Modbus behavior because SNMP model strings are not reliable.
+    if selected_device_type is None or selected_device_type == APCDeviceType.UPS:
+        try:
+            detected_device_type = await coordinator.async_detect_device_type()
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+            _LOGGER.warning("Failed to auto-detect device type via Modbus: %s", err)
+        else:
+            if detected_device_type:
+                _LOGGER.info(
+                    "Auto-detected device type as %s based on Modbus probe",
+                    detected_device_type.value,
+                )
+                selected_device_type = detected_device_type
+
+    if selected_device_type is None:
+        selected_device_type = APCDeviceType.SMART_UPS
+        _LOGGER.warning(
+            "Device type auto-detection was ambiguous; defaulting to %s",
+            selected_device_type.value,
+        )
+
+    coordinator.set_device_type(selected_device_type)
 
     # Load registers for detected device type
     registers, blocks, reg_map = get_registers_for_device(coordinator.device_type)

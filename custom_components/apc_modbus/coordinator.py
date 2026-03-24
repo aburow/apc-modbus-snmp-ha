@@ -17,6 +17,7 @@ import functools
 import inspect
 import logging
 import time
+from datetime import timedelta
 from typing import Any
 
 from pymodbus.client import ModbusTcpClient
@@ -24,8 +25,8 @@ from pymodbus.exceptions import ConnectionException, ModbusException
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, SCAN_INTERVAL
-from .device_types import APCDeviceType
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .device_types import APCDeviceType, classify_device_type
 from . import registers_smart_ups
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,13 +46,14 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry_id: str,
         timeout: int,
         io_lock: asyncio.Lock,
+        scan_interval: int = DEFAULT_SCAN_INTERVAL,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
         self.unit = unit
@@ -137,6 +139,75 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             len(registers),
             len(register_blocks),
         )
+
+    async def async_detect_device_type(self) -> APCDeviceType | None:
+        """Probe distinguishing Modbus addresses to identify the device type."""
+        async with self._io_lock:
+            if not await self._ensure_connection():
+                _LOGGER.debug(
+                    "[%s] Device probe skipped: unable to connect", self._log_ctx
+                )
+                return None
+
+            rack_pdu_capabilities_ok = await self._probe_block(
+                0x009E, 5, "rack_pdu_capabilities"
+            )
+            rack_pdu_measurements_ok = await self._probe_block(
+                0x00CF, 6, "rack_pdu_measurements"
+            )
+            legacy_probe_ok = await self._probe_block(0x0021, 1, "legacy_ups_id")
+            smt_status_ok = await self._probe_block(0x0000, 23, "smt_status")
+            smt_measurements_ok = await self._probe_block(
+                0x0080, 26, "smt_measurements"
+            )
+
+            detected = classify_device_type(
+                rack_pdu_capabilities_ok=rack_pdu_capabilities_ok,
+                rack_pdu_measurements_ok=rack_pdu_measurements_ok,
+                legacy_probe_ok=legacy_probe_ok,
+                smt_status_ok=smt_status_ok,
+                smt_measurements_ok=smt_measurements_ok,
+            )
+
+            _LOGGER.debug(
+                "[%s] Device probe results: pdu_caps=%s pdu_measurements=%s legacy=%s smt_status=%s smt_measurements=%s detected=%s",
+                self._log_ctx,
+                rack_pdu_capabilities_ok,
+                rack_pdu_measurements_ok,
+                legacy_probe_ok,
+                smt_status_ok,
+                smt_measurements_ok,
+                detected.value if detected else "ambiguous",
+            )
+            return detected
+
+    async def _probe_block(self, address: int, count: int, probe_name: str) -> bool:
+        """Return True when a probe read succeeds with a non-error response."""
+        try:
+            if self._inter_block_delay > 0:
+                await asyncio.sleep(self._inter_block_delay)
+            read_request = self._build_read_request(address, count)
+            result = await self.hass.async_add_executor_job(read_request)
+            ok = not self._is_error_response(result)
+            _LOGGER.debug(
+                "[%s] Probe %s at 0x%04X count=%d -> %s",
+                self._log_ctx,
+                probe_name,
+                address,
+                count,
+                ok,
+            )
+            return ok
+        except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
+            _LOGGER.debug(
+                "[%s] Probe %s at 0x%04X count=%d failed: %s",
+                self._log_ctx,
+                probe_name,
+                address,
+                count,
+                err,
+            )
+            return False
 
     def _build_read_request(self, address: int, count: int):
         """Build a compatible read request for old and new pymodbus APIs."""

@@ -39,7 +39,7 @@ this purpose.
 ### Core Features
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
-- **Easy Configuration**: Dropdown to select device type during setup
+- **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
 
@@ -87,14 +87,13 @@ After installation, set up the integration through the UI:
 4. Fill in the required configuration:
    - **Host**: Modbus/TCP host name or address of the device
    - **SNMP Community**: SNMP community string (default: "public")
-   - **Device Type**: Select via radio buttons:
-     - **Smart-UPS** - for APC Smart-UPS devices
-     - **NetShelter Rack PDU** - for APC Rack PDU devices
 5. Optional advanced settings:
    - **Device Name**: Friendly name for the device (default: "APC UPS")
    - **Port**: Modbus/TCP port (default: 502)
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
+
+The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
 
 ### SNMP Requirements
 
@@ -149,7 +148,7 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
   - **Modbus/TCP** enabled (port 502, configurable)
   - **SNMP** enabled (port 161)
 - Network connectivity to the device
-- Python 3.11+ (built into Home Assistant)
+- Python 3.13+ (built into current Home Assistant)
 
 ## Entity Discovery
 
@@ -237,11 +236,11 @@ That repository is intended for gathering raw SNMP and Modbus data for compatibi
   - Verify network latency to device: `ping <device-host>`
 
 ### Device Type Not Detected
-- **Issue**: Setup asks for device type instead of auto-detecting
+- **Issue**: Auto-detection picks the wrong device family or setup fails
 - **Solution**:
-  - This is now the expected behavior (manual selection required)
-  - Select "Smart-UPS" or "NetShelter Rack PDU" from dropdown
-  - Device type can be changed by removing and re-adding the integration
+  - Review Home Assistant debug logs for the Modbus probe results
+  - Confirm the device responds on Modbus/TCP port 502
+  - Use the external dump/debug tooling to capture SNMP and Modbus responses for analysis
 
 ## Version History
 

@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.8] - 2026-03-24
+### Changed
+- Config flow now auto-detects device type instead of asking the user to choose UPS vs Rack PDU.
+- Setup now probes Modbus on first run to distinguish Rack PDU, legacy Smart-UPS, and SMT/SMX/SRT Smart-UPS families.
+- Updated README documentation for auto-detection and current Python requirements.
+
 ## [1.1.0-dev.7] - 2026-03-18
 ### Changed
 - Documented how to enable Home Assistant debug logging for this integration.
