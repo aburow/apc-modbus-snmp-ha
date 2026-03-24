@@ -133,38 +133,45 @@ async def async_get_device_metadata(
         effective_device_type.value,
     )
 
-    # Select OIDs based on device type
-    if effective_device_type == APCDeviceType.RACK_PDU:
-        oid_model = RACKPDU_OID_MODEL
-        oid_serial = RACKPDU_OID_SERIAL
-        oid_firmware = RACKPDU_OID_FIRMWARE
-        oid_firmware_date = RACKPDU_OID_FIRMWARE_DATE
-    else:  # SMART_UPS or UNKNOWN
-        oid_model = SMARTUPS_OID_MODEL
-        oid_serial = SMARTUPS_OID_SERIAL
-        oid_firmware = SMARTUPS_OID_FIRMWARE
-        oid_firmware_date = SMARTUPS_OID_FIRMWARE_DATE
+    async def query_metadata_for_type(query_type: APCDeviceType) -> dict[str, Any]:
+        if query_type == APCDeviceType.RACK_PDU:
+            oid_model = RACKPDU_OID_MODEL
+            oid_serial = RACKPDU_OID_SERIAL
+            oid_firmware = RACKPDU_OID_FIRMWARE
+            oid_firmware_date = RACKPDU_OID_FIRMWARE_DATE
+        else:
+            oid_model = SMARTUPS_OID_MODEL
+            oid_serial = SMARTUPS_OID_SERIAL
+            oid_firmware = SMARTUPS_OID_FIRMWARE
+            oid_firmware_date = SMARTUPS_OID_FIRMWARE_DATE
 
-    # Query all OIDs in parallel
-    results = await asyncio.gather(
-        async_get_snmp_value(host, oid_model, community),
-        async_get_snmp_value(host, oid_serial, community),
-        async_get_snmp_value(host, oid_firmware, community),
-        async_get_snmp_value(host, oid_firmware_date, community),
-        return_exceptions=True,
-    )
+        results = await asyncio.gather(
+            async_get_snmp_value(host, oid_model, community),
+            async_get_snmp_value(host, oid_serial, community),
+            async_get_snmp_value(host, oid_firmware, community),
+            async_get_snmp_value(host, oid_firmware_date, community),
+            return_exceptions=True,
+        )
+        model, serial, firmware, fw_date = [
+            r if not isinstance(r, Exception) else None for r in results
+        ]
+        return {
+            "model": model,
+            "serial_number": serial,
+            "firmware_version": firmware,
+            "firmware_date": fw_date,
+        }
 
-    # Handle exceptions in results
-    model, serial, firmware, fw_date = [
-        r if not isinstance(r, Exception) else None for r in results
-    ]
-
-    metadata = {
-        "model": model,
-        "serial_number": serial,
-        "firmware_version": firmware,
-        "firmware_date": fw_date,
-    }
+    if effective_device_type in (APCDeviceType.UPS, APCDeviceType.UNKNOWN):
+        smartups_metadata, rackpdu_metadata = await asyncio.gather(
+            query_metadata_for_type(APCDeviceType.SMART_UPS),
+            query_metadata_for_type(APCDeviceType.RACK_PDU),
+        )
+        metadata = (
+            rackpdu_metadata if rackpdu_metadata.get("model") else smartups_metadata
+        )
+    else:
+        metadata = await query_metadata_for_type(effective_device_type)
 
     _LOGGER.debug("SNMP metadata retrieved: %s", metadata)
     return metadata

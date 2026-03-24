@@ -2,6 +2,16 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.10] - 2026-03-24
+### Fixed
+- Improved first-run device classification for Rack PDU by treating Modbus exception responses as errors and requiring expected register counts in probe responses.
+- Fixed Rack PDU false-ambiguous detection cases that previously defaulted to `smart_ups`.
+
+### Changed
+- Added broader `pymodbus` API compatibility in Modbus read calls to tolerate unit-id argument variants (`device_id`, `slave`, `unit`, positional) across environments.
+- Auto-detection fallback now uses a strong SNMP Rack PDU model hint when Modbus probe results are ambiguous.
+- Updated display precision for `load_percent` and `input_frequency` sensors to one decimal place.
+
 ## [1.1.0-dev.9] - 2026-03-24
 ### Fixed
 - Avoid crashing SNMP metadata lookup when device type is not yet known during auto-detection setup.

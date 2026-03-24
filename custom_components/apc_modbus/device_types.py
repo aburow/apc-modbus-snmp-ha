@@ -52,13 +52,13 @@ def classify_device_type(
     """Classify APC device type from Modbus probe results.
 
     Returns:
-        `RACK_PDU` when PDU-specific blocks succeed and UPS probes do not.
+        `RACK_PDU` when PDU-specific blocks succeed.
         `SMT_UPS` or `SMART_UPS` when UPS-family probes clearly identify the device.
         `None` when results are ambiguous.
     """
     rack_pdu_ok = rack_pdu_capabilities_ok and rack_pdu_measurements_ok
 
-    if rack_pdu_ok and not (legacy_probe_ok or smt_status_ok or smt_measurements_ok):
+    if rack_pdu_ok:
         return APCDeviceType.RACK_PDU
 
     return classify_smart_ups_family(

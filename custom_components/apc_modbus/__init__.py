@@ -40,7 +40,7 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 from .register_factory import get_registers_for_device
-from .snmp_helper import get_device_metadata_sync
+from .snmp_helper import detect_device_type, get_device_metadata_sync
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +85,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     selected_device_type = device_type
 
+    snmp_hint_device_type: APCDeviceType | None = None
+
     # Query SNMP for device metadata (async, non-blocking)
     try:
         _LOGGER.debug(
@@ -111,6 +113,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 fw_version=metadata.get("firmware_version"),
                 fw_date=metadata.get("firmware_date"),
             )
+            snmp_hint_device_type = detect_device_type(metadata.get("model"))
+            if snmp_hint_device_type == APCDeviceType.RACK_PDU:
+                _LOGGER.info(
+                    "SNMP metadata strongly suggests a Rack PDU model: %s",
+                    metadata.get("model"),
+                )
         else:
             _LOGGER.debug("SNMP query returned empty metadata")
     except (OSError, TimeoutError, RuntimeError, ValueError) as err:
@@ -133,11 +141,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 selected_device_type = detected_device_type
 
     if selected_device_type is None:
-        selected_device_type = APCDeviceType.SMART_UPS
-        _LOGGER.warning(
-            "Device type auto-detection was ambiguous; defaulting to %s",
-            selected_device_type.value,
-        )
+        if snmp_hint_device_type == APCDeviceType.RACK_PDU:
+            selected_device_type = APCDeviceType.RACK_PDU
+            _LOGGER.warning(
+                "Device type auto-detection via Modbus was ambiguous; using SNMP Rack PDU hint instead"
+            )
+        else:
+            selected_device_type = APCDeviceType.SMART_UPS
+            _LOGGER.warning(
+                "Device type auto-detection was ambiguous; defaulting to %s",
+                selected_device_type.value,
+            )
 
     coordinator.set_device_type(selected_device_type)
 

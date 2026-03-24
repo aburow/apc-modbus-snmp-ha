@@ -40,6 +40,7 @@ this purpose.
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
+- **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
 
@@ -218,6 +219,11 @@ That repository is intended for gathering raw SNMP and Modbus data for compatibi
   - Verify device host and port are correct
   - Check network connectivity: `ping <device-host>`
   - Ensure Modbus/TCP is enabled on the device
+
+### PyModbus Environment Compatibility
+- Home Assistant runtime behavior depends on the `pymodbus` version loaded in that environment.
+- This integration now tolerates common unit-id call signatures (`device_id`, `slave`, `unit`, and positional fallback) to reduce version-skew issues.
+- If another custom component alters your runtime package set, capture startup logs showing the detected `pymodbus` version for troubleshooting.
   - Check firewall rules allow port 502 (TCP)
   - Verify Home Assistant can reach port 502: `telnet <device-host> 502`
 

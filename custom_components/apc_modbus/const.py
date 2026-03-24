@@ -102,6 +102,7 @@ SENSOR_DESCRIPTIONS = [
         name="Load Percent",
         native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         register_key="load_percent",
     ),
     # Input Sensors
@@ -117,6 +118,7 @@ SENSOR_DESCRIPTIONS = [
         name="Input Frequency",
         native_unit_of_measurement="Hz",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         register_key="input_frequency",
     ),
     APCModbusSensorDescription(
