@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0-dev.12] - 2026-03-27
+### Fixed
+- Revalidate stored `smart_ups` config entries at startup and auto-correct them to `smt_ups` when Modbus probe results indicate SMT/SMX/SRT behavior.
+- Persist corrected concrete device type back into the config entry to avoid recurring misclassification on future restarts.
+
 ## [1.1.0-dev.11] - 2026-03-24
 ### Fixed
 - SNMP metadata lookup now uses auto OID selection when device type is unknown, so device info model/serial/firmware fields are populated correctly for both UPS and Rack PDU during auto-detect setup.

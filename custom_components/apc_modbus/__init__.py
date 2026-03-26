@@ -84,6 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     selected_device_type = device_type
+    original_device_type = device_type
 
     snmp_hint_device_type: APCDeviceType | None = None
 
@@ -125,9 +126,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
         # Continue without metadata - Modbus sensors still work
 
-    # Concrete device types from older entries are still honored. Otherwise,
-    # auto-detect from Modbus behavior because SNMP model strings are not reliable.
-    if selected_device_type is None or selected_device_type == APCDeviceType.UPS:
+    # For unknown/UPS entries, auto-detect type from Modbus behavior.
+    # Also revalidate stored SMART_UPS entries so SMT/SMX/SRT devices that were
+    # previously misclassified can self-correct on next startup.
+    if selected_device_type in (
+        None,
+        APCDeviceType.UPS,
+        APCDeviceType.SMART_UPS,
+    ):
         try:
             detected_device_type = await coordinator.async_detect_device_type()
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
@@ -152,6 +158,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "Device type auto-detection was ambiguous; defaulting to %s",
                 selected_device_type.value,
             )
+
+    # Persist corrected/derived concrete device type for future startups.
+    if selected_device_type != original_device_type and selected_device_type in (
+        APCDeviceType.SMART_UPS,
+        APCDeviceType.SMT_UPS,
+        APCDeviceType.RACK_PDU,
+    ):
+        hass.config_entries.async_update_entry(
+            entry,
+            data={
+                **entry.data,
+                CONF_DEVICE_TYPE: selected_device_type.value,
+            },
+        )
 
     coordinator.set_device_type(selected_device_type)
 
