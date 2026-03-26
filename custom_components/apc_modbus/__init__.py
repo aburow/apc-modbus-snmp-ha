@@ -20,6 +20,7 @@ from pymodbus.client import ModbusTcpClient
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 
 from .const import (
@@ -43,6 +44,73 @@ from .register_factory import get_registers_for_device
 from .snmp_helper import detect_device_type, get_device_metadata_sync
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _get_expected_entity_unique_ids(
+    coordinator: APCModbusCoordinator, entry_id: str
+) -> set[str]:
+    """Build expected unique_ids for current device type and capabilities."""
+    if coordinator.device_type == APCDeviceType.SMART_UPS:
+        from .const import BINARY_SENSOR_DESCRIPTIONS, SENSOR_DESCRIPTIONS
+
+        sensor_keys = {description.key for description in SENSOR_DESCRIPTIONS}
+        binary_keys = {description.key for description in BINARY_SENSOR_DESCRIPTIONS}
+    elif coordinator.device_type == APCDeviceType.SMT_UPS:
+        from . import registers_smt_ups
+
+        sensor_keys = {
+            description.key for description in registers_smt_ups.SENSOR_DESCRIPTIONS
+        }
+        binary_keys = {
+            description.key
+            for description in registers_smt_ups.BINARY_SENSOR_DESCRIPTIONS
+        }
+    elif coordinator.device_type == APCDeviceType.RACK_PDU:
+        from . import registers_rack_pdu
+
+        sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(
+            coordinator.device_capabilities
+        )
+        binary_descriptions = registers_rack_pdu.get_binary_sensor_descriptions(
+            coordinator.device_capabilities
+        )
+        sensor_keys = {description.key for description in sensor_descriptions}
+        binary_keys = {description.key for description in binary_descriptions}
+    else:
+        return set()
+
+    all_keys = sensor_keys | binary_keys
+    return {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}
+
+
+async def _async_cleanup_stale_entities(
+    hass: HomeAssistant, entry: ConfigEntry, coordinator: APCModbusCoordinator
+) -> None:
+    """Remove stale entities left over from previous device-type classifications."""
+    ent_reg = er.async_get(hass)
+    expected_unique_ids = _get_expected_entity_unique_ids(coordinator, entry.entry_id)
+    if not expected_unique_ids:
+        return
+
+    prefix = f"{DOMAIN}_{entry.entry_id}_"
+    removed_count = 0
+
+    for entity_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
+        if entity_entry.domain not in {"sensor", "binary_sensor"}:
+            continue
+        if not entity_entry.unique_id or not entity_entry.unique_id.startswith(prefix):
+            continue
+        if entity_entry.unique_id in expected_unique_ids:
+            continue
+        ent_reg.async_remove(entity_entry.entity_id)
+        removed_count += 1
+
+    if removed_count:
+        _LOGGER.info(
+            "Removed %d stale entities for entry %s after device type resolution",
+            removed_count,
+            entry.entry_id,
+        )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -188,6 +256,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.warning("Failed to discover Rack PDU capabilities: %s", err)
             # Continue - will create entities with default capabilities
+
+    await _async_cleanup_stale_entities(hass, entry, coordinator)
 
     try:
         await coordinator.async_config_entry_first_refresh()
