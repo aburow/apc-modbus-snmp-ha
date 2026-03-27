@@ -96,6 +96,11 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             if coordinator.fw_version and coordinator.fw_date
             else coordinator.fw_version,
         )
+        # Keep UI rendering concise across all device families.
+        precision = description.suggested_display_precision
+        self._attr_suggested_display_precision = (
+            1 if precision is None else min(precision, 1)
+        )
 
     @property
     def native_value(self):
