@@ -13,7 +13,26 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from homeassistant.components.sensor import SensorDeviceClass
+
 _LOGGER = logging.getLogger(__name__)
+
+
+POWER_STATE_LABELS = {
+    0: "Unknown",
+    1: "Low",
+    2: "Normal",
+    3: "Near Overload",
+    4: "Overload",
+}
+
+OUTLET_ALARM_STATE_LABELS = {
+    0: "Unknown",
+    1: "No Alarm",
+    2: "Warning",
+    3: "Alarm",
+    4: "Critical",
+}
 
 
 # Capability registers for dynamic entity generation
@@ -451,9 +470,11 @@ def get_sensor_descriptions(capabilities: dict = None):
             APCModbusSensorDescription(
                 key="device_load_state",
                 name="Load State",
-                native_unit_of_measurement="",
-                state_class=SensorStateClass.MEASUREMENT,
+                device_class=SensorDeviceClass.ENUM,
+                options=list(POWER_STATE_LABELS.values()),
+                state_class=None,
                 register_key="device_load_state",
+                value_map=POWER_STATE_LABELS,
             ),
         ]
     )
@@ -501,9 +522,11 @@ def get_sensor_descriptions(capabilities: dict = None):
                 APCModbusSensorDescription(
                     key=f"phase_{phase_label}_state",
                     name=f"Phase {phase_label} State",
-                    native_unit_of_measurement="",
-                    state_class=SensorStateClass.MEASUREMENT,
+                    device_class=SensorDeviceClass.ENUM,
+                    options=list(POWER_STATE_LABELS.values()),
+                    state_class=None,
                     register_key=f"phase_{phase_label}_state",
+                    value_map=POWER_STATE_LABELS,
                 ),
             ]
         )
@@ -536,9 +559,11 @@ def get_sensor_descriptions(capabilities: dict = None):
                 APCModbusSensorDescription(
                     key=f"outlet_{outlet_num}_alarm_state",
                     name=f"Outlet {outlet_num} Alarm State",
-                    native_unit_of_measurement="",
-                    state_class=SensorStateClass.MEASUREMENT,
+                    device_class=SensorDeviceClass.ENUM,
+                    options=list(OUTLET_ALARM_STATE_LABELS.values()),
+                    state_class=None,
                     register_key=f"outlet_{outlet_num}_alarm_state",
+                    value_map=OUTLET_ALARM_STATE_LABELS,
                 ),
             ]
         )
@@ -557,9 +582,11 @@ def get_sensor_descriptions(capabilities: dict = None):
                 APCModbusSensorDescription(
                     key=f"bank_{bank_num}_state",
                     name=f"Bank {bank_num} State",
-                    native_unit_of_measurement="",
-                    state_class=SensorStateClass.MEASUREMENT,
+                    device_class=SensorDeviceClass.ENUM,
+                    options=list(POWER_STATE_LABELS.values()),
+                    state_class=None,
                     register_key=f"bank_{bank_num}_state",
+                    value_map=POWER_STATE_LABELS,
                 ),
             ]
         )

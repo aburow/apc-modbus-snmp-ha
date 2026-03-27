@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -96,13 +96,25 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             if coordinator.fw_version and coordinator.fw_date
             else coordinator.fw_version,
         )
-        # Keep UI rendering concise across all device families.
-        precision = description.suggested_display_precision
-        self._attr_suggested_display_precision = (
-            1 if precision is None else min(precision, 1)
-        )
+        # Keep numeric UI rendering concise across all device families.
+        if description.device_class != SensorDeviceClass.ENUM:
+            precision = description.suggested_display_precision
+            self._attr_suggested_display_precision = (
+                1 if precision is None else min(precision, 1)
+            )
 
     @property
     def native_value(self):
         """Return the latest value from the coordinator."""
-        return self.coordinator.data.get(self.entity_description.register_key)
+        value = self.coordinator.data.get(self.entity_description.register_key)
+        if value is None:
+            return None
+
+        if self.entity_description.value_map:
+            try:
+                code = int(value)
+            except (TypeError, ValueError):
+                return None
+            return self.entity_description.value_map.get(code, f"Unknown ({code})")
+
+        return value

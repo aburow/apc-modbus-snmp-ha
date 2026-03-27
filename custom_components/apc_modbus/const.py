@@ -35,6 +35,7 @@ class APCModbusSensorDescription(SensorEntityDescription):
     """Describe an APC Modbus sensor."""
 
     register_key: str = ""
+    value_map: dict[int, str] | None = None
 
 
 @dataclass

@@ -169,6 +169,10 @@ Entity creation is dynamic based on device capabilities:
 - **Bank sensors**: Created for each bank (×0-12)
   - Bank Current, State
 
+Rack PDU state-code sensors are exposed as human-readable text:
+- Load/Phase/Bank State: `Unknown`, `Low`, `Normal`, `Near Overload`, `Overload`
+- Outlet Alarm State: `Unknown`, `No Alarm`, `Warning`, `Alarm`, `Critical`
+
 **Example:** A 3-phase Rack PDU with 24 metered outlets and 6 banks creates:
 - 5 device-level sensors
 - 18 phase sensors (6 per phase × 3 phases)
