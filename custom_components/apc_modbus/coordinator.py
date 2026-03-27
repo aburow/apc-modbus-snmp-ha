@@ -81,6 +81,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.serial_number: str | None = None
         self.fw_version: str | None = None
         self.fw_date: str | None = None
+        self.sys_name: str | None = None
         # Device type and capabilities (for multi-device support)
         self.device_type: APCDeviceType = APCDeviceType.SMART_UPS
         self.device_capabilities: dict[str, int] = {}
@@ -100,17 +101,20 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         serial_number: str | None,
         fw_version: str | None,
         fw_date: str | None,
+        sys_name: str | None = None,
     ) -> None:
         """Set device metadata from SNMP query."""
         self.hw_model = hw_model
         self.serial_number = serial_number
         self.fw_version = fw_version
         self.fw_date = fw_date
+        self.sys_name = sys_name
         _LOGGER.debug(
-            "Device metadata set: model=%s, serial=%s, firmware=%s",
+            "Device metadata set: model=%s, serial=%s, firmware=%s, sys_name=%s",
             hw_model,
             serial_number,
             fw_version,
+            sys_name,
         )
 
     def set_device_type(self, device_type: APCDeviceType) -> None:
@@ -142,6 +146,21 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             len(registers),
             len(register_blocks),
         )
+
+    def get_device_identity_name(self) -> str | None:
+        """Return human-assigned device identity from Modbus or SNMP."""
+        modbus_name = self.data.get("ups_id")
+        if isinstance(modbus_name, str):
+            cleaned_modbus_name = modbus_name.strip()
+            if cleaned_modbus_name:
+                return cleaned_modbus_name
+
+        if self.sys_name:
+            cleaned_sys_name = self.sys_name.strip()
+            if cleaned_sys_name:
+                return cleaned_sys_name
+
+        return None
 
     async def async_detect_device_type(self) -> APCDeviceType | None:
         """Probe distinguishing Modbus addresses to identify the device type."""
@@ -901,7 +920,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # Two chars per register: MSB first (big-endian)
                     chars.append(chr((reg >> 8) & 0xFF))
                     chars.append(chr(reg & 0xFF))
-            return "".join(chars).rstrip()
+            # Normalize common device padding so empty/unset strings decode cleanly.
+            return "".join(chars).replace("\x00", "").strip()
         else:
             return None
 

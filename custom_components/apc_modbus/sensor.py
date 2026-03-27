@@ -91,6 +91,7 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             name=coordinator.device_name,
             manufacturer="APC",
             model=coordinator.hw_model or "Smart-UPS",
+            hw_version=coordinator.get_device_identity_name(),
             serial_number=coordinator.serial_number,
             sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})"
             if coordinator.fw_version and coordinator.fw_date
@@ -107,6 +108,16 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Return the latest value from the coordinator."""
         value = self.coordinator.data.get(self.entity_description.register_key)
+        if self.entity_description.register_key == "ups_id":
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned:
+                    return cleaned
+            elif value is not None:
+                return value
+
+            return self.coordinator.get_device_identity_name()
+
         if value is None:
             return None
 

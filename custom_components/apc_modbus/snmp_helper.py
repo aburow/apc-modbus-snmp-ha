@@ -36,6 +36,9 @@ RACKPDU_OID_SERIAL = "1.3.6.1.4.1.318.1.1.12.1.6.0"
 RACKPDU_OID_FIRMWARE = "1.3.6.1.4.1.318.1.1.12.1.3.0"
 RACKPDU_OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.12.1.4.0"
 
+# Standard system name OID (hostname-style label)
+SYSNAME_OID = "1.3.6.1.2.1.1.5.0"
+
 
 async def async_get_snmp_value(
     host: str, oid: str, community: str = "public", timeout: int = 5
@@ -122,7 +125,7 @@ async def async_get_device_metadata(
         device_type: Type of APC device. `None` queries both Smart-UPS and
             Rack PDU OIDs and picks the best metadata match.
 
-    Returns dict with keys: model, serial_number, firmware_version, firmware_date
+    Returns dict with keys: model, serial_number, firmware_version, firmware_date, sys_name
     All values are None if SNMP fails.
     """
     _LOGGER.debug(
@@ -149,9 +152,10 @@ async def async_get_device_metadata(
             async_get_snmp_value(host, oid_serial, community),
             async_get_snmp_value(host, oid_firmware, community),
             async_get_snmp_value(host, oid_firmware_date, community),
+            async_get_snmp_value(host, SYSNAME_OID, community),
             return_exceptions=True,
         )
-        model, serial, firmware, fw_date = [
+        model, serial, firmware, fw_date, sys_name = [
             r if not isinstance(r, Exception) else None for r in results
         ]
         return {
@@ -159,6 +163,7 @@ async def async_get_device_metadata(
             "serial_number": serial,
             "firmware_version": firmware,
             "firmware_date": fw_date,
+            "sys_name": sys_name,
         }
 
     if device_type in (None, APCDeviceType.UPS, APCDeviceType.UNKNOWN):
