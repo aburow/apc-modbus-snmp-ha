@@ -107,16 +107,6 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         """Return the latest value from the coordinator."""
         value = self.coordinator.data.get(self.entity_description.register_key)
-        if self.entity_description.register_key == "ups_id":
-            if isinstance(value, str):
-                cleaned = value.strip()
-                if cleaned:
-                    return cleaned
-            elif value is not None:
-                return value
-
-            return self.coordinator.get_device_identity_name()
-
         if value is None:
             return None
 

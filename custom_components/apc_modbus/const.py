@@ -189,13 +189,6 @@ SENSOR_DESCRIPTIONS = [
         state_class=SensorStateClass.MEASUREMENT,
         register_key="turn_on_delay",
     ),
-    # Identification
-    APCModbusSensorDescription(
-        key="ups_id",
-        name="UPS ID",
-        register_key="ups_id",
-        state_class=None,
-    ),
 ]
 
 BINARY_SENSOR_DESCRIPTIONS = [

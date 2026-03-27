@@ -169,7 +169,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 metadata.get("model"),
                 metadata.get("serial_number"),
                 metadata.get("firmware_version"),
-                metadata.get("sys_name"),
             ]
         ):
             _LOGGER.info(
@@ -182,7 +181,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 serial_number=metadata.get("serial_number"),
                 fw_version=metadata.get("firmware_version"),
                 fw_date=metadata.get("firmware_date"),
-                sys_name=metadata.get("sys_name"),
             )
             snmp_hint_device_type = detect_device_type(metadata.get("model"))
             if snmp_hint_device_type == APCDeviceType.RACK_PDU:

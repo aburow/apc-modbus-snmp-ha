@@ -436,16 +436,6 @@ def get_sensor_descriptions(capabilities: dict = None):
 
     descriptions = []
 
-    # Identity sensor (resolved from Modbus name where available, else SNMP sysName).
-    descriptions.append(
-        APCModbusSensorDescription(
-            key="ups_id",
-            name="System Name",
-            state_class=None,
-            register_key="ups_id",
-        )
-    )
-
     # Device-level sensors
     descriptions.extend(
         [

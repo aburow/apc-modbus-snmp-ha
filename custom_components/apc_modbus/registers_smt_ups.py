@@ -254,14 +254,6 @@ REGISTERS: list[dict] = [
         "type": "uint16",
         "scale": 64,
     },
-    # Name_STR (0x0254): UPS assigned name, ASCII string
-    {
-        "key": "ups_id",
-        "address": 0x0254,
-        "count": 8,
-        "type": "ascii",
-        "scale": 1,
-    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -310,13 +302,6 @@ REGISTER_BLOCKS: list[dict] = [
             0x0098,
             0x0099,
         ],
-    },
-    {
-        # Covers Name_STR (0x0254): UPS assigned name (ASCII).
-        "name": "identity",
-        "start_address": 0x0254,
-        "count": 8,
-        "registers": [0x0254],
     },
 ]
 
@@ -486,12 +471,6 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         device_class=SensorDeviceClass.FREQUENCY,
         state_class=SensorStateClass.MEASUREMENT,
         register_key="bypass_frequency",
-    ),
-    APCModbusSensorDescription(
-        key="ups_id",
-        name="UPS ID",
-        state_class=None,
-        register_key="ups_id",
     ),
 ]
 
