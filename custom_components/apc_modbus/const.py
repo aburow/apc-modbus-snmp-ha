@@ -81,6 +81,7 @@ SENSOR_DESCRIPTIONS = [
         name="Bad Battery Packs",
         native_unit_of_measurement="",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         register_key="bad_battery_packs",
     ),
     APCModbusSensorDescription(
@@ -88,6 +89,7 @@ SENSOR_DESCRIPTIONS = [
         name="Total Battery Packs",
         native_unit_of_measurement="",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         register_key="total_battery_packs",
     ),
     # Load Sensors
