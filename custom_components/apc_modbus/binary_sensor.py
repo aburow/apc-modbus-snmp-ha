@@ -91,7 +91,6 @@ class APCModbusBinarySensor(CoordinatorEntity, BinarySensorEntity):
             name=coordinator.device_name,
             manufacturer="APC",
             model=coordinator.hw_model or "Smart-UPS",
-            hw_version=coordinator.get_device_identity_name(),
             serial_number=coordinator.serial_number,
             sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})"
             if coordinator.fw_version and coordinator.fw_date
