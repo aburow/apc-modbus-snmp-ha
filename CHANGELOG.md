@@ -2,6 +2,19 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0] - 2026-03-28
+### Added
+- Automatic first-run device type detection for legacy Smart-UPS, SMT/SMX/SRT, and Rack PDU families.
+
+### Changed
+- Improved Rack PDU/UPS classification behavior and startup resilience across ambiguous probe results.
+- Expanded compatibility across common `pymodbus` unit-id call signatures used by Home Assistant environments.
+- Updated documentation for current Home Assistant runtime expectations and troubleshooting workflows.
+
+### Fixed
+- Stale entity cleanup when resolved device type/capabilities change.
+- Multiple detection and metadata edge cases observed during mixed UPS/PDU deployments.
+
 ## [1.1.0-dev.13] - 2026-03-27
 ### Fixed
 - Remove stale sensor and binary sensor entities when the resolved device type/capabilities change, preventing mixed UPS + Rack PDU entity sets on a single device entry.

@@ -258,8 +258,12 @@ That repository is intended for gathering raw SNMP and Modbus data for compatibi
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.0.0 (Current)
-- 🧹 Administrative updates and APC icon/logo refresh
+### v1.1.0 (Current)
+- ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
+- ✅ Improved Rack PDU detection and stale-entity cleanup
+- ✅ Broader `pymodbus` runtime compatibility for Home Assistant environments
+- ✅ Updated polling/decode behavior and display precision cleanup
+- ✅ Documentation refresh for current Home Assistant/Python expectations
 
 ### v0.4.2
 - 🐛 Fix startup crash when device_type not yet set
