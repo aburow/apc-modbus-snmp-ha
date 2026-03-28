@@ -2,6 +2,88 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.1.0] - 2026-03-28
+### Added
+- Automatic first-run device type detection for legacy Smart-UPS, SMT/SMX/SRT, and Rack PDU families.
+
+### Changed
+- Improved Rack PDU/UPS classification behavior and startup resilience across ambiguous probe results.
+- Expanded compatibility across common `pymodbus` unit-id call signatures used by Home Assistant environments.
+- Updated documentation for current Home Assistant runtime expectations and troubleshooting workflows.
+
+### Fixed
+- Stale entity cleanup when resolved device type/capabilities change.
+- Multiple detection and metadata edge cases observed during mixed UPS/PDU deployments.
+
+## [1.1.0-dev.13] - 2026-03-27
+### Fixed
+- Remove stale sensor and binary sensor entities when the resolved device type/capabilities change, preventing mixed UPS + Rack PDU entity sets on a single device entry.
+
+## [1.1.0-dev.12] - 2026-03-27
+### Fixed
+- Revalidate stored `smart_ups` config entries at startup and auto-correct them to `smt_ups` when Modbus probe results indicate SMT/SMX/SRT behavior.
+- Persist corrected concrete device type back into the config entry to avoid recurring misclassification on future restarts.
+
+## [1.1.0-dev.11] - 2026-03-24
+### Fixed
+- SNMP metadata lookup now uses auto OID selection when device type is unknown, so device info model/serial/firmware fields are populated correctly for both UPS and Rack PDU during auto-detect setup.
+
+## [1.1.0-dev.10] - 2026-03-24
+### Fixed
+- Improved first-run device classification for Rack PDU by treating Modbus exception responses as errors and requiring expected register counts in probe responses.
+- Fixed Rack PDU false-ambiguous detection cases that previously defaulted to `smart_ups`.
+
+### Changed
+- Added broader `pymodbus` API compatibility in Modbus read calls to tolerate unit-id argument variants (`device_id`, `slave`, `unit`, positional) across environments.
+- Auto-detection fallback now uses a strong SNMP Rack PDU model hint when Modbus probe results are ambiguous.
+- Updated display precision for `load_percent` and `input_frequency` sensors to one decimal place.
+
+## [1.1.0-dev.9] - 2026-03-24
+### Fixed
+- Avoid crashing SNMP metadata lookup when device type is not yet known during auto-detection setup.
+
+### Changed
+- Track repo lint/security tooling and ignore local artifacts so git, pre-commit, Semgrep, and CodeQL operate on source files instead of local caches.
+- Keep Home Assistant runtime dependencies unchanged; no new integration libraries were added.
+
+## [1.1.0-dev.8] - 2026-03-24
+### Changed
+- Config flow now auto-detects device type instead of asking the user to choose UPS vs Rack PDU.
+- Setup now probes Modbus on first run to distinguish Rack PDU, legacy Smart-UPS, and SMT/SMX/SRT Smart-UPS families.
+- Updated README documentation for auto-detection and current Python requirements.
+
+## [1.1.0-dev.7] - 2026-03-18
+### Changed
+- Documented how to enable Home Assistant debug logging for this integration.
+- Added a link to the standalone `apc_modbus_debug` data collection repository.
+
+## [1.1.0-dev.6] - 2026-03-18
+### Changed
+- Added compatibility for both older and newer PyModbus client read APIs (`slave` and `device_id`).
+- Kept local lint and scan tooling out of version control while retaining a clean manual check flow.
+
+## [1.1.0-dev.2] - 2026-03-05
+### Added
+- Support for Smart-UPS SMT/SMX/SRT models via a dedicated register map and entity set.
+
+### Changed
+- Config flow now offers separate Smart-UPS legacy vs SMT/SMX/SRT device type options.
+- Device type detection and register selection updated for SMT/SMX/SRT model families.
+
+### Credits
+- Initial SMT/SMX/SRT contribution by @brentavery.
+
+## [1.1.0-dev.3] - 2026-03-06
+### Added
+- Expanded SMT/SMX/SRT register coverage: apparent power, phase 2/3 readings, and bypass metrics.
+
+### Changed
+- Updated SMT/SMX/SRT device detection documentation to reflect the supported model prefixes.
+
+## [1.1.0-dev.4] - 2026-03-07
+### Changed
+- Treat "Smart-UPS X" model strings as SMX for device detection.
+
 ## [1.0.0] - 2026-02-08
 ### Changed
 - Administrative updates and APC icon/logo refresh.

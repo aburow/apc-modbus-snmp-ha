@@ -29,11 +29,14 @@ KEY_COORDINATOR = "coordinator"
 
 SUPPORTED_PLATFORMS = ["sensor", "binary_sensor"]
 
+
 @dataclass
 class APCModbusSensorDescription(SensorEntityDescription):
     """Describe an APC Modbus sensor."""
 
     register_key: str = ""
+    value_map: dict[int, str] | None = None
+
 
 @dataclass
 class APCModbusBinarySensorDescription(BinarySensorEntityDescription):
@@ -41,6 +44,7 @@ class APCModbusBinarySensorDescription(BinarySensorEntityDescription):
 
     register_key: str = ""
     bit_index: int = 0
+
 
 SENSOR_DESCRIPTIONS = [
     # Battery Sensors
@@ -77,6 +81,7 @@ SENSOR_DESCRIPTIONS = [
         name="Bad Battery Packs",
         native_unit_of_measurement="",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         register_key="bad_battery_packs",
     ),
     APCModbusSensorDescription(
@@ -84,6 +89,7 @@ SENSOR_DESCRIPTIONS = [
         name="Total Battery Packs",
         native_unit_of_measurement="",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
         register_key="total_battery_packs",
     ),
     # Load Sensors
@@ -99,6 +105,7 @@ SENSOR_DESCRIPTIONS = [
         name="Load Percent",
         native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         register_key="load_percent",
     ),
     # Input Sensors
@@ -114,6 +121,7 @@ SENSOR_DESCRIPTIONS = [
         name="Input Frequency",
         native_unit_of_measurement="Hz",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         register_key="input_frequency",
     ),
     APCModbusSensorDescription(
@@ -180,13 +188,6 @@ SENSOR_DESCRIPTIONS = [
         native_unit_of_measurement="s",
         state_class=SensorStateClass.MEASUREMENT,
         register_key="turn_on_delay",
-    ),
-    # Identification
-    APCModbusSensorDescription(
-        key="ups_id",
-        name="UPS ID",
-        register_key="ups_id",
-        state_class=None,
     ),
 ]
 

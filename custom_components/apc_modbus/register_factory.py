@@ -15,7 +15,9 @@ from . import registers_smart_ups
 _LOGGER = logging.getLogger(__name__)
 
 
-def get_registers_for_device(device_type: APCDeviceType) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[int, dict[str, Any]]]:
+def get_registers_for_device(
+    device_type: APCDeviceType,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[int, dict[str, Any]]]:
     """Get registers, blocks, and map for the specified device type.
 
     Args:
@@ -30,17 +32,38 @@ def get_registers_for_device(device_type: APCDeviceType) -> tuple[list[dict[str,
             registers_smart_ups.REGISTER_BLOCKS,
             registers_smart_ups.REGISTER_MAP,
         )
+    elif device_type == APCDeviceType.SMT_UPS:
+        try:
+            from . import registers_smt_ups
+
+            return (
+                registers_smt_ups.REGISTERS,
+                registers_smt_ups.REGISTER_BLOCKS,
+                registers_smt_ups.REGISTER_MAP,
+            )
+        except ImportError:
+            _LOGGER.warning(
+                "SMT UPS register module not available, falling back to Smart-UPS"
+            )
+            return (
+                registers_smart_ups.REGISTERS,
+                registers_smart_ups.REGISTER_BLOCKS,
+                registers_smart_ups.REGISTER_MAP,
+            )
     elif device_type == APCDeviceType.RACK_PDU:
         # Import here to avoid circular imports and lazy-load Rack PDU registers
         try:
             from . import registers_rack_pdu
+
             return (
                 registers_rack_pdu.REGISTERS,
                 registers_rack_pdu.REGISTER_BLOCKS,
                 registers_rack_pdu.REGISTER_MAP,
             )
         except ImportError:
-            _LOGGER.warning("Rack PDU register module not available, falling back to Smart-UPS")
+            _LOGGER.warning(
+                "Rack PDU register module not available, falling back to Smart-UPS"
+            )
             return (
                 registers_smart_ups.REGISTERS,
                 registers_smart_ups.REGISTER_BLOCKS,

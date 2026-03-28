@@ -1,0 +1,20 @@
+rules:
+  - id: python-broad-except-pass
+    message: Avoid broad except blocks that silently swallow failures.
+    severity: WARNING
+    languages: [python]
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except Exception:
+            pass
+
+  - id: python-debug-print
+    message: Remove debug print statements from committed code.
+    severity: INFO
+    languages: [python]
+    patterns:
+      - pattern-either:
+          - pattern: print(...)
+          - pattern: pprint(...)

@@ -13,7 +13,15 @@ build/
 # Test files and exploratory code
 localonly/
 docs/
-scripts/
+
+# Local lint/tooling
+.tools/
+.sqlfluff
+.yamllint
+uv.lock
+.codeql-db/
+codeql-results.sarif
+scripts/backup_gitea.sh
 
 # Exploratory documentation
 PROTOCOL_COMPARISON.md

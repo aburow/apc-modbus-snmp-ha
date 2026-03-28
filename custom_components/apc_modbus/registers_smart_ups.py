@@ -241,15 +241,6 @@ REGISTERS = [
         "type": "uint16",
         "scale": 1,
     },
-    # UPS Identification (8 ASCII characters)
-    {
-        "key": "ups_id",
-        "address": 0x0022,
-        "count": 8,
-        "type": "ascii",
-        "scale": 1,
-        "ascii_width": 1,
-    },
     # Status Word 4 (extended faults)
     {
         "key": "status_word_4",
@@ -522,13 +513,6 @@ def get_sensor_descriptions(capabilities: dict = None):
             native_unit_of_measurement="s",
             state_class=SensorStateClass.MEASUREMENT,
             register_key="turn_on_delay",
-        ),
-        # Identification
-        APCModbusSensorDescription(
-            key="ups_id",
-            name="UPS ID",
-            register_key="ups_id",
-            state_class=None,
         ),
     ]
 

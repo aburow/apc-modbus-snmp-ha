@@ -39,7 +39,8 @@ this purpose.
 ### Core Features
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
-- **Easy Configuration**: Dropdown to select device type during setup
+- **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
+- **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
 
@@ -87,22 +88,23 @@ After installation, set up the integration through the UI:
 4. Fill in the required configuration:
    - **Host**: Modbus/TCP host name or address of the device
    - **SNMP Community**: SNMP community string (default: "public")
-   - **Device Type**: Select via radio buttons:
-     - **Smart-UPS** - for APC Smart-UPS devices
-     - **NetShelter Rack PDU** - for APC Rack PDU devices
 5. Optional advanced settings:
    - **Device Name**: Friendly name for the device (default: "APC UPS")
    - **Port**: Modbus/TCP port (default: 502)
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
 
+The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
+
 ### SNMP Requirements
 
 SNMP is **required to be enabled** on the device, but metadata retrieval is optional:
 - The integration will retry SNMP queries 3 times at startup
+- During auto-detect setup, metadata lookup queries both UPS and Rack PDU OID families to populate correct device info fields
 - If SNMP queries fail, setup proceeds without device metadata (Modbus still works)
 - Device info (model, serial, firmware) will be empty until SNMP succeeds
 - Once SNMP becomes available, metadata is retrieved on next restart
+- The integration relies on Home Assistant's bundled SNMP support and does not add a separate `pysnmp` dependency
 
 **Recommended Setup:**
 - Ensure SNMP is enabled on the device (port 161)
@@ -149,7 +151,7 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
   - **Modbus/TCP** enabled (port 502, configurable)
   - **SNMP** enabled (port 161)
 - Network connectivity to the device
-- Python 3.11+ (built into Home Assistant)
+- Python 3.13+ (built into current Home Assistant)
 
 ## Entity Discovery
 
@@ -167,6 +169,10 @@ Entity creation is dynamic based on device capabilities:
 - **Bank sensors**: Created for each bank (×0-12)
   - Bank Current, State
 
+Rack PDU state-code sensors are exposed as human-readable text:
+- Load/Phase/Bank State: `Unknown`, `Low`, `Normal`, `Near Overload`, `Overload`
+- Outlet Alarm State: `Unknown`, `No Alarm`, `Warning`, `Alarm`, `Critical`
+
 **Example:** A 3-phase Rack PDU with 24 metered outlets and 6 banks creates:
 - 5 device-level sensors
 - 18 phase sensors (6 per phase × 3 phases)
@@ -175,6 +181,27 @@ Entity creation is dynamic based on device capabilities:
 - **Total: 131 entities**
 
 ## Troubleshooting
+
+### Enable Home Assistant Debug Logging
+
+When diagnosing setup, SNMP, or Modbus issues, enable debug logging for this integration in `configuration.yaml`:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.apc_modbus: debug
+```
+
+After updating the logger configuration:
+- Restart Home Assistant
+- Reproduce the issue
+- Collect the relevant log lines from Home Assistant
+
+For deeper data collection outside Home Assistant, use the standalone debug tools here:
+- https://github.com/aburow/apc_modbus_debug
+
+That repository is intended for gathering raw SNMP and Modbus data for compatibility analysis.
 
 ### SNMP Connection Failed (Device Info Not Populated)
 - **Symptom**: Device model, serial number, and firmware info are not shown
@@ -197,6 +224,11 @@ Entity creation is dynamic based on device capabilities:
   - Verify device host and port are correct
   - Check network connectivity: `ping <device-host>`
   - Ensure Modbus/TCP is enabled on the device
+
+### PyModbus Environment Compatibility
+- Home Assistant runtime behavior depends on the `pymodbus` version loaded in that environment.
+- This integration now tolerates common unit-id call signatures (`device_id`, `slave`, `unit`, and positional fallback) to reduce version-skew issues.
+- If another custom component alters your runtime package set, capture startup logs showing the detected `pymodbus` version for troubleshooting.
   - Check firewall rules allow port 502 (TCP)
   - Verify Home Assistant can reach port 502: `telnet <device-host> 502`
 
@@ -216,18 +248,22 @@ Entity creation is dynamic based on device capabilities:
   - Verify network latency to device: `ping <device-host>`
 
 ### Device Type Not Detected
-- **Issue**: Setup asks for device type instead of auto-detecting
+- **Issue**: Auto-detection picks the wrong device family or setup fails
 - **Solution**:
-  - This is now the expected behavior (manual selection required)
-  - Select "Smart-UPS" or "NetShelter Rack PDU" from dropdown
-  - Device type can be changed by removing and re-adding the integration
+  - Review Home Assistant debug logs for the Modbus probe results
+  - Confirm the device responds on Modbus/TCP port 502
+  - Use the external dump/debug tooling to capture SNMP and Modbus responses for analysis
 
 ## Version History
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.0.0 (Current)
-- 🧹 Administrative updates and APC icon/logo refresh
+### v1.1.0 (Current)
+- ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
+- ✅ Improved Rack PDU detection and stale-entity cleanup
+- ✅ Broader `pymodbus` runtime compatibility for Home Assistant environments
+- ✅ Updated polling/decode behavior and display precision cleanup
+- ✅ Documentation refresh for current Home Assistant/Python expectations
 
 ### v0.4.2
 - 🐛 Fix startup crash when device_type not yet set

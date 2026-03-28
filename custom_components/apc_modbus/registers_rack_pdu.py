@@ -13,7 +13,26 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from homeassistant.components.sensor import SensorDeviceClass
+
 _LOGGER = logging.getLogger(__name__)
+
+
+POWER_STATE_LABELS = {
+    0: "Unknown",
+    1: "Low",
+    2: "Normal",
+    3: "Near Overload",
+    4: "Overload",
+}
+
+OUTLET_ALARM_STATE_LABELS = {
+    0: "Unknown",
+    1: "No Alarm",
+    2: "Warning",
+    3: "Alarm",
+    4: "Critical",
+}
 
 
 # Capability registers for dynamic entity generation
@@ -127,58 +146,70 @@ def generate_phase_registers(num_phases: int) -> list[dict[str, Any]]:
         phase_label = f"L{phase_num}"
 
         # Phase current (scale /10)
-        registers.append({
-            "key": f"phase_{phase_label}_current",
-            "address": base_addr,
-            "count": 1,
-            "type": "int16",
-            "scale": 10,
-        })
+        registers.append(
+            {
+                "key": f"phase_{phase_label}_current",
+                "address": base_addr,
+                "count": 1,
+                "type": "int16",
+                "scale": 10,
+            }
+        )
 
         # Phase voltage
-        registers.append({
-            "key": f"phase_{phase_label}_voltage",
-            "address": base_addr + 1,
-            "count": 1,
-            "type": "uint16",
-            "scale": 1,
-        })
+        registers.append(
+            {
+                "key": f"phase_{phase_label}_voltage",
+                "address": base_addr + 1,
+                "count": 1,
+                "type": "uint16",
+                "scale": 1,
+            }
+        )
 
         # Phase real power (watts)
-        registers.append({
-            "key": f"phase_{phase_label}_real_power",
-            "address": base_addr + 2,
-            "count": 1,
-            "type": "int16",
-            "scale": 1,
-        })
+        registers.append(
+            {
+                "key": f"phase_{phase_label}_real_power",
+                "address": base_addr + 2,
+                "count": 1,
+                "type": "int16",
+                "scale": 1,
+            }
+        )
 
         # Phase apparent power (VA)
-        registers.append({
-            "key": f"phase_{phase_label}_apparent_power",
-            "address": base_addr + 3,
-            "count": 1,
-            "type": "int16",
-            "scale": 1,
-        })
+        registers.append(
+            {
+                "key": f"phase_{phase_label}_apparent_power",
+                "address": base_addr + 3,
+                "count": 1,
+                "type": "int16",
+                "scale": 1,
+            }
+        )
 
         # Phase power factor (scale /100)
-        registers.append({
-            "key": f"phase_{phase_label}_power_factor",
-            "address": base_addr + 4,
-            "count": 1,
-            "type": "int16",
-            "scale": 100,
-        })
+        registers.append(
+            {
+                "key": f"phase_{phase_label}_power_factor",
+                "address": base_addr + 4,
+                "count": 1,
+                "type": "int16",
+                "scale": 100,
+            }
+        )
 
         # Phase state (enum)
-        registers.append({
-            "key": f"phase_{phase_label}_state",
-            "address": base_addr + 5,
-            "count": 1,
-            "type": "uint16",
-            "scale": 1,
-        })
+        registers.append(
+            {
+                "key": f"phase_{phase_label}_state",
+                "address": base_addr + 5,
+                "count": 1,
+                "type": "uint16",
+                "scale": 1,
+            }
+        )
 
     return registers
 
@@ -204,14 +235,20 @@ def generate_outlet_registers(num_outlets: int) -> list[dict[str, Any]]:
 
     # Outlet groups: (group_num, base_addr_current, base_addr_power, base_addr_energy, base_addr_alarm)
     outlet_groups = [
-        (1, 0x06FA, 0x0712, 0x0702, 0x071A),   # Outlets 1-8
-        (2, 0x0702, 0x072A, 0x071A, 0x0732),   # Outlets 9-16 (example - may vary by model)
-        (3, 0x070A, 0x0742, 0x0732, 0x074A),   # Outlets 17-24
-        (4, 0x0712, 0x075A, 0x074A, 0x0762),   # Outlets 25-32
-        (5, 0x071A, 0x0772, 0x0762, 0x077A),   # Outlets 33-40
-        (6, 0x0722, 0x078A, 0x077A, 0x0792),   # Outlets 41-48
-        (7, 0x072A, 0x07A2, 0x0792, 0x07AA),   # Outlets 49-56
-        (8, 0x0732, 0x07BA, 0x07AA, 0x07C2),   # Outlets 57-64
+        (1, 0x06FA, 0x0712, 0x0702, 0x071A),  # Outlets 1-8
+        (
+            2,
+            0x0702,
+            0x072A,
+            0x071A,
+            0x0732,
+        ),  # Outlets 9-16 (example - may vary by model)
+        (3, 0x070A, 0x0742, 0x0732, 0x074A),  # Outlets 17-24
+        (4, 0x0712, 0x075A, 0x074A, 0x0762),  # Outlets 25-32
+        (5, 0x071A, 0x0772, 0x0762, 0x077A),  # Outlets 33-40
+        (6, 0x0722, 0x078A, 0x077A, 0x0792),  # Outlets 41-48
+        (7, 0x072A, 0x07A2, 0x0792, 0x07AA),  # Outlets 49-56
+        (8, 0x0732, 0x07BA, 0x07AA, 0x07C2),  # Outlets 57-64
     ]
 
     for group_num, base_current, base_power, base_energy, base_alarm in outlet_groups:
@@ -225,40 +262,48 @@ def generate_outlet_registers(num_outlets: int) -> list[dict[str, Any]]:
             outlet_num = start_outlet + offset
 
             # Outlet current (scale /10)
-            registers.append({
-                "key": f"outlet_{outlet_num}_current",
-                "address": base_current + offset,
-                "count": 1,
-                "type": "int16",
-                "scale": 10,
-            })
+            registers.append(
+                {
+                    "key": f"outlet_{outlet_num}_current",
+                    "address": base_current + offset,
+                    "count": 1,
+                    "type": "int16",
+                    "scale": 10,
+                }
+            )
 
             # Outlet power (watts)
-            registers.append({
-                "key": f"outlet_{outlet_num}_power",
-                "address": base_power + offset,
-                "count": 1,
-                "type": "int16",
-                "scale": 1,
-            })
+            registers.append(
+                {
+                    "key": f"outlet_{outlet_num}_power",
+                    "address": base_power + offset,
+                    "count": 1,
+                    "type": "int16",
+                    "scale": 1,
+                }
+            )
 
             # Outlet energy (kWh, 2 registers, scale /10)
-            registers.append({
-                "key": f"outlet_{outlet_num}_energy",
-                "address": base_energy + offset * 2,
-                "count": 2,
-                "type": "uint32",
-                "scale": 10,
-            })
+            registers.append(
+                {
+                    "key": f"outlet_{outlet_num}_energy",
+                    "address": base_energy + offset * 2,
+                    "count": 2,
+                    "type": "uint32",
+                    "scale": 10,
+                }
+            )
 
             # Outlet alarm state (enum)
-            registers.append({
-                "key": f"outlet_{outlet_num}_alarm_state",
-                "address": base_alarm + offset,
-                "count": 1,
-                "type": "uint16",
-                "scale": 1,
-            })
+            registers.append(
+                {
+                    "key": f"outlet_{outlet_num}_alarm_state",
+                    "address": base_alarm + offset,
+                    "count": 1,
+                    "type": "uint16",
+                    "scale": 1,
+                }
+            )
 
     return registers
 
@@ -294,27 +339,33 @@ def generate_bank_registers(num_banks: int) -> list[dict[str, Any]]:
             offset = bank_num - start_bank
 
             # Bank current (scale /10)
-            registers.append({
-                "key": f"bank_{bank_num}_current",
-                "address": base_current + offset,
-                "count": 1,
-                "type": "int16",
-                "scale": 10,
-            })
+            registers.append(
+                {
+                    "key": f"bank_{bank_num}_current",
+                    "address": base_current + offset,
+                    "count": 1,
+                    "type": "int16",
+                    "scale": 10,
+                }
+            )
 
             # Bank state (enum)
-            registers.append({
-                "key": f"bank_{bank_num}_state",
-                "address": base_state + offset,
-                "count": 1,
-                "type": "uint16",
-                "scale": 1,
-            })
+            registers.append(
+                {
+                    "key": f"bank_{bank_num}_state",
+                    "address": base_state + offset,
+                    "count": 1,
+                    "type": "uint16",
+                    "scale": 1,
+                }
+            )
 
     return registers
 
 
-def _build_registers(num_phases: int = 1, num_outlets: int = 0, num_banks: int = 0) -> list[dict[str, Any]]:
+def _build_registers(
+    num_phases: int = 1, num_outlets: int = 0, num_banks: int = 0
+) -> list[dict[str, Any]]:
     """Build complete register list for Rack PDU with given capabilities.
 
     Args:
@@ -386,143 +437,159 @@ def get_sensor_descriptions(capabilities: dict = None):
     descriptions = []
 
     # Device-level sensors
-    descriptions.extend([
-        APCModbusSensorDescription(
-            key="device_real_power",
-            name="Real Power",
-            native_unit_of_measurement="kW",
-            state_class=SensorStateClass.MEASUREMENT,
-            register_key="device_real_power",
-        ),
-        APCModbusSensorDescription(
-            key="device_apparent_power",
-            name="Apparent Power",
-            native_unit_of_measurement="kVA",
-            state_class=SensorStateClass.MEASUREMENT,
-            register_key="device_apparent_power",
-        ),
-        APCModbusSensorDescription(
-            key="device_power_factor",
-            name="Power Factor",
-            native_unit_of_measurement="",
-            state_class=SensorStateClass.MEASUREMENT,
-            register_key="device_power_factor",
-        ),
-        APCModbusSensorDescription(
-            key="device_energy",
-            name="Energy",
-            native_unit_of_measurement="kWh",
-            state_class=SensorStateClass.TOTAL_INCREASING,
-            register_key="device_energy",
-        ),
-        APCModbusSensorDescription(
-            key="device_load_state",
-            name="Load State",
-            native_unit_of_measurement="",
-            state_class=SensorStateClass.MEASUREMENT,
-            register_key="device_load_state",
-        ),
-    ])
+    descriptions.extend(
+        [
+            APCModbusSensorDescription(
+                key="device_real_power",
+                name="Real Power",
+                native_unit_of_measurement="kW",
+                state_class=SensorStateClass.MEASUREMENT,
+                register_key="device_real_power",
+            ),
+            APCModbusSensorDescription(
+                key="device_apparent_power",
+                name="Apparent Power",
+                native_unit_of_measurement="kVA",
+                state_class=SensorStateClass.MEASUREMENT,
+                register_key="device_apparent_power",
+            ),
+            APCModbusSensorDescription(
+                key="device_power_factor",
+                name="Power Factor",
+                native_unit_of_measurement="",
+                state_class=SensorStateClass.MEASUREMENT,
+                register_key="device_power_factor",
+            ),
+            APCModbusSensorDescription(
+                key="device_energy",
+                name="Energy",
+                native_unit_of_measurement="kWh",
+                state_class=SensorStateClass.TOTAL_INCREASING,
+                register_key="device_energy",
+            ),
+            APCModbusSensorDescription(
+                key="device_load_state",
+                name="Load State",
+                device_class=SensorDeviceClass.ENUM,
+                options=list(POWER_STATE_LABELS.values()),
+                state_class=None,
+                register_key="device_load_state",
+                value_map=POWER_STATE_LABELS,
+            ),
+        ]
+    )
 
     # Phase-specific sensors
     for phase_num in range(1, num_phases + 1):
         phase_label = f"L{phase_num}"
-        descriptions.extend([
-            APCModbusSensorDescription(
-                key=f"phase_{phase_label}_current",
-                name=f"Phase {phase_label} Current",
-                native_unit_of_measurement="A",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"phase_{phase_label}_current",
-            ),
-            APCModbusSensorDescription(
-                key=f"phase_{phase_label}_voltage",
-                name=f"Phase {phase_label} Voltage",
-                native_unit_of_measurement="V",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"phase_{phase_label}_voltage",
-            ),
-            APCModbusSensorDescription(
-                key=f"phase_{phase_label}_real_power",
-                name=f"Phase {phase_label} Real Power",
-                native_unit_of_measurement="W",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"phase_{phase_label}_real_power",
-            ),
-            APCModbusSensorDescription(
-                key=f"phase_{phase_label}_apparent_power",
-                name=f"Phase {phase_label} Apparent Power",
-                native_unit_of_measurement="VA",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"phase_{phase_label}_apparent_power",
-            ),
-            APCModbusSensorDescription(
-                key=f"phase_{phase_label}_power_factor",
-                name=f"Phase {phase_label} Power Factor",
-                native_unit_of_measurement="",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"phase_{phase_label}_power_factor",
-            ),
-            APCModbusSensorDescription(
-                key=f"phase_{phase_label}_state",
-                name=f"Phase {phase_label} State",
-                native_unit_of_measurement="",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"phase_{phase_label}_state",
-            ),
-        ])
+        descriptions.extend(
+            [
+                APCModbusSensorDescription(
+                    key=f"phase_{phase_label}_current",
+                    name=f"Phase {phase_label} Current",
+                    native_unit_of_measurement="A",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"phase_{phase_label}_current",
+                ),
+                APCModbusSensorDescription(
+                    key=f"phase_{phase_label}_voltage",
+                    name=f"Phase {phase_label} Voltage",
+                    native_unit_of_measurement="V",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"phase_{phase_label}_voltage",
+                ),
+                APCModbusSensorDescription(
+                    key=f"phase_{phase_label}_real_power",
+                    name=f"Phase {phase_label} Real Power",
+                    native_unit_of_measurement="W",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"phase_{phase_label}_real_power",
+                ),
+                APCModbusSensorDescription(
+                    key=f"phase_{phase_label}_apparent_power",
+                    name=f"Phase {phase_label} Apparent Power",
+                    native_unit_of_measurement="VA",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"phase_{phase_label}_apparent_power",
+                ),
+                APCModbusSensorDescription(
+                    key=f"phase_{phase_label}_power_factor",
+                    name=f"Phase {phase_label} Power Factor",
+                    native_unit_of_measurement="",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"phase_{phase_label}_power_factor",
+                ),
+                APCModbusSensorDescription(
+                    key=f"phase_{phase_label}_state",
+                    name=f"Phase {phase_label} State",
+                    device_class=SensorDeviceClass.ENUM,
+                    options=list(POWER_STATE_LABELS.values()),
+                    state_class=None,
+                    register_key=f"phase_{phase_label}_state",
+                    value_map=POWER_STATE_LABELS,
+                ),
+            ]
+        )
 
     # Outlet-specific sensors (metered outlets only)
     for outlet_num in range(1, num_metered_outlets + 1):
-        descriptions.extend([
-            APCModbusSensorDescription(
-                key=f"outlet_{outlet_num}_current",
-                name=f"Outlet {outlet_num} Current",
-                native_unit_of_measurement="A",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"outlet_{outlet_num}_current",
-            ),
-            APCModbusSensorDescription(
-                key=f"outlet_{outlet_num}_power",
-                name=f"Outlet {outlet_num} Power",
-                native_unit_of_measurement="W",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"outlet_{outlet_num}_power",
-            ),
-            APCModbusSensorDescription(
-                key=f"outlet_{outlet_num}_energy",
-                name=f"Outlet {outlet_num} Energy",
-                native_unit_of_measurement="kWh",
-                state_class=SensorStateClass.TOTAL_INCREASING,
-                register_key=f"outlet_{outlet_num}_energy",
-            ),
-            APCModbusSensorDescription(
-                key=f"outlet_{outlet_num}_alarm_state",
-                name=f"Outlet {outlet_num} Alarm State",
-                native_unit_of_measurement="",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"outlet_{outlet_num}_alarm_state",
-            ),
-        ])
+        descriptions.extend(
+            [
+                APCModbusSensorDescription(
+                    key=f"outlet_{outlet_num}_current",
+                    name=f"Outlet {outlet_num} Current",
+                    native_unit_of_measurement="A",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"outlet_{outlet_num}_current",
+                ),
+                APCModbusSensorDescription(
+                    key=f"outlet_{outlet_num}_power",
+                    name=f"Outlet {outlet_num} Power",
+                    native_unit_of_measurement="W",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"outlet_{outlet_num}_power",
+                ),
+                APCModbusSensorDescription(
+                    key=f"outlet_{outlet_num}_energy",
+                    name=f"Outlet {outlet_num} Energy",
+                    native_unit_of_measurement="kWh",
+                    state_class=SensorStateClass.TOTAL_INCREASING,
+                    register_key=f"outlet_{outlet_num}_energy",
+                ),
+                APCModbusSensorDescription(
+                    key=f"outlet_{outlet_num}_alarm_state",
+                    name=f"Outlet {outlet_num} Alarm State",
+                    device_class=SensorDeviceClass.ENUM,
+                    options=list(OUTLET_ALARM_STATE_LABELS.values()),
+                    state_class=None,
+                    register_key=f"outlet_{outlet_num}_alarm_state",
+                    value_map=OUTLET_ALARM_STATE_LABELS,
+                ),
+            ]
+        )
 
     # Bank-specific sensors
     for bank_num in range(1, num_banks + 1):
-        descriptions.extend([
-            APCModbusSensorDescription(
-                key=f"bank_{bank_num}_current",
-                name=f"Bank {bank_num} Current",
-                native_unit_of_measurement="A",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"bank_{bank_num}_current",
-            ),
-            APCModbusSensorDescription(
-                key=f"bank_{bank_num}_state",
-                name=f"Bank {bank_num} State",
-                native_unit_of_measurement="",
-                state_class=SensorStateClass.MEASUREMENT,
-                register_key=f"bank_{bank_num}_state",
-            ),
-        ])
+        descriptions.extend(
+            [
+                APCModbusSensorDescription(
+                    key=f"bank_{bank_num}_current",
+                    name=f"Bank {bank_num} Current",
+                    native_unit_of_measurement="A",
+                    state_class=SensorStateClass.MEASUREMENT,
+                    register_key=f"bank_{bank_num}_current",
+                ),
+                APCModbusSensorDescription(
+                    key=f"bank_{bank_num}_state",
+                    name=f"Bank {bank_num} State",
+                    device_class=SensorDeviceClass.ENUM,
+                    options=list(POWER_STATE_LABELS.values()),
+                    state_class=None,
+                    register_key=f"bank_{bank_num}_state",
+                    value_map=POWER_STATE_LABELS,
+                ),
+            ]
+        )
 
     return descriptions
 

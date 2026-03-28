@@ -13,17 +13,20 @@ Note: pymodbus API compatibility
 from __future__ import annotations
 
 import asyncio
-import time
 import functools
+import inspect
 import logging
+import time
+from datetime import timedelta
 from typing import Any
 
 from pymodbus.client import ModbusTcpClient
+from pymodbus.exceptions import ConnectionException, ModbusException
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, SCAN_INTERVAL
-from .device_types import APCDeviceType
+from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .device_types import APCDeviceType, classify_device_type
 from . import registers_smart_ups
 
 _LOGGER = logging.getLogger(__name__)
@@ -43,13 +46,14 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry_id: str,
         timeout: int,
         io_lock: asyncio.Lock,
+        scan_interval: int = DEFAULT_SCAN_INTERVAL,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
         self.unit = unit
@@ -84,6 +88,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.registers: list[dict[str, Any]] = registers_smart_ups.REGISTERS
         self.register_blocks: list[dict[str, Any]] = registers_smart_ups.REGISTER_BLOCKS
         self.register_map: dict[int, dict[str, Any]] = registers_smart_ups.REGISTER_MAP
+        read_params = inspect.signature(self.client.read_holding_registers).parameters
+        self._unit_param_candidates: list[str] = [
+            name for name in ("device_id", "slave", "unit") if name in read_params
+        ]
+        self._resolved_unit_param: str | None = None
 
     def set_device_metadata(
         self,
@@ -105,7 +114,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     def set_device_type(self, device_type: APCDeviceType) -> None:
-        """Set the detected device type."""
+        """Store device type and tune pacing for slower models."""
         self.device_type = device_type
         _LOGGER.info("Device type set to: %s", device_type.value)
         # Rack PDU is typically slower to respond, so use longer delays.
@@ -128,7 +137,130 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.registers = registers
         self.register_blocks = register_blocks
         self.register_map = register_map
-        _LOGGER.debug("Registers updated: %d registers, %d blocks", len(registers), len(register_blocks))
+        _LOGGER.debug(
+            "Registers updated: %d registers, %d blocks",
+            len(registers),
+            len(register_blocks),
+        )
+
+    async def async_detect_device_type(self) -> APCDeviceType | None:
+        """Probe distinguishing Modbus addresses to identify the device type."""
+        async with self._io_lock:
+            if not await self._ensure_connection():
+                _LOGGER.debug(
+                    "[%s] Device probe skipped: unable to connect", self._log_ctx
+                )
+                return None
+
+            rack_pdu_capabilities_ok = await self._probe_block(
+                0x009E, 5, "rack_pdu_capabilities"
+            )
+            rack_pdu_measurements_ok = await self._probe_block(
+                0x00CF, 6, "rack_pdu_measurements"
+            )
+            legacy_probe_ok = await self._probe_block(0x0021, 1, "legacy_ups_id")
+            smt_status_ok = await self._probe_block(0x0000, 23, "smt_status")
+            smt_measurements_ok = await self._probe_block(
+                0x0080, 26, "smt_measurements"
+            )
+
+            detected = classify_device_type(
+                rack_pdu_capabilities_ok=rack_pdu_capabilities_ok,
+                rack_pdu_measurements_ok=rack_pdu_measurements_ok,
+                legacy_probe_ok=legacy_probe_ok,
+                smt_status_ok=smt_status_ok,
+                smt_measurements_ok=smt_measurements_ok,
+            )
+
+            _LOGGER.debug(
+                "[%s] Device probe results: pdu_caps=%s pdu_measurements=%s legacy=%s smt_status=%s smt_measurements=%s detected=%s",
+                self._log_ctx,
+                rack_pdu_capabilities_ok,
+                rack_pdu_measurements_ok,
+                legacy_probe_ok,
+                smt_status_ok,
+                smt_measurements_ok,
+                detected.value if detected else "ambiguous",
+            )
+            return detected
+
+    async def _probe_block(self, address: int, count: int, probe_name: str) -> bool:
+        """Return True when a probe read succeeds with a non-error response."""
+        try:
+            if self._inter_block_delay > 0:
+                await asyncio.sleep(self._inter_block_delay)
+            read_request = self._build_read_request(address, count)
+            result = await self.hass.async_add_executor_job(read_request)
+            ok = not self._is_error_response(result) and len(result.registers) == count
+            _LOGGER.debug(
+                "[%s] Probe %s at 0x%04X count=%d -> %s (registers=%d)",
+                self._log_ctx,
+                probe_name,
+                address,
+                count,
+                ok,
+                len(getattr(result, "registers", []) or []),
+            )
+            return ok
+        except (
+            ConnectionException,
+            ModbusException,
+            OSError,
+            TimeoutError,
+            TypeError,
+        ) as err:
+            _LOGGER.debug(
+                "[%s] Probe %s at 0x%04X count=%d failed: %s",
+                self._log_ctx,
+                probe_name,
+                address,
+                count,
+                err,
+            )
+            return False
+
+    def _build_read_request(self, address: int, count: int):
+        """Build a compatible read request for old and new pymodbus APIs."""
+        return functools.partial(self._read_holding_registers_compat, address, count)
+
+    def _read_holding_registers_compat(self, address: int, count: int):
+        """Read holding registers across pymodbus API variations.
+
+        Supports unit-id argument names used by different pymodbus branches and
+        caches the first successful variant for future reads.
+        """
+        read_fn = self.client.read_holding_registers
+
+        attempts: list[tuple[str, object]] = []
+        if self._resolved_unit_param:
+            attempts.append(("kw", self._resolved_unit_param))
+        for candidate in self._unit_param_candidates:
+            if candidate != self._resolved_unit_param:
+                attempts.append(("kw", candidate))
+        attempts.extend(
+            [
+                ("positional", self.unit),
+                ("none", None),
+            ]
+        )
+
+        last_type_error: TypeError | None = None
+        for kind, value in attempts:
+            try:
+                if kind == "kw":
+                    result = read_fn(address, count=count, **{str(value): self.unit})
+                    self._resolved_unit_param = str(value)
+                    return result
+                if kind == "positional":
+                    return read_fn(address, count, int(value))
+                return read_fn(address, count=count)
+            except TypeError as err:
+                last_type_error = err
+                continue
+
+        if last_type_error is not None:
+            raise last_type_error
+        raise TypeError("No compatible pymodbus read_holding_registers signature found")
 
     async def async_discover_capabilities(self) -> dict[str, int]:
         """Discover device capabilities for Rack PDU (reads capability registers).
@@ -151,20 +283,27 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             async with self._io_lock:
                 for cap_name, addr in capability_regs.items():
                     try:
-                        read_request = functools.partial(
-                            self.client.read_holding_registers,
-                            addr,
-                            count=1,
-                            device_id=self.unit,
-                        )
+                        read_request = self._build_read_request(addr, 1)
                         result = await self.hass.async_add_executor_job(read_request)
 
                         if not self._is_error_response(result) and result.registers:
                             capabilities[cap_name] = result.registers[0]
                         else:
-                            _LOGGER.debug("Failed to read capability register %s at 0x%04X", cap_name, addr)
-                    except Exception as err:
-                        _LOGGER.debug("Error reading capability register %s: %s", cap_name, err)
+                            _LOGGER.debug(
+                                "Failed to read capability register %s at 0x%04X",
+                                cap_name,
+                                addr,
+                            )
+                    except (
+                        ConnectionException,
+                        ModbusException,
+                        OSError,
+                        TimeoutError,
+                        TypeError,
+                    ) as err:
+                        _LOGGER.debug(
+                            "Error reading capability register %s: %s", cap_name, err
+                        )
 
             if capabilities:
                 _LOGGER.info(
@@ -174,9 +313,17 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     capabilities.get("num_banks", 0),
                 )
             else:
-                _LOGGER.warning("Failed to discover any capability registers for Rack PDU")
+                _LOGGER.warning(
+                    "Failed to discover any capability registers for Rack PDU"
+                )
 
-        except Exception as err:
+        except (
+            ConnectionException,
+            ModbusException,
+            OSError,
+            TimeoutError,
+            TypeError,
+        ) as err:
             _LOGGER.error("Error discovering capabilities: %s", err)
 
         return capabilities
@@ -184,8 +331,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @staticmethod
     def _is_error_response(result) -> bool:
         """Check if a Modbus response indicates an error (pymodbus 3.6+ compatible)."""
-        # For pymodbus 3.6+: Check if registers attribute exists and is not None
-        if not hasattr(result, 'registers'):
+        if hasattr(result, "isError") and callable(result.isError):
+            return bool(result.isError())
+        if hasattr(result, "is_error") and callable(result.is_error):
+            return bool(result.is_error())
+
+        if not hasattr(result, "registers"):
             return True
         if result.registers is None:
             return True
@@ -196,14 +347,18 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data: dict[str, Any] = {}
         errors: list[str] = []
 
-        _LOGGER.debug("[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id)
+        _LOGGER.debug(
+            "[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id
+        )
 
         # Serialize all client I/O to avoid concurrent Modbus socket use.
         lock_wait_start = time.monotonic()
         async with self._io_lock:
             lock_wait = time.monotonic() - lock_wait_start
             if lock_wait > 0:
-                _LOGGER.debug("[%s] Waited %.3fs for I/O lock", self._log_ctx, lock_wait)
+                _LOGGER.debug(
+                    "[%s] Waited %.3fs for I/O lock", self._log_ctx, lock_wait
+                )
             cycle_start = time.monotonic()
             _LOGGER.debug("[%s] Acquired I/O lock", self._log_ctx)
             try:
@@ -223,11 +378,22 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # If block reads failed, fall back to individual reads with reconnection
                 if not block_read_ok:
-                    _LOGGER.info("[%s] Block reads failed or incomplete, falling back to individual register reads", self._log_ctx)
+                    _LOGGER.info(
+                        "[%s] Block reads failed or incomplete, falling back to individual register reads",
+                        self._log_ctx,
+                    )
                     # Don't clear data - preserve any partial data from successful block reads
                     await self._try_individual_reads(data, errors)
-                    _LOGGER.debug("[%s] Individual reads fallback complete (data keys: %s)", self._log_ctx, list(data.keys()))
-                    _LOGGER.debug("[%s] Individual reads fallback complete (data keys: %s)", self._log_ctx, list(data.keys()))
+                    _LOGGER.debug(
+                        "[%s] Individual reads fallback complete (data keys: %s)",
+                        self._log_ctx,
+                        list(data.keys()),
+                    )
+                    _LOGGER.debug(
+                        "[%s] Individual reads fallback complete (data keys: %s)",
+                        self._log_ctx,
+                        list(data.keys()),
+                    )
             except UpdateFailed as err:
                 self._register_failure(str(err))
                 raise
@@ -245,19 +411,40 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._log_ctx,
                         time.monotonic() - close_start,
                     )
-                except Exception as close_err:
-                    _LOGGER.debug("[%s] Error closing Modbus client: %s", self._log_ctx, close_err)
+                except (
+                    ConnectionException,
+                    ModbusException,
+                    OSError,
+                    TimeoutError,
+                ) as close_err:
+                    _LOGGER.debug(
+                        "[%s] Error closing Modbus client: %s", self._log_ctx, close_err
+                    )
 
         if not data:
             self._register_failure("No data read")
             raise UpdateFailed(f"Unable to read any registers: {', '.join(errors)}")
 
         if errors:
-            _LOGGER.debug("[%s] Failed to read %d registers: %s", self._log_ctx, len(errors), ", ".join(errors))
+            _LOGGER.debug(
+                "[%s] Failed to read %d registers: %s",
+                self._log_ctx,
+                len(errors),
+                ", ".join(errors),
+            )
 
         # Log successful data keys for debugging
-        _LOGGER.debug("[%s] Successfully read %d registers: %s", self._log_ctx, len(data), ", ".join(sorted(data.keys())))
-        _LOGGER.debug("[%s] Update cycle complete in %.3fs", self._log_ctx, time.monotonic() - cycle_start)
+        _LOGGER.debug(
+            "[%s] Successfully read %d registers: %s",
+            self._log_ctx,
+            len(data),
+            ", ".join(sorted(data.keys())),
+        )
+        _LOGGER.debug(
+            "[%s] Update cycle complete in %.3fs",
+            self._log_ctx,
+            time.monotonic() - cycle_start,
+        )
         self._reset_backoff()
 
         return data
@@ -278,11 +465,19 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._connect_failures = 0
                 if self._post_connect_delay > 0:
                     await asyncio.sleep(self._post_connect_delay)
-                    _LOGGER.debug("[%s] Post-connect delay %.3fs", self._log_ctx, self._post_connect_delay)
+                    _LOGGER.debug(
+                        "[%s] Post-connect delay %.3fs",
+                        self._log_ctx,
+                        self._post_connect_delay,
+                    )
                 return True
             self._connect_failures += 1
             if self._connect_failures >= 3:
-                _LOGGER.debug("[%s] Recreating Modbus client after %d connect failures", self._log_ctx, self._connect_failures)
+                _LOGGER.debug(
+                    "[%s] Recreating Modbus client after %d connect failures",
+                    self._log_ctx,
+                    self._connect_failures,
+                )
                 await self._recreate_client()
                 self._connect_failures = 0
                 reconnect_start = time.monotonic()
@@ -296,7 +491,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 return ok
             return False
-        except Exception as err:
+        except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
             _LOGGER.debug("[%s] Connection attempt failed: %s", self._log_ctx, err)
             return False
 
@@ -305,9 +500,16 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             close_request = functools.partial(self.client.close)
             await self.hass.async_add_executor_job(close_request)
-        except Exception:
+        except (ConnectionException, ModbusException, OSError, TimeoutError):
             pass
-        self.client = ModbusTcpClient(host=self.host, port=self.port, timeout=self.timeout)
+        self.client = ModbusTcpClient(
+            host=self.host, port=self.port, timeout=self.timeout
+        )
+        read_params = inspect.signature(self.client.read_holding_registers).parameters
+        self._unit_param_candidates = [
+            name for name in ("device_id", "slave", "unit") if name in read_params
+        ]
+        self._resolved_unit_param = None
 
     def _register_failure(self, reason: str) -> None:
         """Apply exponential backoff on repeated failures."""
@@ -350,11 +552,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     block["start_address"],
                     block["count"],
                 )
-                read_request = functools.partial(
-                    self.client.read_holding_registers,
-                    block["start_address"],
-                    count=block["count"],
-                    device_id=self.unit,
+                read_request = self._build_read_request(
+                    block["start_address"], block["count"]
                 )
                 result = await self.hass.async_add_executor_job(read_request)
 
@@ -406,7 +605,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         value = self._decode_register(reg_slice, descriptor)
                         if value is not None:
                             data[descriptor["key"]] = value
-                    except Exception as err:
+                    except (TypeError, ValueError, KeyError, IndexError) as err:
                         errors.append(descriptor["key"])
                         _LOGGER.debug(
                             "Error decoding register %s: %s",
@@ -414,7 +613,13 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             err,
                         )
 
-            except Exception as err:
+            except (
+                ConnectionException,
+                ModbusException,
+                OSError,
+                TimeoutError,
+                TypeError,
+            ) as err:
                 _LOGGER.warning(
                     "[%s] Exception in block read %s: %s (type: %s)",
                     self._log_ctx,
@@ -425,8 +630,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # Try to reconnect on connection errors (same as individual reads)
                 err_str = str(err).lower()
-                if "broken pipe" in err_str or "connection" in err_str or "reset" in err_str:
-                    _LOGGER.debug("[%s] Connection error in block read, attempting to reconnect and retry", self._log_ctx)
+                if (
+                    "broken pipe" in err_str
+                    or "connection" in err_str
+                    or "reset" in err_str
+                ):
+                    _LOGGER.debug(
+                        "[%s] Connection error in block read, attempting to reconnect and retry",
+                        self._log_ctx,
+                    )
                     try:
                         # Close existing connection
                         close_request = functools.partial(self.client.close)
@@ -434,7 +646,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                         # Recreate client on broken pipe / connection reset
                         if "broken pipe" in err_str or "reset" in err_str:
-                            _LOGGER.debug("[%s] Recreating Modbus client after socket error", self._log_ctx)
+                            _LOGGER.debug(
+                                "[%s] Recreating Modbus client after socket error",
+                                self._log_ctx,
+                            )
                             await self._recreate_client()
 
                         # Reconnect
@@ -442,11 +657,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         await self.hass.async_add_executor_job(connect_request)
 
                         # Retry the block read
-                        read_request = functools.partial(
-                            self.client.read_holding_registers,
-                            block["start_address"],
-                            count=block["count"],
-                            device_id=self.unit,
+                        read_request = self._build_read_request(
+                            block["start_address"], block["count"]
                         )
                         result = await self.hass.async_add_executor_job(read_request)
 
@@ -466,7 +678,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 descriptor = self.register_map[addr]
                                 offset = addr - block["start_address"]
                                 reg_count = descriptor["count"]
-                                reg_slice = result.registers[offset : offset + reg_count]
+                                reg_slice = result.registers[
+                                    offset : offset + reg_count
+                                ]
 
                                 if len(reg_slice) < reg_count:
                                     errors.append(descriptor["key"])
@@ -476,12 +690,31 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                     value = self._decode_register(reg_slice, descriptor)
                                     if value is not None:
                                         data[descriptor["key"]] = value
-                                except Exception as decode_err:
+                                except (
+                                    TypeError,
+                                    ValueError,
+                                    KeyError,
+                                    IndexError,
+                                ) as decode_err:
                                     errors.append(descriptor["key"])
-                                    _LOGGER.debug("Error decoding register %s: %s", descriptor["key"], decode_err)
+                                    _LOGGER.debug(
+                                        "Error decoding register %s: %s",
+                                        descriptor["key"],
+                                        decode_err,
+                                    )
                             continue  # Skip the error marking below
-                    except Exception as reconnect_err:
-                        _LOGGER.debug("[%s] Failed to reconnect and retry block: %s", self._log_ctx, reconnect_err)
+                    except (
+                        ConnectionException,
+                        ModbusException,
+                        OSError,
+                        TimeoutError,
+                        TypeError,
+                    ) as reconnect_err:
+                        _LOGGER.debug(
+                            "[%s] Failed to reconnect and retry block: %s",
+                            self._log_ctx,
+                            reconnect_err,
+                        )
 
                 # Mark all registers in this block as failed
                 for addr in block["registers"]:
@@ -491,7 +724,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Return True if at least one block succeeded
         return block_success_count > 0
 
-    async def _try_individual_reads(self, data: dict[str, Any], errors: list[str]) -> None:
+    async def _try_individual_reads(
+        self, data: dict[str, Any], errors: list[str]
+    ) -> None:
         """Try to read data using individual registers with reconnection logic."""
         consecutive_failures = 0
 
@@ -507,7 +742,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                     # If too many consecutive failures, abort
                     if consecutive_failures >= 5:
-                        _LOGGER.warning("[%s] Too many consecutive read failures, aborting update cycle", self._log_ctx)
+                        _LOGGER.warning(
+                            "[%s] Too many consecutive read failures, aborting update cycle",
+                            self._log_ctx,
+                        )
                         break
                     continue
 
@@ -529,7 +767,16 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 value = self._decode_register(result.registers, descriptor)
                 if value is not None:
                     data[descriptor["key"]] = value
-            except Exception as err:
+            except (
+                ConnectionException,
+                ModbusException,
+                OSError,
+                TimeoutError,
+                TypeError,
+                ValueError,
+                KeyError,
+                IndexError,
+            ) as err:
                 errors.append(descriptor["key"])
                 consecutive_failures += 1
                 _LOGGER.debug(
@@ -541,22 +788,22 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
                 if consecutive_failures >= 5:
-                    _LOGGER.warning("[%s] Too many consecutive read failures, aborting update cycle", self._log_ctx)
+                    _LOGGER.warning(
+                        "[%s] Too many consecutive read failures, aborting update cycle",
+                        self._log_ctx,
+                    )
                     break
 
     async def _read_register_with_reconnect(self, descriptor: dict[str, Any]):
         """Read a register with automatic reconnection on failure."""
         # Attempt read with current connection
         try:
-            read_request = functools.partial(
-                self.client.read_holding_registers,
-                descriptor["address"],
-                count=descriptor["count"],
-                device_id=self.unit,
+            read_request = self._build_read_request(
+                descriptor["address"], descriptor["count"]
             )
             result = await self.hass.async_add_executor_job(read_request)
             return result
-        except Exception as err:
+        except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
             # Connection likely dropped, attempt to reconnect and retry
             err_str = str(err).lower()
             _LOGGER.debug(
@@ -568,7 +815,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 type(err).__name__,
             )
 
-            if "broken pipe" in err_str or "connection" in err_str or "reset" in err_str:
+            if (
+                "broken pipe" in err_str
+                or "connection" in err_str
+                or "reset" in err_str
+            ):
                 _LOGGER.debug(
                     "[%s] Connection error detected, attempting reconnect for %s",
                     self._log_ctx,
@@ -579,28 +830,37 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # Close existing connection
                     close_request = functools.partial(self.client.close)
                     await self.hass.async_add_executor_job(close_request)
-                except Exception:
+                except (ConnectionException, ModbusException, OSError, TimeoutError):
                     pass  # Ignore close errors
 
                 try:
                     if "broken pipe" in err_str or "reset" in err_str:
-                        _LOGGER.debug("[%s] Recreating Modbus client after socket error", self._log_ctx)
+                        _LOGGER.debug(
+                            "[%s] Recreating Modbus client after socket error",
+                            self._log_ctx,
+                        )
                         await self._recreate_client()
                     # Reconnect
                     connect_request = functools.partial(self.client.connect)
                     await self.hass.async_add_executor_job(connect_request)
 
                     # Retry the read
-                    read_request = functools.partial(
-                        self.client.read_holding_registers,
-                        descriptor["address"],
-                        count=descriptor["count"],
-                        device_id=self.unit,
+                    read_request = self._build_read_request(
+                        descriptor["address"], descriptor["count"]
                     )
                     result = await self.hass.async_add_executor_job(read_request)
-                    _LOGGER.debug("[%s] Successfully reconnected and read register %s", self._log_ctx, descriptor["key"])
+                    _LOGGER.debug(
+                        "[%s] Successfully reconnected and read register %s",
+                        self._log_ctx,
+                        descriptor["key"],
+                    )
                     return result
-                except Exception as reconnect_err:
+                except (
+                    ConnectionException,
+                    ModbusException,
+                    OSError,
+                    TimeoutError,
+                ) as reconnect_err:
                     _LOGGER.debug(
                         "[%s] Failed to reconnect and read register %s: %s",
                         self._log_ctx,
@@ -634,14 +894,29 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             chars: list[str] = []
             for reg in registers:
                 if ascii_width == 1:
-                    # One char per register: character is in lower byte (LSB)
-                    # Upper byte is typically 0x00 padding
-                    chars.append(chr(reg & 0xFF))
+                    # One char per register (legacy Smart-UPS UPS ID chars).
+                    # Some firmware stores the character in LSB, others in MSB.
+                    # Prefer a printable byte and ignore 0x00 padding.
+                    hi = (reg >> 8) & 0xFF
+                    lo = reg & 0xFF
+                    hi_printable = 0x20 <= hi <= 0x7E
+                    lo_printable = 0x20 <= lo <= 0x7E
+
+                    if hi_printable and not lo_printable:
+                        chars.append(chr(hi))
+                    elif lo_printable and not hi_printable:
+                        chars.append(chr(lo))
+                    elif hi_printable and lo_printable:
+                        # Keep existing behavior deterministic for rare dual-printable case.
+                        chars.append(chr(lo))
+                    else:
+                        chars.append("\x00")
                 else:
                     # Two chars per register: MSB first (big-endian)
                     chars.append(chr((reg >> 8) & 0xFF))
                     chars.append(chr(reg & 0xFF))
-            return "".join(chars).rstrip()
+            # Normalize common device padding so empty/unset strings decode cleanly.
+            return "".join(chars).replace("\x00", "").strip()
         else:
             return None
 
