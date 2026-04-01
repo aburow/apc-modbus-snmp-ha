@@ -4,12 +4,19 @@
 ![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hacs.yaml/badge.svg)
 ![Hassfest](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hassfest.yaml/badge.svg)
 
-A Home Assistant integration for monitoring APC UPS and Rack PDU devices via Modbus/TCP protocol with SNMP device metadata.
+A Home Assistant integration for monitoring APC power devices via Modbus/TCP with SNMP metadata.
+
+Supported device families include:
+- Legacy Smart-UPS
+- Smart-UPS SMT/SMX/SRT
+- NetShelter Rack PDU
 
 This custom-component runs standalone and DOES NOT require additional components such as NUT or APCUPSD.
 
 Modbus/TCP is an extremely efficient method for collecting bulk data at a high rate and is used in industrial automation services for
 this purpose.
+
+If you do not have a Modbus enabled APC device the project at https://github.com/aburow/ups-snmp-ha provides a similar capability using SNMP only.
 
 ## Features
 
@@ -38,6 +45,7 @@ this purpose.
 
 ### Core Features
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
+- **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
