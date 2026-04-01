@@ -153,6 +153,19 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
 - Network connectivity to the device
 - Python 3.13+ (built into current Home Assistant)
 
+## Tested Platforms
+
+- Home Assistant Core runtime on Python 3.13
+- APC Smart-UPS legacy family (examples tested: Smart-UPS 1500, Smart-UPS 3000)
+- APC Smart-UPS SMT/SMX/SRT register family (multiple field dumps validated)
+- APC NetShelter Rack PDU family (AP8xxx series in mixed single/three-phase deployments)
+
+## Compatibility
+
+- Uses Home Assistant runtime dependencies (no bundled `pymodbus` or `pysnmp` libraries are installed by this integration).
+- Supports common `pymodbus` unit-id calling variants (`device_id`, `slave`, `unit`, positional fallback) to tolerate runtime version differences.
+- Designed to remain stable even when other custom integrations alter the Home Assistant Python package set.
+
 ## Entity Discovery
 
 ### Smart-UPS

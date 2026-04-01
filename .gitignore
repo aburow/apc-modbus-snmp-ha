@@ -28,6 +28,13 @@ PROTOCOL_COMPARISON.md
 TEST_README.md
 AGENTS.md
 
+# Local agent tooling metadata
+.codex
+.claude/
+.cursor/
+.aider/
+CLAUDE.md
+
 # IDE
 .vscode/
 .idea/
