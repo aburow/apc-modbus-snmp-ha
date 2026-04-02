@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.0-dev.2] - 2026-04-02
+### Added
+- New per-device `Run Diagnostics` button entity in Home Assistant.
+- On-demand diagnostic collector output (SNMP + Modbus raw and decoded blocks) shown via persistent-notification modal for fast troubleshooting.
+
+### Changed
+- Added `button` platform to supported integration platforms.
+- Updated README feature documentation for the manual diagnostics flow.
+
 ## [1.1.0] - 2026-03-28
 ### Added
 - Automatic first-run device type detection for legacy Smart-UPS, SMT/SMX/SRT, and Rack PDU families.

@@ -27,7 +27,7 @@ CONF_DEVICE_TYPE = "device_type"
 KEY_CLIENT = "modbus_client"
 KEY_COORDINATOR = "coordinator"
 
-SUPPORTED_PLATFORMS = ["sensor", "binary_sensor"]
+SUPPORTED_PLATFORMS = ["sensor", "binary_sensor", "button"]
 
 
 @dataclass
