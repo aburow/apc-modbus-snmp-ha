@@ -191,6 +191,37 @@ SENSOR_DESCRIPTIONS = [
     ),
 ]
 
+SNMP_EXTERNAL_SENSOR_DESCRIPTIONS = [
+    APCModbusSensorDescription(
+        key="snmp_external_temp_1",
+        name="External Temperature Probe 1",
+        native_unit_of_measurement="°C",
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="snmp_external_temp_1",
+    ),
+    APCModbusSensorDescription(
+        key="snmp_external_humidity_1",
+        name="External Humidity Probe 1",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="snmp_external_humidity_1",
+    ),
+    APCModbusSensorDescription(
+        key="snmp_external_temp_2",
+        name="External Temperature Probe 2",
+        native_unit_of_measurement="°C",
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="snmp_external_temp_2",
+    ),
+    APCModbusSensorDescription(
+        key="snmp_external_humidity_2",
+        name="External Humidity Probe 2",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="snmp_external_humidity_2",
+    ),
+]
+
 BINARY_SENSOR_DESCRIPTIONS = [
     # Status Word 1 - Faults
     APCModbusBinarySensorDescription(

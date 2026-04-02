@@ -28,6 +28,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
 from .device_types import APCDeviceType, classify_device_type
 from . import registers_smart_ups
+from .snmp_helper import get_external_probe_data_sync
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry_id: str,
         timeout: int,
         io_lock: asyncio.Lock,
+        snmp_community: str,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
     ) -> None:
         """Initialize the coordinator."""
@@ -62,6 +64,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.port = port
         self.entry_id = entry_id
         self.timeout = timeout
+        self.snmp_community = snmp_community
         self._log_ctx = f"{self.device_name} {self.host}:{self.port} (unit {self.unit})"
         # Serialize Modbus client access to avoid concurrent reads on one socket.
         self._io_lock = io_lock
@@ -447,7 +450,26 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._reset_backoff()
 
+        # Merge optional SNMP-backed external probe values.
+        await self._merge_snmp_external_probe_data(data)
+
         return data
+
+    async def _merge_snmp_external_probe_data(self, data: dict[str, Any]) -> None:
+        """Fetch and merge external probe values from SNMP."""
+        try:
+            snmp_values = await self.hass.async_add_executor_job(
+                get_external_probe_data_sync, self.host, self.snmp_community
+            )
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+            _LOGGER.debug(
+                "[%s] External probe SNMP query failed: %s", self._log_ctx, err
+            )
+            return
+
+        for key, value in snmp_values.items():
+            if value is not None:
+                data[key] = value
 
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""

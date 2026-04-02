@@ -148,6 +148,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.entry_id,
         5,
         io_lock,
+        snmp_community,
         scan_interval,
     )
 

@@ -33,11 +33,12 @@ If you do not have a Modbus enabled APC device the project at https://github.com
   - Per-outlet monitoring (up to 64 metered outlets)
   - Per-bank monitoring (up to 12 banks)
 
-### Smart-UPS Sensors (39 total)
+### Smart-UPS Sensors (43 total)
 - Input/output voltage and current
 - Battery charge percentage and runtime
 - Load percentage and transfer switch status
 - Temperature and firmware information
+- External temperature/humidity probes via SNMP (for supported environmental modules such as AP9335T/AP9335TH)
 - Input/output frequency
 - Real-time power measurements
 - Status bits and fault indicators
