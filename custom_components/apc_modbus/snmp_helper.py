@@ -190,10 +190,10 @@ def get_device_metadata_sync(
     return asyncio.run(async_get_device_metadata(host, community, device_type))
 
 
-def _parse_tenths_value(value: str | None) -> float | None:
-    """Parse tenths-based SNMP sensor value.
+def _parse_external_temp_c(value: str | None) -> float | None:
+    """Parse APC external temperature (Celsius) from SNMP value.
 
-    Returns None when value is unavailable/invalid.
+    Some devices report whole degrees, others report tenths of a degree.
     """
     if value is None:
         return None
@@ -201,10 +201,30 @@ def _parse_tenths_value(value: str | None) -> float | None:
         raw = int(str(value).strip())
     except (TypeError, ValueError):
         return None
-    # APC uses -1 for invalid/lost communications in many environmental OIDs.
+
     if raw < 0:
         return None
-    return raw / 10.0
+    if raw > 120:
+        return raw / 10.0
+    return float(raw)
+
+
+def _parse_external_humidity_pct(value: str | None) -> float | None:
+    """Parse APC external humidity percentage from SNMP value.
+
+    Some devices report whole %, others report tenths of a percent.
+    """
+    if value is None:
+        return None
+    try:
+        raw = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if raw < 0:
+        return None
+    if raw > 100:
+        return raw / 10.0
+    return float(raw)
 
 
 async def async_get_external_probe_data(
@@ -218,24 +238,40 @@ async def async_get_external_probe_data(
       - snmp_external_temp_2
       - snmp_external_humidity_2
     """
-    oids = {
-        "snmp_external_temp_1": f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1",
-        "snmp_external_humidity_1": f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1",
-        "snmp_external_temp_2": f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2",
-        "snmp_external_humidity_2": f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
+    # Different APC/NMC generations expose UIO values at slightly different
+    # instance depths. Try the two known index layouts per probe.
+    oid_candidates = {
+        "snmp_external_temp_1": [
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1",
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1",
+        ],
+        "snmp_external_humidity_1": [
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1",
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1",
+        ],
+        "snmp_external_temp_2": [
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2.1",
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2",
+        ],
+        "snmp_external_humidity_2": [
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1",
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
+        ],
     }
 
-    values = await asyncio.gather(
-        *(async_get_snmp_value(host, oid, community) for oid in oids.values()),
-        return_exceptions=True,
-    )
-
     parsed: dict[str, float | None] = {}
-    for key, value in zip(oids.keys(), values, strict=False):
-        if isinstance(value, Exception):
-            parsed[key] = None
-            continue
-        parsed[key] = _parse_tenths_value(value)
+    for key, candidates in oid_candidates.items():
+        raw_value: str | None = None
+        for oid in candidates:
+            raw_value = await async_get_snmp_value(host, oid, community)
+            if raw_value is not None:
+                break
+
+        if key.startswith("snmp_external_temp"):
+            parsed[key] = _parse_external_temp_c(raw_value)
+        else:
+            parsed[key] = _parse_external_humidity_pct(raw_value)
+
     return parsed
 
 

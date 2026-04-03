@@ -11,7 +11,11 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntityDescription,
 )
-from homeassistant.components.sensor import SensorEntityDescription, SensorStateClass
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntityDescription,
+    SensorStateClass,
+)
 
 DOMAIN = "apc_modbus"
 DEFAULT_NAME = "APC UPS"
@@ -195,6 +199,7 @@ SNMP_EXTERNAL_SENSOR_DESCRIPTIONS = [
     APCModbusSensorDescription(
         key="snmp_external_temp_1",
         name="External Temperature Probe 1",
+        device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement="°C",
         state_class=SensorStateClass.MEASUREMENT,
         register_key="snmp_external_temp_1",
@@ -202,6 +207,7 @@ SNMP_EXTERNAL_SENSOR_DESCRIPTIONS = [
     APCModbusSensorDescription(
         key="snmp_external_humidity_1",
         name="External Humidity Probe 1",
+        device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
         register_key="snmp_external_humidity_1",
@@ -209,6 +215,7 @@ SNMP_EXTERNAL_SENSOR_DESCRIPTIONS = [
     APCModbusSensorDescription(
         key="snmp_external_temp_2",
         name="External Temperature Probe 2",
+        device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement="°C",
         state_class=SensorStateClass.MEASUREMENT,
         register_key="snmp_external_temp_2",
@@ -216,6 +223,7 @@ SNMP_EXTERNAL_SENSOR_DESCRIPTIONS = [
     APCModbusSensorDescription(
         key="snmp_external_humidity_2",
         name="External Humidity Probe 2",
+        device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement="%",
         state_class=SensorStateClass.MEASUREMENT,
         register_key="snmp_external_humidity_2",

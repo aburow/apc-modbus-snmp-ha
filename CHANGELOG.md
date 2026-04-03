@@ -2,6 +2,14 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.0-dev.3] - 2026-04-03
+### Fixed
+- External SNMP probe OID indexing now supports APC table layouts that require `.X.1` instance suffixes (with fallback for legacy suffixing).
+- External probe scaling now handles devices that report whole-number temperature/humidity values instead of tenths.
+
+### Changed
+- Marked external probe sensors as Home Assistant `temperature` / `humidity` device classes for correct unit handling.
+
 ## [1.2.0-dev.2] - 2026-04-02
 ### Added
 - New per-device `Run Diagnostics` button entity in Home Assistant.
