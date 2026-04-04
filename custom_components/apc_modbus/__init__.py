@@ -45,6 +45,13 @@ from .snmp_helper import detect_device_type, get_device_metadata_sync
 
 _LOGGER = logging.getLogger(__name__)
 
+OPTIONAL_SNMP_EXTERNAL_KEYS = {
+    "snmp_external_temp_1",
+    "snmp_external_humidity_1",
+    "snmp_external_temp_2",
+    "snmp_external_humidity_2",
+}
+
 
 def _get_expected_entity_unique_ids(
     coordinator: APCModbusCoordinator, entry_id: str
@@ -78,6 +85,17 @@ def _get_expected_entity_unique_ids(
         binary_keys = {description.key for description in binary_descriptions}
     else:
         return set()
+
+    available_optional_keys = {
+        key
+        for key in OPTIONAL_SNMP_EXTERNAL_KEYS
+        if coordinator.data.get(key) is not None
+    }
+    sensor_keys = {
+        key
+        for key in sensor_keys
+        if key not in OPTIONAL_SNMP_EXTERNAL_KEYS or key in available_optional_keys
+    }
 
     all_keys = sensor_keys | binary_keys
     return {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}
@@ -258,13 +276,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning("Failed to discover Rack PDU capabilities: %s", err)
             # Continue - will create entities with default capabilities
 
-    await _async_cleanup_stale_entities(hass, entry, coordinator)
-
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception as err:
         _LOGGER.error("Failed to fetch initial data from APC device: %s", err)
         raise ConfigEntryNotReady(f"Failed to fetch initial data: {err}") from err
+
+    await _async_cleanup_stale_entities(hass, entry, coordinator)
 
     hass.data[DOMAIN][entry.entry_id] = {
         KEY_CLIENT: client,

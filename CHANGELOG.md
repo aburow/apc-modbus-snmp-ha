@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.0-dev.4] - 2026-04-04
+### Changed
+- Optional external SNMP probe entities (temperature/humidity) are now only created when probe values are actually returned.
+- Core UPS/PDU entities remain unchanged; only optional probe entities are suppressed when no probe is connected.
+
 ## [1.2.0-dev.3] - 2026-04-03
 ### Fixed
 - External SNMP probe OID indexing now supports APC table layouts that require `.X.1` instance suffixes (with fallback for legacy suffixing).
