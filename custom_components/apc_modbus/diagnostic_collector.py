@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import socket
 import struct
 from datetime import UTC, datetime
@@ -39,8 +40,6 @@ SNMP_OIDS: dict[str, str] = {
     "sysDescr": "1.3.6.1.2.1.1.1.0",
     "apc_model_smartups": "1.3.6.1.4.1.318.1.1.1.1.1.1.0",
     "apc_model_rackpdu": "1.3.6.1.4.1.318.1.1.12.1.5.0",
-    "apc_serial_smartups": "1.3.6.1.4.1.318.1.1.1.1.2.3.0",
-    "apc_serial_rackpdu": "1.3.6.1.4.1.318.1.1.12.1.6.0",
     "apc_fw_smartups": "1.3.6.1.4.1.318.1.1.1.1.2.1.0",
     "apc_fw_rackpdu": "1.3.6.1.4.1.318.1.1.12.1.3.0",
     "apc_fw_date_smartups": "1.3.6.1.4.1.318.1.1.1.1.2.2.0",
@@ -59,6 +58,13 @@ MODBUS_BLOCKS: list[tuple[int, int]] = [
 RUNTIME_BLOCK_KEY = "0x0080_count_26"
 LEGACY_ID_BLOCK_KEY = "0x0021_count_10"
 MODERN_ID_BLOCK_KEY = "0x023C_count_21"
+REDACTED_IP = "[redacted-ip]"
+REDACTED_COMMUNITY = "[redacted-community]"
+REDACTED_SERIAL = "[redacted-serial]"
+IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
+SERIAL_FIELD_RE = re.compile(
+    r"(?i)\b(sn|serial(?:\s+number)?)\s*[:=]\s*([A-Za-z0-9._/-]+)"
+)
 
 
 def _modbus_read_holding_registers(
@@ -180,6 +186,34 @@ def _build_quick_decode(registers: list[int]) -> dict[str, float | int | None]:
     }
 
 
+def _sanitize_text(value: str, host: str, community: str) -> str:
+    """Redact sensitive strings in diagnostics output."""
+    text = value
+    if host:
+        text = text.replace(host, REDACTED_IP)
+    text = IPV4_RE.sub(REDACTED_IP, text)
+    if community:
+        text = text.replace(community, REDACTED_COMMUNITY)
+
+    def _serial_replace(match: re.Match[str]) -> str:
+        return f"{match.group(1)}: {REDACTED_SERIAL}"
+
+    return SERIAL_FIELD_RE.sub(_serial_replace, text)
+
+
+def _sanitize_data(value: Any, host: str, community: str) -> Any:
+    """Recursively sanitize sensitive values in diagnostics data."""
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_data(item, host, community) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_data(item, host, community) for item in value]
+    if isinstance(value, str):
+        return _sanitize_text(value, host, community)
+    return value
+
+
 async def _collect_snmp_data(host: str, community: str) -> dict[str, Any]:
     values = await asyncio.gather(
         *(async_get_snmp_value(host, oid, community) for oid in SNMP_OIDS.values()),
@@ -267,7 +301,7 @@ def collect_diagnostic_dump(
     """Collect SNMP and Modbus diagnostic data for one APC device."""
     dump: dict[str, Any] = {
         "generated_at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
-        "host": host,
+        "host": REDACTED_IP,
         "port": port,
         "unit_id": unit_id,
         "snmp": asyncio.run(_collect_snmp_data(host, community)),
@@ -279,4 +313,4 @@ def collect_diagnostic_dump(
         dump["modbus"][key] = _collect_modbus_block(host, port, unit_id, start, count)
 
     _add_decodes(dump)
-    return dump
+    return _sanitize_data(dump, host, community)

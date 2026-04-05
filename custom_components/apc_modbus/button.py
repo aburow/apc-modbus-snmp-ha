@@ -75,7 +75,6 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             notification_id=notification_id,
         )
         _LOGGER.info(
-            "Diagnostics dump generated for %s (notification_id=%s)",
-            self.coordinator.host,
+            "Diagnostics dump generated (notification_id=%s)",
             notification_id,
         )

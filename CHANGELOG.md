@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.1] - 2026-04-05
+### Fixed
+- Redacted sensitive diagnostics output before display: IP addresses, serial-like values, and SNMP community values.
+- Removed direct serial-number OIDs from diagnostic SNMP collection.
+- Removed host address from diagnostics completion log line.
+
 ## [1.2.0] - 2026-04-05
 ### Added
 - External temperature and humidity sensor support via APC SNMP Universal I/O probe OIDs.
