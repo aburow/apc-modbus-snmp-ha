@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.0] - 2026-04-05
+### Added
+- External temperature and humidity sensor support via APC SNMP Universal I/O probe OIDs.
+- Manual per-device diagnostics button with on-demand SNMP + Modbus dump output in Home Assistant.
+
+### Changed
+- Improved external probe compatibility across APC/NMC OID instance indexing variants and value scaling formats.
+- Optional external probe entities are only created when probe values are present.
+
 ## [1.2.0-dev.4] - 2026-04-04
 ### Changed
 - Optional external SNMP probe entities (temperature/humidity) are now only created when probe values are actually returned.
