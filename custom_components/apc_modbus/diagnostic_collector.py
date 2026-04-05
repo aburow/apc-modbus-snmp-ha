@@ -204,9 +204,14 @@ def _sanitize_text(value: str, host: str, community: str) -> str:
 def _sanitize_data(value: Any, host: str, community: str) -> Any:
     """Recursively sanitize sensitive values in diagnostics data."""
     if isinstance(value, dict):
-        return {
-            key: _sanitize_data(item, host, community) for key, item in value.items()
-        }
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            # Keep SNMP OIDs as-is for troubleshooting/reference readability.
+            if key == "oid":
+                sanitized[key] = item
+                continue
+            sanitized[key] = _sanitize_data(item, host, community)
+        return sanitized
     if isinstance(value, list):
         return [_sanitize_data(item, host, community) for item in value]
     if isinstance(value, str):
