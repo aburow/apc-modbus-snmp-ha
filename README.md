@@ -44,6 +44,11 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - Status bits and fault indicators
 - And more...
 
+### External Probe Behavior (AP9335T/AP9335TH)
+- External probe sensors are optional and are created only when probe values are returned by SNMP.
+- If no compatible probe is connected, those entities are not created (instead of showing permanently unavailable sensors).
+- Temperature is reported as native Celsius and exposed with Home Assistant temperature device class, so UI/unit settings can convert to Fahrenheit automatically.
+
 ### Core Features
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
@@ -115,6 +120,7 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
 - Device info (model, serial, firmware) will be empty until SNMP succeeds
 - Once SNMP becomes available, metadata is retrieved on next restart
 - The integration relies on Home Assistant's bundled SNMP support and does not add a separate `pysnmp` dependency
+- Current SNMP implementation uses SNMP v2c reads in this integration path
 
 **Recommended Setup:**
 - Ensure SNMP is enabled on the device (port 161)
