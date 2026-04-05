@@ -5,6 +5,10 @@ name: Hassfest
   push:
   pull_request:
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   hassfest:
     name: Hassfest
