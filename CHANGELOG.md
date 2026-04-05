@@ -2,6 +2,37 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.0] - 2026-04-05
+### Added
+- External temperature and humidity sensor support via APC SNMP Universal I/O probe OIDs.
+- Manual per-device diagnostics button with on-demand SNMP + Modbus dump output in Home Assistant.
+
+### Changed
+- Improved external probe compatibility across APC/NMC OID instance indexing variants and value scaling formats.
+- Optional external probe entities are only created when probe values are present.
+
+## [1.2.0-dev.4] - 2026-04-04
+### Changed
+- Optional external SNMP probe entities (temperature/humidity) are now only created when probe values are actually returned.
+- Core UPS/PDU entities remain unchanged; only optional probe entities are suppressed when no probe is connected.
+
+## [1.2.0-dev.3] - 2026-04-03
+### Fixed
+- External SNMP probe OID indexing now supports APC table layouts that require `.X.1` instance suffixes (with fallback for legacy suffixing).
+- External probe scaling now handles devices that report whole-number temperature/humidity values instead of tenths.
+
+### Changed
+- Marked external probe sensors as Home Assistant `temperature` / `humidity` device classes for correct unit handling.
+
+## [1.2.0-dev.2] - 2026-04-02
+### Added
+- New per-device `Run Diagnostics` button entity in Home Assistant.
+- On-demand diagnostic collector output (SNMP + Modbus raw and decoded blocks) shown via persistent-notification modal for fast troubleshooting.
+
+### Changed
+- Added `button` platform to supported integration platforms.
+- Updated README feature documentation for the manual diagnostics flow.
+
 ## [1.1.0] - 2026-03-28
 ### Added
 - Automatic first-run device type detection for legacy Smart-UPS, SMT/SMX/SRT, and Rack PDU families.

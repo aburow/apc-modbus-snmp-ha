@@ -19,11 +19,19 @@ from .const import (
     APCModbusSensorDescription,
     DOMAIN,
     KEY_COORDINATOR,
+    SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
 )
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 
 _LOGGER = logging.getLogger(__name__)
+
+OPTIONAL_SNMP_EXTERNAL_KEYS = {
+    "snmp_external_temp_1",
+    "snmp_external_humidity_1",
+    "snmp_external_temp_2",
+    "snmp_external_humidity_2",
+}
 
 
 async def async_setup_entry(
@@ -59,6 +67,15 @@ async def async_setup_entry(
         from .const import SENSOR_DESCRIPTIONS
 
         sensor_descriptions = SENSOR_DESCRIPTIONS
+
+    # SNMP-backed external probe sensors are available across supported families.
+    sensor_descriptions = [*sensor_descriptions, *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS]
+    sensor_descriptions = [
+        description
+        for description in sensor_descriptions
+        if description.key not in OPTIONAL_SNMP_EXTERNAL_KEYS
+        or coordinator.data.get(description.register_key) is not None
+    ]
 
     _LOGGER.debug(
         "Setting up %d sensors for device type %s",

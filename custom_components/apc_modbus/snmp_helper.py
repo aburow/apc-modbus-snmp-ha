@@ -36,6 +36,11 @@ RACKPDU_OID_SERIAL = "1.3.6.1.4.1.318.1.1.12.1.6.0"
 RACKPDU_OID_FIRMWARE = "1.3.6.1.4.1.318.1.1.12.1.3.0"
 RACKPDU_OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.12.1.4.0"
 
+# APC Universal I/O sensor status table (PowerNet-MIB)
+# Index 1/2 typically correspond to UIO ports 1/2.
+UIO_SENSOR_STATUS_TEMP_C_BASE = "1.3.6.1.4.1.318.1.1.25.1.2.1.6"
+UIO_SENSOR_STATUS_HUMIDITY_BASE = "1.3.6.1.4.1.318.1.1.25.1.2.1.7"
+
 
 async def async_get_snmp_value(
     host: str, oid: str, community: str = "public", timeout: int = 5
@@ -183,6 +188,99 @@ def get_device_metadata_sync(
 ) -> dict[str, Any]:
     """Run SNMP metadata query in a dedicated event loop (sync wrapper)."""
     return asyncio.run(async_get_device_metadata(host, community, device_type))
+
+
+def _parse_external_temp_c(value: str | None) -> float | None:
+    """Parse APC external temperature (Celsius) from SNMP value.
+
+    Some devices report whole degrees, others report tenths of a degree.
+    """
+    if value is None:
+        return None
+    try:
+        raw = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+    if raw < 0:
+        return None
+    if raw > 120:
+        return raw / 10.0
+    return float(raw)
+
+
+def _parse_external_humidity_pct(value: str | None) -> float | None:
+    """Parse APC external humidity percentage from SNMP value.
+
+    Some devices report whole %, others report tenths of a percent.
+    """
+    if value is None:
+        return None
+    try:
+        raw = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if raw < 0:
+        return None
+    if raw > 100:
+        return raw / 10.0
+    return float(raw)
+
+
+async def async_get_external_probe_data(
+    host: str, community: str = "public"
+) -> dict[str, float | None]:
+    """Query APC external probe values via SNMP.
+
+    Returns keys:
+      - snmp_external_temp_1
+      - snmp_external_humidity_1
+      - snmp_external_temp_2
+      - snmp_external_humidity_2
+    """
+    # Different APC/NMC generations expose UIO values at slightly different
+    # instance depths. Try the two known index layouts per probe.
+    oid_candidates = {
+        "snmp_external_temp_1": [
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1",
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1",
+        ],
+        "snmp_external_humidity_1": [
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1",
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1",
+        ],
+        "snmp_external_temp_2": [
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2.1",
+            f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2",
+        ],
+        "snmp_external_humidity_2": [
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1",
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
+        ],
+    }
+
+    parsed: dict[str, float | None] = {}
+    for key, candidates in oid_candidates.items():
+        raw_value: str | None = None
+        for oid in candidates:
+            raw_value = await async_get_snmp_value(host, oid, community)
+            if raw_value is not None:
+                break
+
+        if key.startswith("snmp_external_temp"):
+            parsed[key] = _parse_external_temp_c(raw_value)
+        else:
+            parsed[key] = _parse_external_humidity_pct(raw_value)
+
+    return parsed
+
+
+def get_external_probe_data_sync(
+    host: str,
+    community: str = "public",
+) -> dict[str, float | None]:
+    """Run external probe SNMP query in a dedicated event loop (sync wrapper)."""
+    return asyncio.run(async_get_external_probe_data(host, community))
 
 
 def detect_device_type(model_string: str | None) -> APCDeviceType:
