@@ -13,6 +13,7 @@ import struct
 from datetime import UTC, datetime
 from typing import Any
 
+from .device_types import classify_device_type
 from .snmp_helper import async_get_snmp_value
 
 MBAP_HEADER_LENGTH = 7
@@ -53,6 +54,14 @@ MODBUS_BLOCKS: list[tuple[int, int]] = [
     (0x009E, 0x00A2 - 0x009E + 1),
     (0x00CF, 0x00D4 - 0x00CF + 1),
     (0x023C, 0x0250 - 0x023C + 1),
+]
+
+MODBUS_PROBES: list[tuple[str, int, int]] = [
+    ("rack_pdu_capabilities", 0x009E, 5),
+    ("rack_pdu_measurements", 0x00CF, 6),
+    ("legacy_ups_id", 0x0021, 1),
+    ("smt_status", 0x0000, 23),
+    ("smt_measurements", 0x0080, 26),
 ]
 
 RUNTIME_BLOCK_KEY = "0x0080_count_26"
@@ -219,6 +228,47 @@ def _sanitize_data(value: Any, host: str, community: str) -> Any:
     return value
 
 
+def _probe_block_ok(modbus_block: dict[str, Any] | None, count: int) -> bool:
+    """Return True when a collected Modbus block contains a successful read."""
+    if not modbus_block or "parsed" not in modbus_block:
+        return False
+    parsed = modbus_block["parsed"]
+    registers = parsed.get("registers")
+    return isinstance(registers, list) and len(registers) == count
+
+
+def _build_detection_summary(modbus_probes: dict[str, Any]) -> dict[str, Any]:
+    """Summarize exact runtime probe results using the same classifier as HA."""
+    rack_pdu_capabilities_ok = _probe_block_ok(
+        modbus_probes.get("rack_pdu_capabilities"), 5
+    )
+    rack_pdu_measurements_ok = _probe_block_ok(
+        modbus_probes.get("rack_pdu_measurements"), 6
+    )
+    legacy_probe_ok = _probe_block_ok(modbus_probes.get("legacy_ups_id"), 1)
+    smt_status_ok = _probe_block_ok(modbus_probes.get("smt_status"), 23)
+    smt_measurements_ok = _probe_block_ok(modbus_probes.get("smt_measurements"), 26)
+
+    detected = classify_device_type(
+        rack_pdu_capabilities_ok=rack_pdu_capabilities_ok,
+        rack_pdu_measurements_ok=rack_pdu_measurements_ok,
+        legacy_probe_ok=legacy_probe_ok,
+        smt_status_ok=smt_status_ok,
+        smt_measurements_ok=smt_measurements_ok,
+    )
+
+    return {
+        "detected_device_type": detected.value if detected else None,
+        "probe_results": {
+            "rack_pdu_capabilities_ok": rack_pdu_capabilities_ok,
+            "rack_pdu_measurements_ok": rack_pdu_measurements_ok,
+            "legacy_probe_ok": legacy_probe_ok,
+            "smt_status_ok": smt_status_ok,
+            "smt_measurements_ok": smt_measurements_ok,
+        },
+    }
+
+
 async def _collect_snmp_data(host: str, community: str) -> dict[str, Any]:
     values = await asyncio.gather(
         *(async_get_snmp_value(host, oid, community) for oid in SNMP_OIDS.values()),
@@ -311,11 +361,18 @@ def collect_diagnostic_dump(
         "unit_id": unit_id,
         "snmp": asyncio.run(_collect_snmp_data(host, community)),
         "modbus": {},
+        "modbus_probes": {},
     }
 
     for start, count in MODBUS_BLOCKS:
         key = f"0x{start:04X}_count_{count}"
         dump["modbus"][key] = _collect_modbus_block(host, port, unit_id, start, count)
 
+    for probe_name, start, count in MODBUS_PROBES:
+        dump["modbus_probes"][probe_name] = _collect_modbus_block(
+            host, port, unit_id, start, count
+        )
+
     _add_decodes(dump)
+    dump["detection"] = _build_detection_summary(dump["modbus_probes"])
     return _sanitize_data(dump, host, community)

@@ -17,6 +17,18 @@ class APCDeviceType(Enum):
     UNKNOWN = "unknown"
 
 
+def should_probe_device_type(device_type: APCDeviceType | None) -> bool:
+    """Return True when startup should revalidate device type via Modbus probes."""
+    return device_type in (
+        None,
+        APCDeviceType.UNKNOWN,
+        APCDeviceType.UPS,
+        APCDeviceType.SMART_UPS,
+        APCDeviceType.SMT_UPS,
+        APCDeviceType.RACK_PDU,
+    )
+
+
 def classify_smart_ups_family(
     *,
     legacy_probe_ok: bool,

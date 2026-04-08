@@ -39,7 +39,7 @@ from .const import (
     SUPPORTED_PLATFORMS,
 )
 from .coordinator import APCModbusCoordinator
-from .device_types import APCDeviceType
+from .device_types import APCDeviceType, should_probe_device_type
 from .register_factory import get_registers_for_device
 from .snmp_helper import detect_device_type, get_device_metadata_sync
 
@@ -213,14 +213,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
         # Continue without metadata - Modbus sensors still work
 
-    # For unknown/UPS entries, auto-detect type from Modbus behavior.
-    # Also revalidate stored SMART_UPS entries so SMT/SMX/SRT devices that were
-    # previously misclassified can self-correct on next startup.
-    if selected_device_type in (
-        None,
-        APCDeviceType.UPS,
-        APCDeviceType.SMART_UPS,
-    ):
+    # Revalidate concrete device types on startup so improved probing logic can
+    # correct previously persisted classifications without requiring re-add.
+    if should_probe_device_type(selected_device_type):
         try:
             detected_device_type = await coordinator.async_detect_device_type()
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:

@@ -55,6 +55,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Manual Diagnostics Button**: Per-device `Run Diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
+- **Probe-Based Revalidation**: Startup rechecks persisted concrete device types with Modbus probes so improved detection logic can self-correct stale stored classifications
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
@@ -231,6 +232,11 @@ For deeper data collection outside Home Assistant, use the standalone debug tool
 - https://github.com/aburow/apc_modbus_debug
 
 That repository is intended for gathering raw SNMP and Modbus data for compatibility analysis.
+
+The built-in diagnostics button also includes:
+- raw block reads for the current collector set
+- exact device-family probe calls used by Home Assistant detection
+- a derived detection summary based on those same probe results
 
 ### SNMP Connection Failed (Device Info Not Populated)
 - **Symptom**: Device model, serial number, and firmware info are not shown

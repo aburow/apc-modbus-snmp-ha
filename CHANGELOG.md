@@ -2,6 +2,14 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2-dev.2] - 2026-04-08
+### Changed
+- Startup Modbus revalidation now rechecks persisted concrete device types so improved probing logic can correct stale stored classifications without requiring re-add.
+- Diagnostic collector now records the exact runtime probe calls and includes a derived detection summary based on those same probe results.
+
+### Fixed
+- Collector/runtime detection parity for the legacy UPS probe path so diagnostics now reflect the same count and decision inputs used by Home Assistant.
+
 ## [1.2.2-dev.1] - 2026-04-08
 ### Changed
 - Improved Modbus family detection to classify UPS families from probe-success patterns using stronger discriminators (`0x0080` and `0x0021`) instead of requiring all probe blocks to succeed.

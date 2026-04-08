@@ -15,6 +15,16 @@ MODULE_SPEC.loader.exec_module(DEVICE_TYPES)
 APCDeviceType = DEVICE_TYPES.APCDeviceType
 classify_device_type = DEVICE_TYPES.classify_device_type
 classify_smart_ups_family = DEVICE_TYPES.classify_smart_ups_family
+should_probe_device_type = DEVICE_TYPES.should_probe_device_type
+
+
+def test_should_probe_device_type_revalidates_all_supported_types() -> None:
+    assert should_probe_device_type(None) is True
+    assert should_probe_device_type(APCDeviceType.UNKNOWN) is True
+    assert should_probe_device_type(APCDeviceType.UPS) is True
+    assert should_probe_device_type(APCDeviceType.SMART_UPS) is True
+    assert should_probe_device_type(APCDeviceType.SMT_UPS) is True
+    assert should_probe_device_type(APCDeviceType.RACK_PDU) is True
 
 
 def test_classify_smart_ups_family_prefers_smt_when_legacy_probe_fails() -> None:
