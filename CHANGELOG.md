@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2-dev.3] - 2026-04-08
+### Fixed
+- Device info model fallback now uses a family-aware label, so Rack PDU devices no longer show the generic `APC Device` label when SNMP model metadata is missing.
+
 ## [1.2.2-dev.2] - 2026-04-08
 ### Changed
 - Startup Modbus revalidation now rechecks persisted concrete device types so improved probing logic can correct stale stored classifications without requiring re-add.

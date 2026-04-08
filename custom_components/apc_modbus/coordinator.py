@@ -125,6 +125,16 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._post_connect_delay = 0.10
             self._inter_block_delay = 0.10
 
+    def get_device_model_for_registry(self) -> str:
+        """Return the best available model string for Home Assistant device info."""
+        if self.hw_model:
+            return self.hw_model
+        if self.device_type == APCDeviceType.RACK_PDU:
+            return "Rack PDU"
+        if self.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
+            return "Smart-UPS"
+        return "APC Device"
+
     def set_capabilities(self, capabilities: dict[str, int]) -> None:
         """Set device capabilities for dynamic entity generation (Rack PDU)."""
         self.device_capabilities = capabilities

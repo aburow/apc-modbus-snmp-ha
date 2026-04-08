@@ -52,7 +52,7 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             identifiers={(DOMAIN, entry_id)},
             name=coordinator.device_name,
             manufacturer="APC",
-            model=coordinator.hw_model or "APC Device",
+            model=coordinator.get_device_model_for_registry(),
             serial_number=coordinator.serial_number,
         )
 
