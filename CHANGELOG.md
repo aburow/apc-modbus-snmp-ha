@@ -2,6 +2,13 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2-dev.1] - 2026-04-08
+### Changed
+- Improved Modbus family detection to classify UPS families from probe-success patterns using stronger discriminators (`0x0080` and `0x0021`) instead of requiring all probe blocks to succeed.
+
+### Fixed
+- Reduced false-ambiguous startup classification cases for devices where `0x0000` probe behavior is non-discriminative.
+
 ## [1.2.1] - 2026-04-05
 ### Fixed
 - Redacted sensitive diagnostics output before display: IP addresses, serial-like values, and SNMP community values.

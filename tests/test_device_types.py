@@ -28,11 +28,33 @@ def test_classify_smart_ups_family_prefers_smt_when_legacy_probe_fails() -> None
     )
 
 
+def test_classify_smart_ups_family_prefers_smt_when_measurements_only_succeed() -> None:
+    assert (
+        classify_smart_ups_family(
+            legacy_probe_ok=False,
+            smt_status_ok=False,
+            smt_measurements_ok=True,
+        )
+        == APCDeviceType.SMT_UPS
+    )
+
+
 def test_classify_smart_ups_family_prefers_legacy_when_smt_probes_fail() -> None:
     assert (
         classify_smart_ups_family(
             legacy_probe_ok=True,
             smt_status_ok=False,
+            smt_measurements_ok=False,
+        )
+        == APCDeviceType.SMART_UPS
+    )
+
+
+def test_classify_smart_ups_family_prefers_legacy_when_status_only_succeeds() -> None:
+    assert (
+        classify_smart_ups_family(
+            legacy_probe_ok=True,
+            smt_status_ok=True,
             smt_measurements_ok=False,
         )
         == APCDeviceType.SMART_UPS
@@ -45,6 +67,19 @@ def test_classify_smart_ups_family_returns_none_when_ambiguous() -> None:
             legacy_probe_ok=True,
             smt_status_ok=True,
             smt_measurements_ok=True,
+        )
+        is None
+    )
+
+
+def test_classify_smart_ups_family_returns_none_when_no_discriminator_succeeds() -> (
+    None
+):
+    assert (
+        classify_smart_ups_family(
+            legacy_probe_ok=False,
+            smt_status_ok=True,
+            smt_measurements_ok=False,
         )
         is None
     )

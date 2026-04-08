@@ -25,17 +25,22 @@ def classify_smart_ups_family(
 ) -> APCDeviceType | None:
     """Classify a Smart-UPS family from distinguishing Modbus probe results.
 
-    Returns:
-        `SMT_UPS` when SMT-specific blocks succeed and the legacy-only probe fails.
-        `SMART_UPS` when the legacy-only probe succeeds and SMT probes fail.
-        `None` when the result is ambiguous and the caller should keep the current type.
-    """
-    smt_ok = smt_status_ok and smt_measurements_ok
+    Notes:
+        `0x0080` (SMT measurements) and `0x0021` (legacy UPS ID) are the
+        strongest discriminators in mixed hardware/firmware environments.
+        `0x0000` is probed for extra signal but can succeed across families.
 
-    if smt_ok and not legacy_probe_ok:
+    Returns:
+        `SMT_UPS` when SMT measurement probe succeeds and legacy ID probe fails.
+        `SMART_UPS` when legacy ID probe succeeds and SMT measurement probe fails.
+        `None` when both (or neither) discriminators succeed.
+    """
+    _ = smt_status_ok  # Kept in signature for compatibility and future weighting.
+
+    if smt_measurements_ok and not legacy_probe_ok:
         return APCDeviceType.SMT_UPS
 
-    if legacy_probe_ok and not smt_ok:
+    if legacy_probe_ok and not smt_measurements_ok:
         return APCDeviceType.SMART_UPS
 
     return None
@@ -52,7 +57,7 @@ def classify_device_type(
     """Classify APC device type from Modbus probe results.
 
     Returns:
-        `RACK_PDU` when PDU-specific blocks succeed.
+        `RACK_PDU` when PDU-specific blocks strongly identify Rack PDU behavior.
         `SMT_UPS` or `SMART_UPS` when UPS-family probes clearly identify the device.
         `None` when results are ambiguous.
     """
