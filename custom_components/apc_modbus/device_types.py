@@ -6,6 +6,8 @@
 
 from enum import Enum
 
+DETECTION_VERSION = 1
+
 
 class APCDeviceType(Enum):
     """Enumeration of supported APC device types."""
@@ -17,16 +19,56 @@ class APCDeviceType(Enum):
     UNKNOWN = "unknown"
 
 
-def should_probe_device_type(device_type: APCDeviceType | None) -> bool:
-    """Return True when startup should revalidate device type via Modbus probes."""
+def is_concrete_device_type(device_type: APCDeviceType | None) -> bool:
+    """Return True when the device type is a concrete supported family."""
     return device_type in (
-        None,
-        APCDeviceType.UNKNOWN,
-        APCDeviceType.UPS,
         APCDeviceType.SMART_UPS,
         APCDeviceType.SMT_UPS,
         APCDeviceType.RACK_PDU,
     )
+
+
+def should_probe_device_type(
+    device_type: APCDeviceType | None,
+    *,
+    stored_detection_version: int | None,
+    snmp_hint_device_type: APCDeviceType | None = None,
+) -> bool:
+    """Return True when startup should perform Modbus family probes.
+
+    Detection is performed on first add or when strong SNMP identity metadata
+    conflicts with the stored concrete type. Concrete stored families are not
+    automatically re-probed just because the detection algorithm version
+    changes; use manual re-detect for that path.
+    """
+    if device_type in (None, APCDeviceType.UNKNOWN, APCDeviceType.UPS):
+        return True
+
+    _ = stored_detection_version
+
+    return bool(
+        is_concrete_device_type(snmp_hint_device_type)
+        and snmp_hint_device_type != device_type
+    )
+
+
+def choose_device_type(
+    *,
+    stored_device_type: APCDeviceType | None,
+    detected_device_type: APCDeviceType | None,
+    snmp_hint_device_type: APCDeviceType | None = None,
+) -> APCDeviceType:
+    """Resolve the best concrete device type from stored, probed, and SNMP hints."""
+    if is_concrete_device_type(detected_device_type):
+        return detected_device_type
+
+    if is_concrete_device_type(stored_device_type):
+        return stored_device_type
+
+    if is_concrete_device_type(snmp_hint_device_type):
+        return snmp_hint_device_type
+
+    return APCDeviceType.SMART_UPS
 
 
 def classify_smart_ups_family(

@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2-dev.5] - 2026-04-09
+### Changed
+- Switched startup device-family probing to a gated model: probe on first add, strong SNMP/type conflict, or manual re-detect instead of re-probing every startup.
+- Automatic family rediscovery no longer runs for already classified devices just because of transient connection loss or detection-version drift.
+- Added a manual `Re-detect Device Type` button that updates the stored family and reloads the entry only when the resolved detection state changes.
+
 ## [1.2.2-dev.4] - 2026-04-09
 ### Changed
 - Added deterministic startup staggering across APC config entries so SNMP metadata reads, Modbus detection, capability discovery, and first refresh do not all run simultaneously in larger fleets.

@@ -55,7 +55,9 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Manual Diagnostics Button**: Per-device `Run Diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
-- **Probe-Based Revalidation**: Startup rechecks persisted concrete device types with Modbus probes so improved detection logic can self-correct stale stored classifications
+- **Targeted Re-detection**: Device family probes run on first add, when strong SNMP identity conflicts with the stored family, or when you manually trigger re-detection
+- **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
+- **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, capability discovery, and first refresh do not all hit at once
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
@@ -238,6 +240,8 @@ The built-in diagnostics button also includes:
 - raw block reads for the current collector set
 - exact device-family probe calls used by Home Assistant detection
 - a derived detection summary based on those same probe results
+
+For device-family correction without deleting and re-adding an entry, use the built-in `Re-detect Device Type` button from the device page.
 
 ### SNMP Connection Failed (Device Info Not Populated)
 - **Symptom**: Device model, serial number, and firmware info are not shown
