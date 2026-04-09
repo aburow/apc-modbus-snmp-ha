@@ -42,6 +42,7 @@ from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType, should_probe_device_type
 from .register_factory import get_registers_for_device
 from .snmp_helper import detect_device_type, get_device_metadata_sync
+from .startup_stagger import compute_startup_stagger_delay
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -169,6 +170,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         snmp_community,
         scan_interval,
     )
+
+    entry_ids = [
+        config_entry.entry_id
+        for config_entry in hass.config_entries.async_entries(DOMAIN)
+    ]
+    startup_stagger_delay = compute_startup_stagger_delay(
+        entry_ids, entry.entry_id, scan_interval
+    )
+    if startup_stagger_delay > 0:
+        _LOGGER.info(
+            "Applying startup stagger of %.1fs for entry %s across %d APC devices",
+            startup_stagger_delay,
+            entry.entry_id,
+            len(entry_ids),
+        )
+        await asyncio.sleep(startup_stagger_delay)
 
     selected_device_type = device_type
     original_device_type = device_type

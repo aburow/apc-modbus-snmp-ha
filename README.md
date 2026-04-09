@@ -56,6 +56,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Manual Diagnostics Button**: Per-device `Run Diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
 - **Probe-Based Revalidation**: Startup rechecks persisted concrete device types with Modbus probes so improved detection logic can self-correct stale stored classifications
+- **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, capability discovery, and first refresh do not all hit at once
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
@@ -282,6 +283,14 @@ The built-in diagnostics button also includes:
   - For Rack PDU with many outlets, expect longer update cycles
   - Verify network latency to device: `ping <device-host>`
 
+### Large Fleet Startup Behavior
+- **Behavior**: When many APC entries are present, startup work is staggered across a bounded window instead of all devices probing at once.
+- **Why**: This reduces first-start polling spikes that can otherwise cause partial Modbus failures in larger deployments.
+- **What to expect**:
+  - Small fleets start immediately.
+  - Larger fleets may take up to 60 seconds for the last APC entry to begin its heavy startup polling.
+  - Normal steady-state polling cadence is unchanged after startup.
+
 ### Device Type Not Detected
 - **Issue**: Auto-detection picks the wrong device family or setup fails
 - **Solution**:
@@ -293,7 +302,11 @@ The built-in diagnostics button also includes:
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.1.0 (Current)
+### v1.2.2-dev.4 (Current Pre-release)
+- ✅ Deterministic startup staggering for larger APC fleets
+- ✅ Reduced synchronized first-run probe/load spikes during Home Assistant startup
+
+### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
 - ✅ Improved Rack PDU detection and stale-entity cleanup
 - ✅ Broader `pymodbus` runtime compatibility for Home Assistant environments
