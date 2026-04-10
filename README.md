@@ -231,6 +231,8 @@ After updating the logger configuration:
 - Reproduce the issue
 - Collect the relevant log lines from Home Assistant
 
+At `info` log level, the coordinator now emits per-cycle boundary timing lines (`Starting update cycle` and `Update cycle complete in ...s`) to help baseline poll performance without enabling full debug logging.
+
 For deeper data collection outside Home Assistant, use the standalone debug tools here:
 - https://github.com/aburow/apc_modbus_debug
 

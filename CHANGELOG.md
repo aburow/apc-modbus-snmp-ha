@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2-dev.6] - 2026-04-10
+### Changed
+- Promoted coordinator update-cycle boundary logs (`Starting update cycle`, `Update cycle complete`) from `DEBUG` to `INFO` for easier poll-timing visibility in normal troubleshooting logs.
+
 ## [1.2.2-dev.5] - 2026-04-09
 ### Changed
 - Switched startup device-family probing to a gated model: probe on first add, strong SNMP/type conflict, or manual re-detect instead of re-probing every startup.

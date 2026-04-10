@@ -360,7 +360,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data: dict[str, Any] = {}
         errors: list[str] = []
 
-        _LOGGER.debug(
+        _LOGGER.info(
             "[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id
         )
 
@@ -453,7 +453,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             len(data),
             ", ".join(sorted(data.keys())),
         )
-        _LOGGER.debug(
+        _LOGGER.info(
             "[%s] Update cycle complete in %.3fs",
             self._log_ctx,
             time.monotonic() - cycle_start,
