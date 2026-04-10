@@ -2,6 +2,14 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2] - 2026-04-11
+### Changed
+- Improved startup stability for larger fleets with deterministic startup staggering to avoid synchronized first-run polling spikes.
+- Switched startup device-family probing to a gated model (first add, strong SNMP/type conflict, or manual re-detect), avoiding unnecessary rediscovery work.
+- Added a manual `Re-detect Device Type` button that updates stored type metadata and reloads only when detection state actually changes.
+- Promoted coordinator update-cycle boundary timing logs to `INFO` for easier runtime visibility without full debug logging.
+- Added explicit `mdi:` icon mapping for APC sensors and binary sensors (including dynamic Rack PDU entities) to avoid generic frontend fallback icons.
+
 ## [1.2.2-dev.7] - 2026-04-11
 ### Changed
 - Added explicit `mdi:` icon mapping for APC sensors and binary sensors (including dynamic Rack PDU entities) so Home Assistant UI no longer relies on generic fallback icons.

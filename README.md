@@ -309,9 +309,12 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.2-dev.4 (Current Pre-release)
-- ✅ Deterministic startup staggering for larger APC fleets
-- ✅ Reduced synchronized first-run probe/load spikes during Home Assistant startup
+### v1.2.2 (Current)
+- ✅ Startup load smoothing for larger APC fleets with deterministic startup staggering
+- ✅ Gated device-family probing (no automatic rediscovery on transient connection loss)
+- ✅ Manual `Re-detect Device Type` control for targeted correction and reload
+- ✅ Coordinator cycle timing boundaries visible at `INFO` log level
+- ✅ Explicit sensor/binary-sensor icon mapping for consistent Home Assistant UI display
 
 ### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
