@@ -62,6 +62,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
+- **Consistent Icons**: Sensors and binary sensors now publish explicit `mdi:` icons by key pattern to avoid generic frontend fallbacks
 
 ## Architecture
 
