@@ -27,6 +27,7 @@ CONF_UNIT = "unit"
 CONF_DEVICE_NAME = "device_name"
 CONF_SNMP_COMMUNITY = "snmp_community"
 CONF_DEVICE_TYPE = "device_type"
+CONF_DETECTION_VERSION = "detection_version"
 
 KEY_CLIENT = "modbus_client"
 KEY_COORDINATOR = "coordinator"

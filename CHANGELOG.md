@@ -2,6 +2,51 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.2] - 2026-04-11
+### Changed
+- Improved startup stability for larger fleets with deterministic startup staggering to avoid synchronized first-run polling spikes.
+- Switched startup device-family probing to a gated model (first add, strong SNMP/type conflict, or manual re-detect), avoiding unnecessary rediscovery work.
+- Added a manual `Re-detect Device Type` button that updates stored type metadata and reloads only when detection state actually changes.
+- Promoted coordinator update-cycle boundary timing logs to `INFO` for easier runtime visibility without full debug logging.
+- Added explicit `mdi:` icon mapping for APC sensors and binary sensors (including dynamic Rack PDU entities) to avoid generic frontend fallback icons.
+
+## [1.2.2-dev.7] - 2026-04-11
+### Changed
+- Added explicit `mdi:` icon mapping for APC sensors and binary sensors (including dynamic Rack PDU entities) so Home Assistant UI no longer relies on generic fallback icons.
+
+## [1.2.2-dev.6] - 2026-04-10
+### Changed
+- Promoted coordinator update-cycle boundary logs (`Starting update cycle`, `Update cycle complete`) from `DEBUG` to `INFO` for easier poll-timing visibility in normal troubleshooting logs.
+
+## [1.2.2-dev.5] - 2026-04-09
+### Changed
+- Switched startup device-family probing to a gated model: probe on first add, strong SNMP/type conflict, or manual re-detect instead of re-probing every startup.
+- Automatic family rediscovery no longer runs for already classified devices just because of transient connection loss or detection-version drift.
+- Added a manual `Re-detect Device Type` button that updates the stored family and reloads the entry only when the resolved detection state changes.
+
+## [1.2.2-dev.4] - 2026-04-09
+### Changed
+- Added deterministic startup staggering across APC config entries so SNMP metadata reads, Modbus detection, capability discovery, and first refresh do not all run simultaneously in larger fleets.
+
+## [1.2.2-dev.3] - 2026-04-08
+### Fixed
+- Device info model fallback now uses a family-aware label, so Rack PDU devices no longer show the generic `APC Device` label when SNMP model metadata is missing.
+
+## [1.2.2-dev.2] - 2026-04-08
+### Changed
+- Startup Modbus revalidation now rechecks persisted concrete device types so improved probing logic can correct stale stored classifications without requiring re-add.
+- Diagnostic collector now records the exact runtime probe calls and includes a derived detection summary based on those same probe results.
+
+### Fixed
+- Collector/runtime detection parity for the legacy UPS probe path so diagnostics now reflect the same count and decision inputs used by Home Assistant.
+
+## [1.2.2-dev.1] - 2026-04-08
+### Changed
+- Improved Modbus family detection to classify UPS families from probe-success patterns using stronger discriminators (`0x0080` and `0x0021`) instead of requiring all probe blocks to succeed.
+
+### Fixed
+- Reduced false-ambiguous startup classification cases for devices where `0x0000` probe behavior is non-discriminative.
+
 ## [1.2.1] - 2026-04-05
 ### Fixed
 - Redacted sensitive diagnostics output before display: IP addresses, serial-like values, and SNMP community values.

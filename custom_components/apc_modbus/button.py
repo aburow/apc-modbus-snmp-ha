@@ -17,8 +17,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, KEY_COORDINATOR
+from .const import CONF_DETECTION_VERSION, CONF_DEVICE_TYPE, DOMAIN, KEY_COORDINATOR
 from .coordinator import APCModbusCoordinator
+from .device_types import DETECTION_VERSION, choose_device_type
 from .diagnostic_collector import collect_diagnostic_dump
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,7 +34,12 @@ async def async_setup_entry(
     coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][
         KEY_COORDINATOR
     ]
-    async_add_entities([APCModbusDiagnosticButton(coordinator, entry.entry_id)])
+    async_add_entities(
+        [
+            APCModbusDiagnosticButton(coordinator, entry.entry_id),
+            APCModbusRedetectDeviceTypeButton(coordinator, entry),
+        ]
+    )
 
 
 class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
@@ -52,7 +58,7 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             identifiers={(DOMAIN, entry_id)},
             name=coordinator.device_name,
             manufacturer="APC",
-            model=coordinator.hw_model or "APC Device",
+            model=coordinator.get_device_model_for_registry(),
             serial_number=coordinator.serial_number,
         )
 
@@ -77,4 +83,75 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
         _LOGGER.info(
             "Diagnostics dump generated (notification_id=%s)",
             notification_id,
+        )
+
+
+class APCModbusRedetectDeviceTypeButton(
+    CoordinatorEntity[APCModbusCoordinator], ButtonEntity
+):
+    """Manual button to re-run device-type detection and reload the entry."""
+
+    has_entity_name = True
+    _attr_name = "Re-detect Device Type"
+    _attr_icon = "mdi:magnify-scan"
+
+    def __init__(self, coordinator: APCModbusCoordinator, entry: ConfigEntry) -> None:
+        """Initialize button entity."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_redetect_device_type"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=coordinator.device_name,
+            manufacturer="APC",
+            model=coordinator.get_device_model_for_registry(),
+            serial_number=coordinator.serial_number,
+        )
+
+    async def async_press(self) -> None:
+        """Run Modbus device detection again and reload if the result changed."""
+        detected_device_type = await self.coordinator.async_detect_device_type()
+        selected_device_type = choose_device_type(
+            stored_device_type=self.coordinator.device_type,
+            detected_device_type=detected_device_type,
+        )
+
+        entry_data = self._entry.data
+        stored_detection_version = entry_data.get(CONF_DETECTION_VERSION)
+        config_changed = (
+            entry_data.get(CONF_DEVICE_TYPE) != selected_device_type.value
+            or stored_detection_version != DETECTION_VERSION
+        )
+
+        if config_changed:
+            self.hass.config_entries.async_update_entry(
+                self._entry,
+                data={
+                    **entry_data,
+                    CONF_DEVICE_TYPE: selected_device_type.value,
+                    CONF_DETECTION_VERSION: DETECTION_VERSION,
+                },
+            )
+            await self.hass.config_entries.async_reload(self._entry.entry_id)
+            message = (
+                f"Device type resolved as `{selected_device_type.value}` and the "
+                "integration entry was reloaded."
+            )
+        else:
+            message = (
+                f"Device type remains `{selected_device_type.value}`. "
+                "No reload was required."
+            )
+
+        notification_id = f"{DOMAIN}_{self._entry.entry_id}_redetect_device_type"
+        async_create(
+            self.hass,
+            message,
+            title=f"{self.coordinator.device_name} Device Type",
+            notification_id=notification_id,
+        )
+        _LOGGER.info(
+            "Manual device re-detect completed for entry %s: %s",
+            self._entry.entry_id,
+            selected_device_type.value,
         )

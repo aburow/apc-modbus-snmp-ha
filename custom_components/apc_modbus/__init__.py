@@ -24,6 +24,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 
 from .const import (
+    CONF_DETECTION_VERSION,
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
     CONF_SNMP_COMMUNITY,
@@ -39,9 +40,16 @@ from .const import (
     SUPPORTED_PLATFORMS,
 )
 from .coordinator import APCModbusCoordinator
-from .device_types import APCDeviceType
+from .device_types import (
+    DETECTION_VERSION,
+    APCDeviceType,
+    choose_device_type,
+    is_concrete_device_type,
+    should_probe_device_type,
+)
 from .register_factory import get_registers_for_device
 from .snmp_helper import detect_device_type, get_device_metadata_sync
+from .startup_stagger import compute_startup_stagger_delay
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -144,6 +152,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     device_type_str = entry.data.get(CONF_DEVICE_TYPE)
     device_type = APCDeviceType(device_type_str) if device_type_str else None
+    detection_version = entry.data.get(CONF_DETECTION_VERSION)
 
     # Create client with timeout to prevent hung connections
     client = ModbusTcpClient(host=host, port=port, timeout=5)
@@ -170,10 +179,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scan_interval,
     )
 
+    entry_ids = [
+        config_entry.entry_id
+        for config_entry in hass.config_entries.async_entries(DOMAIN)
+    ]
+    startup_stagger_delay = compute_startup_stagger_delay(
+        entry_ids, entry.entry_id, scan_interval
+    )
+    if startup_stagger_delay > 0:
+        _LOGGER.info(
+            "Applying startup stagger of %.1fs for entry %s across %d APC devices",
+            startup_stagger_delay,
+            entry.entry_id,
+            len(entry_ids),
+        )
+        await asyncio.sleep(startup_stagger_delay)
+
     selected_device_type = device_type
     original_device_type = device_type
 
     snmp_hint_device_type: APCDeviceType | None = None
+    detected_device_type: APCDeviceType | None = None
 
     # Query SNMP for device metadata (async, non-blocking)
     try:
@@ -201,7 +227,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 fw_version=metadata.get("firmware_version"),
                 fw_date=metadata.get("firmware_date"),
             )
-            snmp_hint_device_type = detect_device_type(metadata.get("model"))
+            if metadata.get("model"):
+                snmp_hint_device_type = detect_device_type(metadata.get("model"))
             if snmp_hint_device_type == APCDeviceType.RACK_PDU:
                 _LOGGER.info(
                     "SNMP metadata strongly suggests a Rack PDU model: %s",
@@ -213,13 +240,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
         # Continue without metadata - Modbus sensors still work
 
-    # For unknown/UPS entries, auto-detect type from Modbus behavior.
-    # Also revalidate stored SMART_UPS entries so SMT/SMX/SRT devices that were
-    # previously misclassified can self-correct on next startup.
-    if selected_device_type in (
-        None,
-        APCDeviceType.UPS,
-        APCDeviceType.SMART_UPS,
+    if should_probe_device_type(
+        selected_device_type,
+        stored_detection_version=detection_version,
+        snmp_hint_device_type=snmp_hint_device_type,
     ):
         try:
             detected_device_type = await coordinator.async_detect_device_type()
@@ -232,31 +256,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     detected_device_type.value,
                 )
                 selected_device_type = detected_device_type
+            elif is_concrete_device_type(original_device_type):
+                _LOGGER.warning(
+                    "Device type re-detection was ambiguous; keeping stored type %s",
+                    original_device_type.value,
+                )
 
-    if selected_device_type is None:
-        if snmp_hint_device_type == APCDeviceType.RACK_PDU:
-            selected_device_type = APCDeviceType.RACK_PDU
+    selected_device_type = choose_device_type(
+        stored_device_type=original_device_type,
+        detected_device_type=detected_device_type,
+        snmp_hint_device_type=snmp_hint_device_type,
+    )
+    if detected_device_type is None and original_device_type is None:
+        if is_concrete_device_type(snmp_hint_device_type):
             _LOGGER.warning(
-                "Device type auto-detection via Modbus was ambiguous; using SNMP Rack PDU hint instead"
+                "Device type auto-detection via Modbus was ambiguous; using SNMP hint %s instead",
+                selected_device_type.value,
             )
         else:
-            selected_device_type = APCDeviceType.SMART_UPS
             _LOGGER.warning(
                 "Device type auto-detection was ambiguous; defaulting to %s",
                 selected_device_type.value,
             )
 
-    # Persist corrected/derived concrete device type for future startups.
-    if selected_device_type != original_device_type and selected_device_type in (
-        APCDeviceType.SMART_UPS,
-        APCDeviceType.SMT_UPS,
-        APCDeviceType.RACK_PDU,
+    # Persist corrected/derived concrete device type and detection version.
+    if is_concrete_device_type(selected_device_type) and (
+        selected_device_type != original_device_type
+        or detection_version != DETECTION_VERSION
     ):
         hass.config_entries.async_update_entry(
             entry,
             data={
                 **entry.data,
                 CONF_DEVICE_TYPE: selected_device_type.value,
+                CONF_DETECTION_VERSION: DETECTION_VERSION,
             },
         )
 

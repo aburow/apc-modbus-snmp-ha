@@ -55,9 +55,14 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Manual Diagnostics Button**: Per-device `Run Diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
+- **Targeted Re-detection**: Device family probes run on first add, when strong SNMP identity conflicts with the stored family, or when you manually trigger re-detection
+- **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
+- **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
+- **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, capability discovery, and first refresh do not all hit at once
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
+- **Consistent Icons**: Sensors and binary sensors now publish explicit `mdi:` icons by key pattern to avoid generic frontend fallbacks
 
 ## Architecture
 
@@ -227,10 +232,19 @@ After updating the logger configuration:
 - Reproduce the issue
 - Collect the relevant log lines from Home Assistant
 
+At `info` log level, the coordinator now emits per-cycle boundary timing lines (`Starting update cycle` and `Update cycle complete in ...s`) to help baseline poll performance without enabling full debug logging.
+
 For deeper data collection outside Home Assistant, use the standalone debug tools here:
 - https://github.com/aburow/apc_modbus_debug
 
 That repository is intended for gathering raw SNMP and Modbus data for compatibility analysis.
+
+The built-in diagnostics button also includes:
+- raw block reads for the current collector set
+- exact device-family probe calls used by Home Assistant detection
+- a derived detection summary based on those same probe results
+
+For device-family correction without deleting and re-adding an entry, use the built-in `Re-detect Device Type` button from the device page.
 
 ### SNMP Connection Failed (Device Info Not Populated)
 - **Symptom**: Device model, serial number, and firmware info are not shown
@@ -276,6 +290,14 @@ That repository is intended for gathering raw SNMP and Modbus data for compatibi
   - For Rack PDU with many outlets, expect longer update cycles
   - Verify network latency to device: `ping <device-host>`
 
+### Large Fleet Startup Behavior
+- **Behavior**: When many APC entries are present, startup work is staggered across a bounded window instead of all devices probing at once.
+- **Why**: This reduces first-start polling spikes that can otherwise cause partial Modbus failures in larger deployments.
+- **What to expect**:
+  - Small fleets start immediately.
+  - Larger fleets may take up to 60 seconds for the last APC entry to begin its heavy startup polling.
+  - Normal steady-state polling cadence is unchanged after startup.
+
 ### Device Type Not Detected
 - **Issue**: Auto-detection picks the wrong device family or setup fails
 - **Solution**:
@@ -287,7 +309,14 @@ That repository is intended for gathering raw SNMP and Modbus data for compatibi
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.1.0 (Current)
+### v1.2.2 (Current)
+- ✅ Startup load smoothing for larger APC fleets with deterministic startup staggering
+- ✅ Gated device-family probing (no automatic rediscovery on transient connection loss)
+- ✅ Manual `Re-detect Device Type` control for targeted correction and reload
+- ✅ Coordinator cycle timing boundaries visible at `INFO` log level
+- ✅ Explicit sensor/binary-sensor icon mapping for consistent Home Assistant UI display
+
+### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
 - ✅ Improved Rack PDU detection and stale-entity cleanup
 - ✅ Broader `pymodbus` runtime compatibility for Home Assistant environments
