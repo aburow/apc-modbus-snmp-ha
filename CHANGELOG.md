@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.1] - 2026-04-11
+### Changed
+- Replaced local sensor/binary icon logic with the shared canonical `icons_unified.py` mapping module copied from `ups_unified_mqtt`, so icon behavior now aligns across projects.
+
 ## [1.2.2] - 2026-04-11
 ### Changed
 - Improved startup stability for larger fleets with deterministic startup staggering to avoid synchronized first-run polling spikes.

@@ -23,6 +23,7 @@ from .const import (
 )
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
+from .icons_unified import resolve_sensor_icon
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,41 +33,6 @@ OPTIONAL_SNMP_EXTERNAL_KEYS = {
     "snmp_external_temp_2",
     "snmp_external_humidity_2",
 }
-
-
-def _icon_for_sensor_key(sensor_key: str) -> str:
-    """Return an explicit mdi icon for known APC sensor keys."""
-    if "temperature" in sensor_key:
-        return "mdi:thermometer"
-    if "humidity" in sensor_key:
-        return "mdi:water-percent"
-    if "runtime" in sensor_key or "delay" in sensor_key or "duration" in sensor_key:
-        return "mdi:timer-outline"
-    if "energy" in sensor_key:
-        return "mdi:lightning-bolt"
-    if "apparent_power" in sensor_key:
-        return "mdi:flash-outline"
-    if "real_power" in sensor_key or sensor_key.endswith("_power"):
-        return "mdi:flash"
-    if "power_factor" in sensor_key:
-        return "mdi:angle-acute"
-    if "current" in sensor_key or sensor_key.endswith("_amps"):
-        return "mdi:current-ac"
-    if "frequency" in sensor_key:
-        return "mdi:sine-wave"
-    if "voltage" in sensor_key or "transfer_point" in sensor_key:
-        return "mdi:sine-wave"
-    if "battery" in sensor_key:
-        if "state_of_charge" in sensor_key:
-            return "mdi:battery"
-        return "mdi:battery-medium"
-    if "load" in sensor_key:
-        if sensor_key.endswith("_state"):
-            return "mdi:list-status"
-        return "mdi:gauge"
-    if sensor_key.endswith("_state"):
-        return "mdi:list-status"
-    return "mdi:eye"
 
 
 async def async_setup_entry(
@@ -148,7 +114,7 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             if coordinator.fw_version and coordinator.fw_date
             else coordinator.fw_version,
         )
-        self._attr_icon = _icon_for_sensor_key(description.key)
+        self._attr_icon = resolve_sensor_icon(description.key)
         # Keep numeric UI rendering concise across all device families.
         if description.device_class != SensorDeviceClass.ENUM:
             precision = description.suggested_display_precision

@@ -22,27 +22,9 @@ from .const import (
 )
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
+from .icons_unified import resolve_binary_sensor_icon
 
 _LOGGER = logging.getLogger(__name__)
-
-
-def _icon_for_binary_sensor_key(sensor_key: str) -> str:
-    """Return an explicit mdi icon for known APC binary sensor keys."""
-    if "overload" in sensor_key or "fault" in sensor_key:
-        return "mdi:alert-circle"
-    if "replace_battery" in sensor_key or "needs_replacement" in sensor_key:
-        return "mdi:battery-alert"
-    if "battery" in sensor_key:
-        return "mdi:battery-medium"
-    if "on_bypass" in sensor_key or "bypass" in sensor_key:
-        return "mdi:swap-horizontal"
-    if "output_off" in sensor_key:
-        return "mdi:power-plug-off"
-    if "online" in sensor_key:
-        return "mdi:power-plug"
-    if "on_battery" in sensor_key:
-        return "mdi:battery"
-    return "mdi:eye"
 
 
 async def async_setup_entry(
@@ -115,7 +97,7 @@ class APCModbusBinarySensor(CoordinatorEntity, BinarySensorEntity):
             if coordinator.fw_version and coordinator.fw_date
             else coordinator.fw_version,
         )
-        self._attr_icon = _icon_for_binary_sensor_key(description.key)
+        self._attr_icon = resolve_binary_sensor_icon(description.key)
 
     @property
     def is_on(self) -> bool | None:
