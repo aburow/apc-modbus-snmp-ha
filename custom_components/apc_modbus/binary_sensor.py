@@ -23,6 +23,7 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 from .icons_unified import resolve_binary_sensor_icon
+from .sensor_availability_unified import is_binary_sensor_enabled_by_default
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -98,6 +99,12 @@ class APCModbusBinarySensor(CoordinatorEntity, BinarySensorEntity):
             else coordinator.fw_version,
         )
         self._attr_icon = resolve_binary_sensor_icon(description.key)
+        self._attr_entity_registry_enabled_default = (
+            is_binary_sensor_enabled_by_default(
+                description.key,
+                coordinator.device_type.value,
+            )
+        )
 
     @property
     def is_on(self) -> bool | None:

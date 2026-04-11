@@ -24,6 +24,7 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
 from .icons_unified import resolve_sensor_icon
+from .sensor_availability_unified import is_sensor_enabled_by_default
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -115,6 +116,10 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             else coordinator.fw_version,
         )
         self._attr_icon = resolve_sensor_icon(description.key)
+        self._attr_entity_registry_enabled_default = is_sensor_enabled_by_default(
+            description.key,
+            coordinator.device_type.value,
+        )
         # Keep numeric UI rendering concise across all device families.
         if description.device_class != SensorDeviceClass.ENUM:
             precision = description.suggested_display_precision

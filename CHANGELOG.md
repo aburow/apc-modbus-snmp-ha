@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.2] - 2026-04-11
+### Changed
+- Added a dependency-free unified sensor availability policy module (`sensor_availability_unified.py`) to standardize default-enabled UPS core sensors.
+- Updated sensor/binary entities so UPS extras are disabled by default via Entity Registry while keeping entities available for manual opt-in.
+- Added setup-time UPS core polling profile selection to reduce register reads when only core entities are enabled.
+
 ## [1.2.3-dev.1] - 2026-04-11
 ### Changed
 - Replaced local sensor/binary icon logic with the shared canonical `icons_unified.py` mapping module copied from `ups_unified_mqtt`, so icon behavior now aligns across projects.
