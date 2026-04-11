@@ -109,6 +109,7 @@ def _build_blocks_from_registers(
 
     ordered = sorted(registers, key=lambda descriptor: int(descriptor["address"]))
     blocks: list[dict[str, Any]] = []
+    block_index = 1
 
     current_start = int(ordered[0]["address"])
     current_end = current_start + int(ordered[0].get("count", 1)) - 1
@@ -125,18 +126,21 @@ def _build_blocks_from_registers(
 
         blocks.append(
             {
-                "start": current_start,
+                "name": f"core_block_{block_index}",
+                "start_address": current_start,
                 "count": current_end - current_start + 1,
                 "registers": current_registers,
             }
         )
+        block_index += 1
         current_start = descriptor_start
         current_end = descriptor_end
         current_registers = [descriptor_start]
 
     blocks.append(
         {
-            "start": current_start,
+            "name": f"core_block_{block_index}",
+            "start_address": current_start,
             "count": current_end - current_start + 1,
             "registers": current_registers,
         }

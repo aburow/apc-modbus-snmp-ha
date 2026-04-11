@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.3] - 2026-04-11
+### Fixed
+- Restored coordinator block-read compatibility for UPS core polling profiles by emitting core blocks with `name` and `start_address`, preventing `KeyError: 'name'` during refresh.
+
 ## [1.2.3-dev.2] - 2026-04-11
 ### Changed
 - Added a dependency-free unified sensor availability policy module (`sensor_availability_unified.py`) to standardize default-enabled UPS core sensors.
