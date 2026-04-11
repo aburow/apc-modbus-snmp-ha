@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.4] - 2026-04-11
+### Fixed
+- Restored full block-read polling behavior for UPS families while keeping core-first entity availability defaults. Disabled-by-default sensors now affect visibility/opt-in only, not block polling strategy.
+
 ## [1.2.3-dev.3] - 2026-04-11
 ### Fixed
 - Restored coordinator block-read compatibility for UPS core polling profiles by emitting core blocks with `name` and `start_address`, preventing `KeyError: 'name'` during refresh.

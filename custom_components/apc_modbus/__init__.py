@@ -47,11 +47,7 @@ from .device_types import (
     is_concrete_device_type,
     should_probe_device_type,
 )
-from .register_factory import build_core_register_profile, get_registers_for_device
-from .sensor_availability_unified import (
-    is_binary_sensor_enabled_by_default,
-    is_sensor_enabled_by_default,
-)
+from .register_factory import get_registers_for_device
 from .snmp_helper import detect_device_type, get_device_metadata_sync
 from .startup_stagger import compute_startup_stagger_delay
 
@@ -141,49 +137,6 @@ async def _async_cleanup_stale_entities(
             removed_count,
             entry.entry_id,
         )
-
-
-def _get_enabled_entity_keys(hass: HomeAssistant, entry: ConfigEntry) -> set[str]:
-    """Return currently enabled sensor/binary keys from entity registry."""
-    ent_reg = er.async_get(hass)
-    prefix = f"{DOMAIN}_{entry.entry_id}_"
-    enabled_keys: set[str] = set()
-
-    for entity_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        if entity_entry.domain not in {"sensor", "binary_sensor"}:
-            continue
-        if not entity_entry.unique_id or not entity_entry.unique_id.startswith(prefix):
-            continue
-        if entity_entry.disabled_by is not None:
-            continue
-        enabled_keys.add(entity_entry.unique_id.removeprefix(prefix))
-
-    return enabled_keys
-
-
-def _is_default_core_entity_key(key: str, device_type: APCDeviceType) -> bool:
-    """Return True when the key is in the standard default-enabled UPS core."""
-    device_family = device_type.value
-    return is_sensor_enabled_by_default(
-        key, device_family
-    ) or is_binary_sensor_enabled_by_default(key, device_family)
-
-
-def _should_use_core_poll_profile(
-    hass: HomeAssistant, entry: ConfigEntry, device_type: APCDeviceType
-) -> bool:
-    """Select core polling when no extra entities are enabled."""
-    if device_type not in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
-        return False
-
-    enabled_keys = _get_enabled_entity_keys(hass, entry)
-    if not enabled_keys:
-        # Fresh entries have no registry state yet; default to core polling.
-        return True
-
-    return not any(
-        not _is_default_core_entity_key(key, device_type) for key in enabled_keys
-    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -342,24 +295,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator.set_device_type(selected_device_type)
 
-    # Load registers for detected device type.
+    # Load full block polling register profile for detected device type.
     registers, blocks, reg_map = get_registers_for_device(coordinator.device_type)
-    if _should_use_core_poll_profile(hass, entry, coordinator.device_type):
-        registers, blocks, reg_map = build_core_register_profile(
-            coordinator.device_type,
-            registers,
-        )
-        _LOGGER.info(
-            "Using core polling profile for %s (%d registers across %d blocks)",
-            coordinator.device_type.value,
-            len(registers),
-            len(blocks),
-        )
-    elif coordinator.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
-        _LOGGER.info(
-            "Using full polling profile for %s because one or more extra entities are enabled",
-            coordinator.device_type.value,
-        )
     coordinator.set_registers(registers, blocks, reg_map)
 
     # For Rack PDU, discover capabilities for dynamic entity generation
