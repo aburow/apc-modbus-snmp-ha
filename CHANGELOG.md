@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.6] - 2026-04-12
+### Added
+- Added dependency-free `device_info_unified.py` with `resolve_device_info(values, source)` for ups-docker-ha bridge compatibility.
+- Added acceptance tests covering import safety, canonical-key output constraints, malformed input handling, and deterministic metadata mapping.
+
 ## [1.2.3-dev.5] - 2026-04-12
 ### Added
 - Added a per-device `Reset Monitor Defaults` button that reapplies integration default sensor/binary-sensor enablement in Home Assistant Entity Registry.
