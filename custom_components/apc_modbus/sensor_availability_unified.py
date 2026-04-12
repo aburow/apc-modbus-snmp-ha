@@ -86,3 +86,13 @@ def is_binary_sensor_enabled_by_default(local_key: str, device_family: str) -> b
         return True
     canonical_key = resolve_binary_canonical_key(local_key)
     return canonical_key in STANDARD_ENABLED_CANONICAL_SET
+
+
+def entity_enabled_default(local_entity_key: str) -> bool:
+    """External contract API: default-enabled state without device-family context."""
+    if not isinstance(local_entity_key, str):
+        return True
+
+    if resolve_sensor_canonical_key(local_entity_key) is not None:
+        return is_sensor_enabled_by_default(local_entity_key, "unknown")
+    return is_binary_sensor_enabled_by_default(local_entity_key, "unknown")

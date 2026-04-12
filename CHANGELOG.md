@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.5] - 2026-04-12
+### Added
+- Added a per-device `Reset Monitor Defaults` button that reapplies integration default sensor/binary-sensor enablement in Home Assistant Entity Registry.
+
 ## [1.2.3-dev.4] - 2026-04-11
 ### Fixed
 - Restored full block-read polling behavior for UPS families while keeping core-first entity availability defaults. Disabled-by-default sensors now affect visibility/opt-in only, not block polling strategy.

@@ -49,3 +49,11 @@ def test_non_ups_device_families_keep_enabled_default() -> None:
         AVAILABILITY.is_binary_sensor_enabled_by_default("bank_1_alarm", "rack_pdu")
         is True
     )
+
+
+def test_entity_enabled_default_contract_api() -> None:
+    assert AVAILABILITY.entity_enabled_default("output_voltage") is True
+    assert AVAILABILITY.entity_enabled_default("ups_on_battery") is True
+    assert AVAILABILITY.entity_enabled_default("battery_temperature") is False
+    assert AVAILABILITY.entity_enabled_default("unknown_metric_key") is False
+    assert AVAILABILITY.entity_enabled_default(None) is True

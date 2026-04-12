@@ -21,6 +21,7 @@ from .const import CONF_DETECTION_VERSION, CONF_DEVICE_TYPE, DOMAIN, KEY_COORDIN
 from .coordinator import APCModbusCoordinator
 from .device_types import DETECTION_VERSION, choose_device_type
 from .diagnostic_collector import collect_diagnostic_dump
+from .entity_defaults import async_reset_entry_monitors_to_defaults
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ async def async_setup_entry(
         [
             APCModbusDiagnosticButton(coordinator, entry.entry_id),
             APCModbusRedetectDeviceTypeButton(coordinator, entry),
+            APCModbusResetMonitorDefaultsButton(coordinator, entry.entry_id),
         ]
     )
 
@@ -154,4 +156,62 @@ class APCModbusRedetectDeviceTypeButton(
             "Manual device re-detect completed for entry %s: %s",
             self._entry.entry_id,
             selected_device_type.value,
+        )
+
+
+class APCModbusResetMonitorDefaultsButton(
+    CoordinatorEntity[APCModbusCoordinator], ButtonEntity
+):
+    """Manual button to reset monitor enablement to integration defaults."""
+
+    has_entity_name = True
+    _attr_name = "Reset Monitor Defaults"
+    _attr_icon = "mdi:tune-variant"
+
+    def __init__(self, coordinator: APCModbusCoordinator, entry_id: str) -> None:
+        """Initialize button entity."""
+        super().__init__(coordinator)
+        self._entry_id = entry_id
+        self._attr_unique_id = f"{DOMAIN}_{entry_id}_reset_monitor_defaults"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry_id)},
+            name=coordinator.device_name,
+            manufacturer="APC",
+            model=coordinator.get_device_model_for_registry(),
+            serial_number=coordinator.serial_number,
+        )
+
+    async def async_press(self) -> None:
+        """Reset enabled/disabled entities to integration defaults."""
+        device_type = self.coordinator.device_type
+        device_family = device_type.value if device_type is not None else "unknown"
+        (
+            enabled_count,
+            disabled_count,
+            unchanged_count,
+        ) = await async_reset_entry_monitors_to_defaults(
+            self.hass,
+            entry_id=self._entry_id,
+            device_family=device_family,
+        )
+
+        notification_id = f"{DOMAIN}_{self._entry_id}_reset_monitor_defaults"
+        message = (
+            "Monitor defaults applied.\n\n"
+            f"- Enabled: {enabled_count}\n"
+            f"- Disabled: {disabled_count}\n"
+            f"- Unchanged: {unchanged_count}"
+        )
+        async_create(
+            self.hass,
+            message,
+            title=f"{self.coordinator.device_name} Monitor Defaults",
+            notification_id=notification_id,
+        )
+        _LOGGER.info(
+            "Monitor defaults reset for entry %s (enabled=%d disabled=%d unchanged=%d)",
+            self._entry_id,
+            enabled_count,
+            disabled_count,
+            unchanged_count,
         )
