@@ -2,6 +2,14 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.7] - 2026-04-12
+### Added
+- Coordinator data now injects bridge-consumable metadata keys each cycle (`manufacturer`, `model`, `serial_number`, `firmware_version`/`firmware`, `firmware_date`/`hw_version`) for Smart-UPS, SMT/SMX/SRT, and Rack PDU profiles.
+
+### Changed
+- SNMP metadata refresh is now cached on coordinator fields and refreshed on first cycle, reconnect, and periodic interval.
+- Expanded `device_info_unified` tests with explicit smart/smt/rack_pdu source samples and unknown-marker filtering coverage.
+
 ## [1.2.3-dev.6] - 2026-04-12
 ### Added
 - Added dependency-free `device_info_unified.py` with `resolve_device_info(values, source)` for ups-docker-ha bridge compatibility.

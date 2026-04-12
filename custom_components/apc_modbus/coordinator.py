@@ -28,9 +28,10 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
 from .device_types import APCDeviceType, classify_device_type
 from . import registers_smart_ups
-from .snmp_helper import get_external_probe_data_sync
+from .snmp_helper import get_device_metadata_sync, get_external_probe_data_sync
 
 _LOGGER = logging.getLogger(__name__)
+METADATA_REFRESH_INTERVAL_SECONDS = 3600
 
 
 class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -84,6 +85,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.serial_number: str | None = None
         self.fw_version: str | None = None
         self.fw_date: str | None = None
+        self._metadata_needs_refresh = True
+        self._metadata_last_refresh_monotonic = 0.0
         # Device type and capabilities (for multi-device support)
         self.device_type: APCDeviceType = APCDeviceType.SMART_UPS
         self.device_capabilities: dict[str, int] = {}
@@ -105,16 +108,37 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         fw_date: str | None,
     ) -> None:
         """Set device metadata from SNMP query."""
-        self.hw_model = hw_model
-        self.serial_number = serial_number
-        self.fw_version = fw_version
-        self.fw_date = fw_date
+        self.hw_model = self._clean_metadata_value(hw_model)
+        self.serial_number = self._clean_metadata_value(serial_number)
+        self.fw_version = self._clean_metadata_value(fw_version)
+        self.fw_date = self._clean_metadata_value(fw_date)
+        self._metadata_needs_refresh = False
+        self._metadata_last_refresh_monotonic = time.monotonic()
         _LOGGER.debug(
             "Device metadata set: model=%s, serial=%s, firmware=%s",
-            hw_model,
-            serial_number,
-            fw_version,
+            self.hw_model,
+            self.serial_number,
+            self.fw_version,
         )
+
+    @staticmethod
+    def _clean_metadata_value(value: Any) -> str | None:
+        """Normalize metadata value to a meaningful string."""
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        if not normalized:
+            return None
+        if normalized.lower() in {
+            "unknown",
+            "unavailable",
+            "n/a",
+            "na",
+            "none",
+            "null",
+        }:
+            return None
+        return normalized
 
     def set_device_type(self, device_type: APCDeviceType) -> None:
         """Store device type and tune pacing for slower models."""
@@ -460,10 +484,60 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._reset_backoff()
 
+        await self._maybe_refresh_snmp_metadata()
+        self._merge_device_metadata(data)
+
         # Merge optional SNMP-backed external probe values.
         await self._merge_snmp_external_probe_data(data)
 
         return data
+
+    async def _maybe_refresh_snmp_metadata(self) -> None:
+        """Refresh device metadata via SNMP on first run, reconnect, or interval."""
+        now = time.monotonic()
+        if (
+            not self._metadata_needs_refresh
+            and (now - self._metadata_last_refresh_monotonic)
+            < METADATA_REFRESH_INTERVAL_SECONDS
+        ):
+            return
+
+        try:
+            metadata = await self.hass.async_add_executor_job(
+                get_device_metadata_sync,
+                self.host,
+                self.snmp_community,
+                self.device_type,
+            )
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+            _LOGGER.debug("[%s] Metadata SNMP query failed: %s", self._log_ctx, err)
+            return
+
+        if not isinstance(metadata, dict):
+            return
+
+        self.set_device_metadata(
+            hw_model=metadata.get("model"),
+            serial_number=metadata.get("serial_number"),
+            fw_version=metadata.get("firmware_version") or metadata.get("firmware"),
+            fw_date=metadata.get("firmware_date") or metadata.get("hw_version"),
+        )
+
+    def _merge_device_metadata(self, data: dict[str, Any]) -> None:
+        """Inject canonical metadata keys into coordinator data for bridge consumers."""
+        data.setdefault("manufacturer", "APC")
+        data.setdefault("host", self.host)
+
+        if self.hw_model:
+            data["model"] = self.hw_model
+        if self.serial_number:
+            data["serial_number"] = self.serial_number
+        if self.fw_version:
+            data["firmware_version"] = self.fw_version
+            data.setdefault("firmware", self.fw_version)
+        if self.fw_date:
+            data["firmware_date"] = self.fw_date
+            data.setdefault("hw_version", self.fw_date)
 
     async def _merge_snmp_external_probe_data(self, data: dict[str, Any]) -> None:
         """Fetch and merge external probe values from SNMP."""
@@ -494,7 +568,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 time.monotonic() - connect_start,
             )
             if ok:
+                had_failures = self._connect_failures > 0
                 self._connect_failures = 0
+                if had_failures:
+                    self._metadata_needs_refresh = True
                 if self._post_connect_delay > 0:
                     await asyncio.sleep(self._post_connect_delay)
                     _LOGGER.debug(
@@ -542,6 +619,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name for name in ("device_id", "slave", "unit") if name in read_params
         ]
         self._resolved_unit_param = None
+        self._metadata_needs_refresh = True
 
     def _register_failure(self, reason: str) -> None:
         """Apply exponential backoff on repeated failures."""

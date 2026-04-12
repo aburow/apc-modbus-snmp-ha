@@ -21,10 +21,31 @@ def test_import_outside_homeassistant_runtime() -> None:
     assert callable(DEVICE_INFO.resolve_device_info)
 
 
-def test_resolve_device_info_with_representative_payload() -> None:
+def test_resolve_device_info_smart_profile() -> None:
     result = DEVICE_INFO.resolve_device_info(
         {
-            "model": "Smart-UPS 1500",
+            "model": "Smart-UPS 700",
+            "firmware": "50.14.I",
+            "firmware_date": "06/05/02",
+            "serial_number": "QS0223111264",
+            "host": "192.168.100.3",
+        },
+        "apc_modbus_smart",
+    )
+    assert result == {
+        "manufacturer": "APC",
+        "model": "Smart-UPS 700",
+        "sw_version": "50.14.I",
+        "hw_version": "06/05/02",
+        "serial_number": "QS0223111264",
+        "configuration_url": "http://192.168.100.3",
+    }
+
+
+def test_resolve_device_info_smt_profile() -> None:
+    result = DEVICE_INFO.resolve_device_info(
+        {
+            "model": "Smart-UPS X 3000",
             "firmware_version": "UPS 08.1 (ID1003)",
             "firmware_date": "08/03/2024",
             "serial_number": "AS2431136618",
@@ -34,11 +55,32 @@ def test_resolve_device_info_with_representative_payload() -> None:
     )
     assert result == {
         "manufacturer": "APC",
-        "model": "Smart-UPS 1500",
+        "model": "Smart-UPS X 3000",
         "sw_version": "UPS 08.1 (ID1003)",
         "hw_version": "08/03/2024",
         "serial_number": "AS2431136618",
         "configuration_url": "http://192.168.100.7",
+    }
+
+
+def test_resolve_device_info_rack_pdu_profile() -> None:
+    result = DEVICE_INFO.resolve_device_info(
+        {
+            "model": "AP8858",
+            "firmware_version": "v7.1.4",
+            "firmware_date": "07/14/2012",
+            "serial_number": "5A1229E06611",
+            "configuration_url": "https://192.168.100.117",
+        },
+        "apc_modbus_rack_pdu",
+    )
+    assert result == {
+        "manufacturer": "APC",
+        "model": "AP8858",
+        "sw_version": "v7.1.4",
+        "hw_version": "07/14/2012",
+        "serial_number": "5A1229E06611",
+        "configuration_url": "https://192.168.100.117",
     }
 
 
@@ -53,6 +95,22 @@ def test_empty_or_unknown_input_returns_subset_only() -> None:
         )
         == {}
     )
+
+
+def test_unknown_markers_are_dropped() -> None:
+    result = DEVICE_INFO.resolve_device_info(
+        {
+            "manufacturer": "unknown",
+            "model": "n/a",
+            "firmware": "NA",
+            "firmware_date": "unavailable",
+            "serial_number": "none",
+            "configuration_url": "http://",
+            "host": "  ",
+        },
+        "apc_modbus_smart",
+    )
+    assert result == {"manufacturer": "APC"}
 
 
 def test_only_canonical_keys_and_non_blank_values_returned() -> None:
