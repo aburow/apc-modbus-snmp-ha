@@ -125,6 +125,8 @@ def _match_icon(
     Returns:
         Material Design Icon string (e.g. "mdi:battery")
     """
+    if not isinstance(register_key, str):
+        return default_icon
     key_lower = register_key.lower()
     for patterns, icon in mapping:
         if any(pattern in key_lower for pattern in patterns):

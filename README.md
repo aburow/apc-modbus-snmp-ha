@@ -67,6 +67,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Core-First Availability**: UPS integrations now default-enable a standard core sensor set and keep non-core UPS sensors available but disabled-by-default for opt-in in Entity Registry
 - **Bridge Device Info Contract**: Exposes dependency-free `device_info_unified.py` with canonical `resolve_device_info(values, source)` output for ups-docker-ha MQTT discovery device metadata
 - **Bridge Metadata in Poll Data**: Coordinator now merges canonical device metadata fields into per-cycle data for Smart-UPS, SMT/SMX/SRT, and Rack PDU profiles
+- **Unified Interop Capability Profiles (v2)**: Exposes dependency-free `capability_profiles_unified.py` with `profile_id`, protocol, poll-groups, and hybrid key-precedence contract data for UPS Unified runtime loading
 - **Full Block Polling Preserved**: Block-read polling remains intact; disabled-by-default UPS extras affect default visibility/opt-in behavior, not register block strategy
 
 ## Architecture

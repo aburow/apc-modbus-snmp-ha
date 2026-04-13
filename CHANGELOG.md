@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.8] - 2026-04-13
+### Added
+- Added dependency-free `capability_profiles_unified.py` implementing UPS Unified interop contract version `2.0.0` with `apc_modbus_smart`, `apc_modbus_smt`, and `apc_modbus_rack_pdu` hybrid profiles.
+- Added contract validation tests for unified interface import safety, deterministic no-raise behavior, profile key uniqueness, poll-group integrity, and hybrid key precedence.
+
 ## [1.2.3-dev.7] - 2026-04-12
 ### Added
 - Coordinator data now injects bridge-consumable metadata keys each cycle (`manufacturer`, `model`, `serial_number`, `firmware_version`/`firmware`, `firmware_date`/`hw_version`) for Smart-UPS, SMT/SMX/SRT, and Rack PDU profiles.
