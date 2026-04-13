@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.12] - 2026-04-13
+### Fixed
+- Corrected Smart-UPS unified profile mappings for `input_voltage` and `input_frequency` to match the legacy APC register table used by Home Assistant.
+- Corrected SMT unified profile mapping for `output_frequency` to the canonical register address.
+- Added regression tests to lock Smart-UPS/SMT unified core register mappings and prevent future drift.
+
 ## [1.2.3-dev.11] - 2026-04-13
 ### Fixed
 - Aligned UPS Unified Rack PDU defaults to the six core operational sensor keys (`device_apparent_power`, `device_energy`, `phase_l1_current`, `phase_l1_voltage`, `device_power_factor`, `device_real_power`).

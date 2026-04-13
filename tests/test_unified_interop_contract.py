@@ -137,3 +137,29 @@ def test_rack_pdu_profile_default_sensor_keys_align_with_core_set() -> None:
     assert expected.issubset(modbus_keys)
     assert "num_phases" not in modbus_keys
     assert "num_metered_outlets" not in modbus_keys
+
+
+def test_smart_profile_core_register_mapping_matches_legacy_table() -> None:
+    smart_profile = CAP_PROFILES.get_profile("apc_modbus_smart")
+    assert smart_profile is not None
+
+    registers = smart_profile.get("modbus", {}).get("registers", [])
+    register_map = {register["key"]: register for register in registers}
+
+    assert register_map["input_voltage"]["address"] == 0x0011
+    assert register_map["input_voltage"]["scale"] == 1
+    assert register_map["input_frequency"]["address"] == 0x0012
+    assert register_map["input_frequency"]["scale"] == 1
+
+
+def test_smt_profile_core_register_mapping_matches_table() -> None:
+    smt_profile = CAP_PROFILES.get_profile("apc_modbus_smt")
+    assert smt_profile is not None
+
+    registers = smt_profile.get("modbus", {}).get("registers", [])
+    register_map = {register["key"]: register for register in registers}
+
+    assert register_map["output_load_percent"]["address"] == 0x0088
+    assert register_map["output_load_percent"]["scale"] == 256
+    assert register_map["output_frequency"]["address"] == 0x0090
+    assert register_map["output_frequency"]["scale"] == 128

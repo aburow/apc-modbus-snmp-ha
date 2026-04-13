@@ -81,7 +81,7 @@ PROFILES: tuple[dict[str, Any], ...] = (
                 },
                 {
                     "key": "input_voltage",
-                    "address": 0x0012,
+                    "address": 0x0011,
                     "count": 1,
                     "type": "uint16",
                     "scale": 1,
@@ -107,10 +107,10 @@ PROFILES: tuple[dict[str, Any], ...] = (
                 },
                 {
                     "key": "input_frequency",
-                    "address": 0x0013,
+                    "address": 0x0012,
                     "count": 1,
                     "type": "uint16",
-                    "scale": 10,
+                    "scale": 1,
                     "word_order": "big",
                 },
             ],
@@ -198,7 +198,7 @@ PROFILES: tuple[dict[str, Any], ...] = (
                 },
                 {
                     "key": "output_frequency",
-                    "address": 0x0091,
+                    "address": 0x0090,
                     "count": 1,
                     "type": "uint16",
                     "scale": 128,

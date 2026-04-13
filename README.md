@@ -69,6 +69,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Bridge Availability Contract**: `entity_enabled_default()` now enables Rack PDU core operational metrics by default for bridge callers without device-family runtime context; metadata remains mapped via device-info
 - **Bridge Metadata in Poll Data**: Coordinator now merges canonical device metadata fields into per-cycle data for Smart-UPS, SMT/SMX/SRT, and Rack PDU profiles
 - **Unified Interop Capability Profiles (v2)**: Exposes dependency-free `capability_profiles_unified.py` with `profile_id`, protocol, poll-groups, and hybrid key-precedence contract data for UPS Unified runtime loading
+- **Unified Profile Mapping Parity**: Smart-UPS and SMT unified profile register mappings are now validated against the integration’s canonical APC register tables
 - **Full Block Polling Preserved**: Block-read polling remains intact; disabled-by-default UPS extras affect default visibility/opt-in behavior, not register block strategy
 
 ## Architecture
