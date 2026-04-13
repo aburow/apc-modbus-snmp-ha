@@ -39,6 +39,15 @@ RACK_PDU_ENABLED_CANONICAL_KEYS: tuple[str, ...] = (
 
 RACK_PDU_ENABLED_CANONICAL_SET = set(RACK_PDU_ENABLED_CANONICAL_KEYS)
 
+BRIDGE_ENABLED_METADATA_KEYS: tuple[str, ...] = (
+    "model",
+    "serial_number",
+    "sw_version",
+    "hw_version",
+)
+
+BRIDGE_ENABLED_METADATA_SET = set(BRIDGE_ENABLED_METADATA_KEYS)
+
 SENSOR_CANONICAL_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("runtime", "seconds_on_battery"), "runtime_remaining"),
     (
@@ -125,6 +134,13 @@ def entity_enabled_default(local_entity_key: str) -> bool:
     """External contract API: default-enabled state without device-family context."""
     if not isinstance(local_entity_key, str):
         return True
+
+    key_lower = local_entity_key.lower()
+    if key_lower in BRIDGE_ENABLED_METADATA_SET:
+        return True
+
+    if resolve_rack_pdu_sensor_canonical_key(local_entity_key) is not None:
+        return is_sensor_enabled_by_default(local_entity_key, "rack_pdu")
 
     if resolve_sensor_canonical_key(local_entity_key) is not None:
         return is_sensor_enabled_by_default(local_entity_key, "unknown")

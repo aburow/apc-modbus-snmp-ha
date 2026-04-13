@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.10] - 2026-04-13
+### Fixed
+- Updated `entity_enabled_default()` bridge behavior so Rack PDU core metrics are default-enabled without device-family context.
+- Added explicit bridge metadata default policy (`model`, `serial_number`, `sw_version`, `hw_version` enabled-by-default) for deterministic UPS Unified behavior.
+- Added `test_sensor_availability_unified_bridge_contract.py` to lock the bridge contract behavior.
+
 ## [1.2.3-dev.9] - 2026-04-13
 ### Changed
 - Added a dedicated Rack PDU default monitor profile: core device + L1 metrics are now enabled by default, while dynamic outlet/bank/extra metrics remain opt-in.
