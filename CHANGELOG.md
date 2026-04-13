@@ -2,6 +2,10 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.9] - 2026-04-13
+### Changed
+- Added a dedicated Rack PDU default monitor profile: core device + L1 metrics are now enabled by default, while dynamic outlet/bank/extra metrics remain opt-in.
+
 ## [1.2.3-dev.8] - 2026-04-13
 ### Added
 - Added dependency-free `capability_profiles_unified.py` implementing UPS Unified interop contract version `2.0.0` with `apc_modbus_smart`, `apc_modbus_smt`, and `apc_modbus_rack_pdu` hybrid profiles.

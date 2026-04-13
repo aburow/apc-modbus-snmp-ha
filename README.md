@@ -64,7 +64,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
 - **Consistent Icons**: Sensors and binary sensors now resolve icons via shared `icons_unified.py` (canonical cross-project mapping) for consistent UI behavior across integrations
-- **Core-First Availability**: UPS integrations now default-enable a standard core sensor set and keep non-core UPS sensors available but disabled-by-default for opt-in in Entity Registry
+- **Core-First Availability**: UPS integrations default-enable a core sensor set; Rack PDU defaults now enable core device + L1 metrics while non-core/dynamic extras remain opt-in in Entity Registry
 - **Bridge Device Info Contract**: Exposes dependency-free `device_info_unified.py` with canonical `resolve_device_info(values, source)` output for ups-docker-ha MQTT discovery device metadata
 - **Bridge Metadata in Poll Data**: Coordinator now merges canonical device metadata fields into per-cycle data for Smart-UPS, SMT/SMX/SRT, and Rack PDU profiles
 - **Unified Interop Capability Profiles (v2)**: Exposes dependency-free `capability_profiles_unified.py` with `profile_id`, protocol, poll-groups, and hybrid key-precedence contract data for UPS Unified runtime loading

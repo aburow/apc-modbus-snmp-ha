@@ -40,14 +40,22 @@ def test_non_core_ups_sensor_keys_disabled_by_default() -> None:
     )
 
 
-def test_non_ups_device_families_keep_enabled_default() -> None:
+def test_rack_pdu_core_enabled_and_non_core_disabled_by_default() -> None:
     assert (
-        AVAILABILITY.is_sensor_enabled_by_default("phase_l1_current", "rack_pdu")
+        AVAILABILITY.is_sensor_enabled_by_default("device_real_power", "rack_pdu")
         is True
     )
     assert (
-        AVAILABILITY.is_binary_sensor_enabled_by_default("bank_1_alarm", "rack_pdu")
+        AVAILABILITY.is_sensor_enabled_by_default("phase_l1_voltage", "rack_pdu")
         is True
+    )
+    assert (
+        AVAILABILITY.is_sensor_enabled_by_default("outlet_1_current", "rack_pdu")
+        is False
+    )
+    assert (
+        AVAILABILITY.is_binary_sensor_enabled_by_default("bank_1_alarm", "rack_pdu")
+        is False
     )
 
 

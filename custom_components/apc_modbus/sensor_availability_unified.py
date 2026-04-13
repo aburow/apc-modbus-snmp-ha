@@ -11,6 +11,7 @@ from __future__ import annotations
 
 
 UPS_DEVICE_FAMILIES = ("smart_ups", "smt_ups", "ups", "unknown")
+RACK_PDU_DEVICE_FAMILIES = ("rack_pdu",)
 
 STANDARD_ENABLED_CANONICAL_KEYS: tuple[str, ...] = (
     "runtime_remaining",
@@ -26,6 +27,17 @@ STANDARD_ENABLED_CANONICAL_KEYS: tuple[str, ...] = (
 )
 
 STANDARD_ENABLED_CANONICAL_SET = set(STANDARD_ENABLED_CANONICAL_KEYS)
+
+RACK_PDU_ENABLED_CANONICAL_KEYS: tuple[str, ...] = (
+    "device_real_power",
+    "device_apparent_power",
+    "device_power_factor",
+    "device_energy",
+    "phase_l1_current",
+    "phase_l1_voltage",
+)
+
+RACK_PDU_ENABLED_CANONICAL_SET = set(RACK_PDU_ENABLED_CANONICAL_KEYS)
 
 SENSOR_CANONICAL_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("runtime", "seconds_on_battery"), "runtime_remaining"),
@@ -51,6 +63,15 @@ BINARY_CANONICAL_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("ups_overload", "overload"), "overload_state"),
 )
 
+RACK_PDU_SENSOR_CANONICAL_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("device_real_power",), "device_real_power"),
+    (("device_apparent_power",), "device_apparent_power"),
+    (("device_power_factor",), "device_power_factor"),
+    (("device_energy",), "device_energy"),
+    (("phase_l1_current",), "phase_l1_current"),
+    (("phase_l1_voltage",), "phase_l1_voltage"),
+)
+
 
 def _match_pattern_key(
     local_key: str, patterns: tuple[tuple[tuple[str, ...], str], ...]
@@ -72,8 +93,17 @@ def resolve_binary_canonical_key(local_key: str) -> str | None:
     return _match_pattern_key(local_key, BINARY_CANONICAL_PATTERNS)
 
 
+def resolve_rack_pdu_sensor_canonical_key(local_key: str) -> str | None:
+    """Resolve a local rack-pdu sensor key to its canonical sensor key."""
+    return _match_pattern_key(local_key, RACK_PDU_SENSOR_CANONICAL_PATTERNS)
+
+
 def is_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
     """Return whether a sensor should be entity-registry enabled by default."""
+    if device_family in RACK_PDU_DEVICE_FAMILIES:
+        canonical_key = resolve_rack_pdu_sensor_canonical_key(local_key)
+        return canonical_key in RACK_PDU_ENABLED_CANONICAL_SET
+
     if device_family not in UPS_DEVICE_FAMILIES:
         return True
     canonical_key = resolve_sensor_canonical_key(local_key)
@@ -82,6 +112,9 @@ def is_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
 
 def is_binary_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
     """Return whether a binary sensor should be entity-registry enabled by default."""
+    if device_family in RACK_PDU_DEVICE_FAMILIES:
+        return False
+
     if device_family not in UPS_DEVICE_FAMILIES:
         return True
     canonical_key = resolve_binary_canonical_key(local_key)
