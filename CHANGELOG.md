@@ -2,6 +2,12 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.11] - 2026-04-13
+### Fixed
+- Aligned UPS Unified Rack PDU defaults to the six core operational sensor keys (`device_apparent_power`, `device_energy`, `phase_l1_current`, `phase_l1_voltage`, `device_power_factor`, `device_real_power`).
+- Metadata keys (`model`, `serial_number`, `sw_version`, `hw_version`) are no longer default-enabled as bridge sensor entities; they remain handled via device-info mapping.
+- Updated Rack PDU unified capability profile defaults to include L1 current/voltage and exclude `num_*` keys from default-visible metrics.
+
 ## [1.2.3-dev.10] - 2026-04-13
 ### Fixed
 - Updated `entity_enabled_default()` bridge behavior so Rack PDU core metrics are default-enabled without device-family context.

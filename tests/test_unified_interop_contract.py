@@ -116,3 +116,24 @@ def test_hybrid_cross_protocol_collisions_require_precedence() -> None:
         overlaps = modbus_keys & snmp_keys
         precedence_keys = set(profile.get("key_precedence", {}).keys())
         assert overlaps.issubset(precedence_keys)
+
+
+def test_rack_pdu_profile_default_sensor_keys_align_with_core_set() -> None:
+    rack_profile = CAP_PROFILES.get_profile("apc_modbus_rack_pdu")
+    assert rack_profile is not None
+
+    modbus_keys = {
+        register["key"]
+        for register in rack_profile.get("modbus", {}).get("registers", [])
+    }
+    expected = {
+        "device_real_power",
+        "device_apparent_power",
+        "device_power_factor",
+        "device_energy",
+        "phase_l1_current",
+        "phase_l1_voltage",
+    }
+    assert expected.issubset(modbus_keys)
+    assert "num_phases" not in modbus_keys
+    assert "num_metered_outlets" not in modbus_keys

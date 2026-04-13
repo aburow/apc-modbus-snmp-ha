@@ -42,7 +42,14 @@ def test_rack_pdu_core_metrics_enabled_for_bridge_contract() -> None:
 def test_rack_pdu_metadata_policy_is_explicit_and_stable() -> None:
     mod = _load_module()
 
-    expected = True
+    expected = False
 
     for key in ("model", "serial_number", "sw_version", "hw_version"):
         assert mod.entity_enabled_default(key) is expected, key
+
+
+def test_rack_pdu_non_core_metrics_stay_disabled_by_default() -> None:
+    mod = _load_module()
+
+    for key in ("num_phases", "num_metered_outlets"):
+        assert mod.entity_enabled_default(key) is False, key
