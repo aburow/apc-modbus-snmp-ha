@@ -2,6 +2,19 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.13] - 2026-04-14
+### Added
+- Added SNMP fallback for `input_frequency` on SMT/AP9640-class devices (APC enterprise OID first, UPS-MIB fallback), while keeping Modbus values as primary when available.
+- Added diagnostics `snmp_decode` interpretation for input frequency source/value so customer reports clearly show which SNMP path is active.
+
+### Changed
+- Added debug-level source tracing for `input_frequency` resolution (Modbus retained, SNMP fallback, or output-frequency alias fallback), visible only when debug logging is enabled.
+- Added SMT compatibility alias sensor exposure for `input_frequency` so entities appear consistently across Smart-UPS families.
+
+### Fixed
+- Filled missing `input_frequency` for AP9640-backed SMT deployments where Modbus register map does not expose a dedicated numeric input-frequency register.
+- Added regression tests to ensure fallback logic remains scoped correctly and does not affect Rack PDU profiles.
+
 ## [1.2.3-dev.12] - 2026-04-13
 ### Fixed
 - Corrected Smart-UPS unified profile mappings for `input_voltage` and `input_frequency` to match the legacy APC register table used by Home Assistant.
