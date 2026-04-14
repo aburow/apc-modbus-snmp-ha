@@ -205,6 +205,15 @@ PROFILES: tuple[dict[str, Any], ...] = (
                     "word_order": "big",
                     "poll_group": "fast",
                 },
+                {
+                    "key": "input_frequency",
+                    "address": 0x0090,
+                    "count": 1,
+                    "type": "uint16",
+                    "scale": 128,
+                    "word_order": "big",
+                    "poll_group": "fast",
+                },
             ],
             "register_blocks": [
                 {

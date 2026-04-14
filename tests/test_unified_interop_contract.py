@@ -163,3 +163,14 @@ def test_smt_profile_core_register_mapping_matches_table() -> None:
     assert register_map["output_load_percent"]["scale"] == 256
     assert register_map["output_frequency"]["address"] == 0x0090
     assert register_map["output_frequency"]["scale"] == 128
+    assert register_map["input_frequency"]["address"] == 0x0090
+    assert register_map["input_frequency"]["scale"] == 128
+
+
+def test_rack_pdu_profile_does_not_expose_input_frequency() -> None:
+    rack_profile = CAP_PROFILES.get_profile("apc_modbus_rack_pdu")
+    assert rack_profile is not None
+
+    registers = rack_profile.get("modbus", {}).get("registers", [])
+    register_keys = {register["key"] for register in registers}
+    assert "input_frequency" not in register_keys

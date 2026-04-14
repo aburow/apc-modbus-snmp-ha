@@ -489,8 +489,25 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Merge optional SNMP-backed external probe values.
         await self._merge_snmp_external_probe_data(data)
+        self._apply_device_compat_aliases(data)
 
         return data
+
+    def _apply_device_compat_aliases(self, data: dict[str, Any]) -> None:
+        """Populate compatibility aliases for device families with sparse maps."""
+        if self.device_type == APCDeviceType.SMT_UPS:
+            # APC 990-9840B SMT/SMX/SRT map exposes a measured output frequency
+            # register but no dedicated numeric input-frequency register.
+            # Keep this as a last-resort fallback after SNMP merge.
+            if (
+                data.get("input_frequency") is None
+                and data.get("output_frequency") is not None
+            ):
+                data["input_frequency"] = data["output_frequency"]
+                _LOGGER.debug(
+                    "[%s] input_frequency sourced from output_frequency fallback",
+                    self._log_ctx,
+                )
 
     async def _maybe_refresh_snmp_metadata(self) -> None:
         """Refresh device metadata via SNMP on first run, reconnect, or interval."""
@@ -552,8 +569,23 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         for key, value in snmp_values.items():
-            if value is not None:
-                data[key] = value
+            if value is None:
+                continue
+            if key == "snmp_input_frequency":
+                # Prefer true line frequency from SNMP when Modbus lacks it.
+                if data.get("input_frequency") is None:
+                    data["input_frequency"] = value
+                    _LOGGER.debug(
+                        "[%s] input_frequency sourced from SNMP fallback",
+                        self._log_ctx,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "[%s] SNMP input_frequency available but Modbus value retained",
+                        self._log_ctx,
+                    )
+                continue
+            data[key] = value
 
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""

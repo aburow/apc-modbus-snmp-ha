@@ -23,6 +23,7 @@ INT16_SIGN_BIT = 0x8000
 INT16_MODULUS = 0x10000
 ASCII_PRINTABLE_START = 32
 ASCII_PRINTABLE_END = 126
+FREQUENCY_TENTHS_THRESHOLD = 400
 
 MODBUS_EXCEPTION_NAMES: dict[int, str] = {
     1: "Illegal Function",
@@ -45,6 +46,8 @@ SNMP_OIDS: dict[str, str] = {
     "apc_fw_rackpdu": "1.3.6.1.4.1.318.1.1.12.1.3.0",
     "apc_fw_date_smartups": "1.3.6.1.4.1.318.1.1.1.1.2.2.0",
     "apc_fw_date_rackpdu": "1.3.6.1.4.1.318.1.1.12.1.4.0",
+    "apc_input_frequency": "1.3.6.1.4.1.318.1.1.1.3.2.4.0",
+    "upsmib_input_frequency_line1": "1.3.6.1.2.1.33.1.3.3.1.2.1",
 }
 
 MODBUS_BLOCKS: list[tuple[int, int]] = [
@@ -180,6 +183,7 @@ def _scaled_register(
 
 
 def _build_quick_decode(registers: list[int]) -> dict[str, float | int | None]:
+    output_frequency = _scaled_register(registers, 0x0090, 128)
     return {
         "runtime_remaining": _decode_uint32(registers, _block_index(0x0080)),
         "soc_pct": _scaled_register(registers, 0x0082, 512),
@@ -189,10 +193,41 @@ def _build_quick_decode(registers: list[int]) -> dict[str, float | int | None]:
         "out_load_pct": _scaled_register(registers, 0x0088, 256),
         "out_current": _scaled_register(registers, 0x008C, 32),
         "out_voltage": _scaled_register(registers, 0x008E, 64),
-        "out_freq": _scaled_register(registers, 0x0090, 128),
+        "out_freq": output_frequency,
+        "in_freq": output_frequency,
         "out_energy_wh": _decode_uint32(registers, _block_index(0x0091)),
         "in_voltage": _scaled_register(registers, 0x0097, 64),
     }
+
+
+def _parse_snmp_frequency_hz(value: str) -> float | None:
+    try:
+        raw = float(value.strip())
+    except (TypeError, ValueError):
+        return None
+    if raw <= 0:
+        return None
+    if raw > FREQUENCY_TENTHS_THRESHOLD:
+        return raw / 10.0
+    return raw
+
+
+def _decode_snmp_input_frequency(snmp_data: dict[str, Any]) -> dict[str, Any] | None:
+    for source_key in ("apc_input_frequency", "upsmib_input_frequency_line1"):
+        source = snmp_data.get(source_key)
+        if not isinstance(source, dict):
+            continue
+        value = source.get("value")
+        if not isinstance(value, str):
+            continue
+        parsed_hz = _parse_snmp_frequency_hz(value)
+        if parsed_hz is None:
+            continue
+        return {
+            "input_frequency_hz": parsed_hz,
+            "input_frequency_source": source_key,
+        }
+    return None
 
 
 def _sanitize_text(value: str, host: str, community: str) -> str:
@@ -322,6 +357,10 @@ def _collect_modbus_block(
 
 
 def _add_decodes(dump: dict[str, Any]) -> None:
+    snmp_decode = _decode_snmp_input_frequency(dump.get("snmp", {}))
+    if snmp_decode:
+        dump["snmp_decode"] = snmp_decode
+
     runtime_block = dump["modbus"].get(RUNTIME_BLOCK_KEY)
     if runtime_block and "parsed" in runtime_block:
         parsed = runtime_block["parsed"]

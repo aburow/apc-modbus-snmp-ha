@@ -40,6 +40,10 @@ RACKPDU_OID_FIRMWARE_DATE = "1.3.6.1.4.1.318.1.1.12.1.4.0"
 # Index 1/2 typically correspond to UIO ports 1/2.
 UIO_SENSOR_STATUS_TEMP_C_BASE = "1.3.6.1.4.1.318.1.1.25.1.2.1.6"
 UIO_SENSOR_STATUS_HUMIDITY_BASE = "1.3.6.1.4.1.318.1.1.25.1.2.1.7"
+# Input frequency candidates for AP9640-class cards.
+# APC enterprise OID first, then RFC1628 UPS-MIB line 1 frequency.
+SMARTUPS_OID_INPUT_FREQUENCY = "1.3.6.1.4.1.318.1.1.1.3.2.4.0"
+UPS_MIB_OID_INPUT_FREQUENCY_LINE1 = "1.3.6.1.2.1.33.1.3.3.1.2.1"
 
 
 async def async_get_snmp_value(
@@ -227,6 +231,24 @@ def _parse_external_humidity_pct(value: str | None) -> float | None:
     return float(raw)
 
 
+def _parse_frequency_hz(value: str | None) -> float | None:
+    """Parse input frequency from SNMP value.
+
+    APC and UPS-MIB devices may report frequency as either whole Hz or tenths Hz.
+    """
+    if value is None:
+        return None
+    try:
+        raw = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if raw <= 0:
+        return None
+    if raw > 400:
+        return raw / 10.0
+    return raw
+
+
 async def async_get_external_probe_data(
     host: str, community: str = "public"
 ) -> dict[str, float | None]:
@@ -237,6 +259,7 @@ async def async_get_external_probe_data(
       - snmp_external_humidity_1
       - snmp_external_temp_2
       - snmp_external_humidity_2
+      - snmp_input_frequency
     """
     # Different APC/NMC generations expose UIO values at slightly different
     # instance depths. Try the two known index layouts per probe.
@@ -257,6 +280,10 @@ async def async_get_external_probe_data(
             f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1",
             f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
         ],
+        "snmp_input_frequency": [
+            SMARTUPS_OID_INPUT_FREQUENCY,
+            UPS_MIB_OID_INPUT_FREQUENCY_LINE1,
+        ],
     }
 
     parsed: dict[str, float | None] = {}
@@ -267,7 +294,9 @@ async def async_get_external_probe_data(
             if raw_value is not None:
                 break
 
-        if key.startswith("snmp_external_temp"):
+        if key == "snmp_input_frequency":
+            parsed[key] = _parse_frequency_hz(raw_value)
+        elif key.startswith("snmp_external_temp"):
             parsed[key] = _parse_external_temp_c(raw_value)
         else:
             parsed[key] = _parse_external_humidity_pct(raw_value)

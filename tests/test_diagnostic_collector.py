@@ -81,3 +81,51 @@ def test_detection_summary_prefers_smt_from_exact_probe_signature() -> None:
 
     assert summary["probe_results"]["smt_measurements_ok"] is True
     assert summary["detected_device_type"] == "smt_ups"
+
+
+def test_quick_decode_exposes_input_frequency_alias() -> None:
+    registers = [0] * 26
+    # 6400 / 128 = 50.0 Hz at 0x0090 (offset 16)
+    registers[16] = 6400
+
+    quick = DIAGNOSTIC_COLLECTOR._build_quick_decode(registers)
+
+    assert quick["out_freq"] == 50.0
+    assert quick["in_freq"] == 50.0
+
+
+def test_snmp_oids_include_input_frequency_candidates() -> None:
+    assert (
+        DIAGNOSTIC_COLLECTOR.SNMP_OIDS["apc_input_frequency"]
+        == "1.3.6.1.4.1.318.1.1.1.3.2.4.0"
+    )
+    assert (
+        DIAGNOSTIC_COLLECTOR.SNMP_OIDS["upsmib_input_frequency_line1"]
+        == "1.3.6.1.2.1.33.1.3.3.1.2.1"
+    )
+
+
+def test_decode_snmp_input_frequency_prefers_apc_oid() -> None:
+    decoded = DIAGNOSTIC_COLLECTOR._decode_snmp_input_frequency(
+        {
+            "apc_input_frequency": {"value": "500"},
+            "upsmib_input_frequency_line1": {"value": "49.9"},
+        }
+    )
+    assert decoded == {
+        "input_frequency_hz": 50.0,
+        "input_frequency_source": "apc_input_frequency",
+    }
+
+
+def test_decode_snmp_input_frequency_uses_upsmib_when_apc_missing() -> None:
+    decoded = DIAGNOSTIC_COLLECTOR._decode_snmp_input_frequency(
+        {
+            "apc_input_frequency": {"error": {"code": "snmp_missing"}},
+            "upsmib_input_frequency_line1": {"value": "501"},
+        }
+    )
+    assert decoded == {
+        "input_frequency_hz": 50.1,
+        "input_frequency_source": "upsmib_input_frequency_line1",
+    }

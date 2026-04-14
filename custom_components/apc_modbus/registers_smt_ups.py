@@ -425,6 +425,14 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         register_key="output_frequency",
     ),
     APCModbusSensorDescription(
+        key="input_frequency",
+        name="Input Frequency",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        device_class=SensorDeviceClass.FREQUENCY,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="input_frequency",
+    ),
+    APCModbusSensorDescription(
         key="output_energy",
         name="Output Energy",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
