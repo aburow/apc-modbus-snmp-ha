@@ -1,3 +1,4 @@
+---
 rules:
   - id: python-broad-except-pass
     message: Avoid broad except blocks that silently swallow failures.

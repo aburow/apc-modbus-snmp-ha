@@ -383,6 +383,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Fetch data from the UPS via Modbus (block reads with fallback to individual reads)."""
         data: dict[str, Any] = {}
         errors: list[str] = []
+        poll_start = time.monotonic()
+        lock_wait = 0.0
+        ensure_connection_elapsed = 0.0
+        block_reads_elapsed = 0.0
+        individual_reads_elapsed = 0.0
+        close_elapsed = 0.0
+        modbus_cycle_elapsed = 0.0
+        snmp_metadata_elapsed = 0.0
+        snmp_external_elapsed = 0.0
 
         _LOGGER.info(
             "[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id
@@ -401,11 +410,16 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 if not self._should_run_now():
                     raise UpdateFailed("Backoff active; skipping update cycle")
-                if not await self._ensure_connection():
+                ensure_connection_start = time.monotonic()
+                connected = await self._ensure_connection()
+                ensure_connection_elapsed = time.monotonic() - ensure_connection_start
+                if not connected:
                     raise UpdateFailed("Unable to connect to APC UPS")
                 # Try block reads first (optimized) with reconnection logic
                 _LOGGER.debug("[%s] Attempting block reads", self._log_ctx)
+                block_reads_start = time.monotonic()
                 block_read_ok = await self._try_block_reads(data, errors)
+                block_reads_elapsed = time.monotonic() - block_reads_start
                 _LOGGER.debug(
                     "[%s] Block reads result: %s (data keys: %s)",
                     self._log_ctx,
@@ -420,7 +434,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._log_ctx,
                     )
                     # Don't clear data - preserve any partial data from successful block reads
+                    individual_reads_start = time.monotonic()
                     await self._try_individual_reads(data, errors)
+                    individual_reads_elapsed = time.monotonic() - individual_reads_start
                     _LOGGER.debug(
                         "[%s] Individual reads fallback complete (data keys: %s)",
                         self._log_ctx,
@@ -443,10 +459,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 try:
                     close_request = functools.partial(self.client.close)
                     await self.hass.async_add_executor_job(close_request)
+                    close_elapsed = time.monotonic() - close_start
                     _LOGGER.debug(
                         "[%s] Closed Modbus client after update (%.3fs)",
                         self._log_ctx,
-                        time.monotonic() - close_start,
+                        close_elapsed,
                     )
                 except (
                     ConnectionException,
@@ -457,6 +474,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug(
                         "[%s] Error closing Modbus client: %s", self._log_ctx, close_err
                     )
+                modbus_cycle_elapsed = time.monotonic() - cycle_start
 
         if not data:
             self._register_failure("No data read")
@@ -480,16 +498,36 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info(
             "[%s] Update cycle complete in %.3fs",
             self._log_ctx,
-            time.monotonic() - cycle_start,
+            modbus_cycle_elapsed,
         )
         self._reset_backoff()
 
+        snmp_metadata_start = time.monotonic()
         await self._maybe_refresh_snmp_metadata()
+        snmp_metadata_elapsed = time.monotonic() - snmp_metadata_start
         self._merge_device_metadata(data)
 
         # Merge optional SNMP-backed external probe values.
+        snmp_external_start = time.monotonic()
         await self._merge_snmp_external_probe_data(data)
+        snmp_external_elapsed = time.monotonic() - snmp_external_start
         self._apply_device_compat_aliases(data)
+
+        _LOGGER.debug(
+            "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
+            "connect=%.3fs, block_reads=%.3fs, individual_reads=%.3fs, close=%.3fs, "
+            "snmp_metadata=%.3fs, snmp_external=%.3fs",
+            self._log_ctx,
+            time.monotonic() - poll_start,
+            lock_wait,
+            modbus_cycle_elapsed,
+            ensure_connection_elapsed,
+            block_reads_elapsed,
+            individual_reads_elapsed,
+            close_elapsed,
+            snmp_metadata_elapsed,
+            snmp_external_elapsed,
+        )
 
         return data
 

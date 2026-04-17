@@ -10,6 +10,8 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 ### Changed
 - Added debug-level source tracing for `input_frequency` resolution (Modbus retained, SNMP fallback, or output-frequency alias fallback), visible only when debug logging is enabled.
 - Added SMT compatibility alias sensor exposure for `input_frequency` so entities appear consistently across Smart-UPS families.
+- Added fleet-aware scan interval guarding: for larger APC fleets, runtime polling now applies a safe minimum interval to reduce Home Assistant recorder/database pressure.
+- Added debug-level poll phase instrumentation in coordinator updates (`total`, `lock_wait`, `modbus`, `connect`, `block_reads`, `individual_reads`, `close`, `snmp_metadata`, `snmp_external`) to speed bottleneck isolation.
 
 ### Fixed
 - Filled missing `input_frequency` for AP9640-backed SMT deployments where Modbus register map does not expose a dedicated numeric input-frequency register.

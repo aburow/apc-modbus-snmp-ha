@@ -48,6 +48,7 @@ from .device_types import (
     should_probe_device_type,
 )
 from .register_factory import get_registers_for_device
+from .scan_interval_guard import compute_effective_scan_interval
 from .snmp_helper import detect_device_type, get_device_metadata_sync
 from .startup_stagger import compute_startup_stagger_delay
 
@@ -149,10 +150,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     device_name = entry.data.get(CONF_DEVICE_NAME, DEFAULT_NAME)
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
-    scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    configured_scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     device_type_str = entry.data.get(CONF_DEVICE_TYPE)
     device_type = APCDeviceType(device_type_str) if device_type_str else None
     detection_version = entry.data.get(CONF_DETECTION_VERSION)
+    entry_ids = [
+        config_entry.entry_id
+        for config_entry in hass.config_entries.async_entries(DOMAIN)
+    ]
+    scan_interval = compute_effective_scan_interval(
+        configured_scan_interval,
+        len(entry_ids),
+    )
+    if scan_interval != configured_scan_interval:
+        _LOGGER.warning(
+            "Fleet-aware polling guard raised scan interval for %s from %ss to %ss "
+            "(%d APC entries configured). Increase this entry's scan interval in "
+            "UI settings to match if you want this persisted.",
+            entry.entry_id,
+            configured_scan_interval,
+            scan_interval,
+            len(entry_ids),
+        )
 
     # Create client with timeout to prevent hung connections
     client = ModbusTcpClient(host=host, port=port, timeout=5)
@@ -179,10 +198,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         scan_interval,
     )
 
-    entry_ids = [
-        config_entry.entry_id
-        for config_entry in hass.config_entries.async_entries(DOMAIN)
-    ]
     startup_stagger_delay = compute_startup_stagger_delay(
         entry_ids, entry.entry_id, scan_interval
     )
