@@ -32,7 +32,11 @@ from .const import (
 )
 from .device_types import APCDeviceType, classify_device_type
 from . import registers_smart_ups
-from .snmp_helper import get_device_metadata_sync, get_external_probe_data_sync
+from .snmp_helper import (
+    detect_external_probe_oids_sync,
+    get_device_metadata_sync,
+    get_external_probe_data_detected_sync,
+)
 
 _LOGGER = logging.getLogger(__name__)
 METADATA_REFRESH_INTERVAL_SECONDS = 3600
@@ -97,6 +101,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.fw_date: str | None = None
         self._metadata_needs_refresh = True
         self._metadata_last_refresh_monotonic = 0.0
+        # External-probe availability/OID selection, refreshed during hourly SNMP metadata poll.
+        self._snmp_probe_detection: dict[str, str | None] = {}
         # Device type and capabilities (for multi-device support)
         self.device_type: APCDeviceType = APCDeviceType.SMART_UPS
         self.device_capabilities: dict[str, int] = {}
@@ -571,7 +577,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
     async def _maybe_refresh_snmp_metadata(self) -> None:
-        """Refresh device metadata via SNMP on first run, reconnect, or interval."""
+        """Refresh device metadata and detect external probes via SNMP.
+
+        Runs at most once per hour (plus first run). External probe availability
+        and OID variants are detected during this refresh and cached for normal
+        per-cycle polling.
+        """
         now = time.monotonic()
         if (
             not self._metadata_needs_refresh
@@ -601,6 +612,37 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             fw_date=metadata.get("firmware_date") or metadata.get("hw_version"),
         )
 
+        # Detect which external probes (temp/humidity) are available, and pick the
+        # best input-frequency OID. This runs only during the hourly metadata poll.
+        try:
+            detection = await self.hass.async_add_executor_job(
+                detect_external_probe_oids_sync,
+                self.host,
+                self.snmp_community,
+            )
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+            _LOGGER.debug(
+                "[%s] External probe detection SNMP query failed: %s",
+                self._log_ctx,
+                err,
+            )
+            return
+
+        if isinstance(detection, dict):
+            self._snmp_probe_detection = {
+                str(k): (v if isinstance(v, str) or v is None else str(v))
+                for k, v in detection.items()
+            }
+            _LOGGER.info(
+                "[%s] SNMP probe detection (hourly): temp1=%s hum1=%s temp2=%s hum2=%s freq=%s",
+                self._log_ctx,
+                bool(self._snmp_probe_detection.get("temp_1_oid")),
+                bool(self._snmp_probe_detection.get("humidity_1_oid")),
+                bool(self._snmp_probe_detection.get("temp_2_oid")),
+                bool(self._snmp_probe_detection.get("humidity_2_oid")),
+                bool(self._snmp_probe_detection.get("frequency_oid")),
+            )
+
     def _merge_device_metadata(self, data: dict[str, Any]) -> None:
         """Inject canonical metadata keys into coordinator data for bridge consumers."""
         data.setdefault("manufacturer", "APC")
@@ -618,10 +660,30 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data.setdefault("hw_version", self.fw_date)
 
     async def _merge_snmp_external_probe_data(self, data: dict[str, Any]) -> None:
-        """Fetch and merge external probe values from SNMP."""
+        """Fetch and merge external probe values from SNMP.
+
+        Temp/humidity probes are only polled if they were detected during the
+        hourly SNMP metadata refresh. Input frequency is also sourced from SNMP
+        (when available) in the same update cycle as Modbus.
+        """
+        detection = self._snmp_probe_detection
+        if not isinstance(detection, dict) or not detection:
+            return
+
+        # Only poll SNMP line frequency when Modbus didn't provide it. This is
+        # especially important for SMT devices where Modbus may lack input freq.
+        effective_detection = dict(detection)
+        if data.get("input_frequency") is not None:
+            effective_detection["frequency_oid"] = None
+
+        if not any(v for v in effective_detection.values() if v):
+            return
         try:
             snmp_values = await self.hass.async_add_executor_job(
-                get_external_probe_data_sync, self.host, self.snmp_community
+                get_external_probe_data_detected_sync,
+                self.host,
+                self.snmp_community,
+                effective_detection,
             )
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.debug(
@@ -707,10 +769,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 time.monotonic() - connect_start,
             )
             if ok:
-                had_failures = self._connect_failures > 0
                 self._connect_failures = 0
-                if had_failures:
-                    self._metadata_needs_refresh = True
                 self._mark_io_activity()
                 if self._post_connect_delay > 0:
                     await asyncio.sleep(self._post_connect_delay)
@@ -770,7 +829,6 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         if ok:
             self._connect_failures = 0
-            self._metadata_needs_refresh = True
             self._mark_io_activity()
             if self._post_connect_delay > 0:
                 await asyncio.sleep(self._post_connect_delay)
@@ -791,7 +849,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name for name in ("device_id", "slave", "unit") if name in read_params
         ]
         self._resolved_unit_param = None
-        self._metadata_needs_refresh = True
+        # Keep cached SNMP metadata/probe detection across Modbus client recreation.
 
     def _register_failure(self, reason: str) -> None:
         """Apply exponential backoff on repeated failures."""

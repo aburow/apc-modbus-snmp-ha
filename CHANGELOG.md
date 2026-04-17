@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.17] - 2026-04-17
+### Added
+- Hourly SNMP metadata refresh now also detects which external temperature/humidity probe OIDs are available, and selects the best SNMP input-frequency OID for the device.
+
+### Changed
+- External temperature/humidity probes are no longer polled unless they were detected during the hourly SNMP metadata refresh.
+- SNMP input-frequency polling now runs in the same cycle as Modbus and only when Modbus did not provide `input_frequency` (covers SMT devices where line frequency is not available via Modbus).
+- Modbus reconnect/recreate no longer forces an SNMP metadata refresh; metadata/probe detection remain on the hourly cadence.
+
 ## [1.2.3-dev.16] - 2026-04-17
 ### Added
 - Added config-flow option `keep_connection_open` to optionally reuse Modbus TCP sessions across poll cycles.

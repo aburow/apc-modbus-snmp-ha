@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
+from collections.abc import Callable
 
 from pysnmp.hlapi.v3arch.asyncio import (
     CommunityData,
@@ -310,6 +311,141 @@ def get_external_probe_data_sync(
 ) -> dict[str, float | None]:
     """Run external probe SNMP query in a dedicated event loop (sync wrapper)."""
     return asyncio.run(async_get_external_probe_data(host, community))
+
+
+async def async_detect_external_probe_oids(
+    host: str, community: str = "public"
+) -> dict[str, str | None]:
+    """Detect which external probe OIDs are available.
+
+    This is intended to run during the hourly metadata poll. It identifies the
+    specific OID variant that returns a sane, parseable value for each probe.
+
+    Returns dict keys:
+      - temp_1_oid, humidity_1_oid, temp_2_oid, humidity_2_oid
+      - frequency_oid
+    """
+
+    async def first_working_oid(
+        candidates: list[str],
+        parser: Callable[[str | None], float | None],
+    ) -> str | None:
+        for oid in candidates:
+            raw_value = await async_get_snmp_value(host, oid, community)
+            if parser(raw_value) is not None:
+                return oid
+        return None
+
+    temp_1_oid = await first_working_oid(
+        [f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1", f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1"],
+        _parse_external_temp_c,
+    )
+    humidity_1_oid = await first_working_oid(
+        [
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1",
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1",
+        ],
+        _parse_external_humidity_pct,
+    )
+    temp_2_oid = await first_working_oid(
+        [f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2.1", f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2"],
+        _parse_external_temp_c,
+    )
+    humidity_2_oid = await first_working_oid(
+        [
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1",
+            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
+        ],
+        _parse_external_humidity_pct,
+    )
+
+    # Input frequency detection: pick the first OID that yields a sane Hz value.
+    frequency_oid = await first_working_oid(
+        [SMARTUPS_OID_INPUT_FREQUENCY, UPS_MIB_OID_INPUT_FREQUENCY_LINE1],
+        _parse_frequency_hz,
+    )
+
+    detection = {
+        "temp_1_oid": temp_1_oid,
+        "humidity_1_oid": humidity_1_oid,
+        "temp_2_oid": temp_2_oid,
+        "humidity_2_oid": humidity_2_oid,
+        "frequency_oid": frequency_oid,
+    }
+    _LOGGER.debug("SNMP external probe OID detection for %s: %s", host, detection)
+    return detection
+
+
+def detect_external_probe_oids_sync(
+    host: str,
+    community: str = "public",
+) -> dict[str, str | None]:
+    """Run external probe detection in a dedicated event loop (sync wrapper)."""
+    return asyncio.run(async_detect_external_probe_oids(host, community))
+
+
+async def async_get_external_probe_data_detected(
+    host: str,
+    community: str,
+    detection: dict[str, str | None],
+) -> dict[str, float | None]:
+    """Fetch external probe values using a previously-detected OID map.
+
+    Notes:
+    - Temperature/humidity probes are only queried if their OID is present in
+      the detection map.
+    - Input frequency is queried if a frequency OID is present; this is useful
+      for SMT devices where Modbus cannot provide line frequency.
+    """
+    oids: dict[str, str] = {}
+
+    freq_oid = detection.get("frequency_oid")
+    if isinstance(freq_oid, str) and freq_oid:
+        oids["snmp_input_frequency"] = freq_oid
+
+    temp_1_oid = detection.get("temp_1_oid")
+    if isinstance(temp_1_oid, str) and temp_1_oid:
+        oids["snmp_external_temp_1"] = temp_1_oid
+    humidity_1_oid = detection.get("humidity_1_oid")
+    if isinstance(humidity_1_oid, str) and humidity_1_oid:
+        oids["snmp_external_humidity_1"] = humidity_1_oid
+    temp_2_oid = detection.get("temp_2_oid")
+    if isinstance(temp_2_oid, str) and temp_2_oid:
+        oids["snmp_external_temp_2"] = temp_2_oid
+    humidity_2_oid = detection.get("humidity_2_oid")
+    if isinstance(humidity_2_oid, str) and humidity_2_oid:
+        oids["snmp_external_humidity_2"] = humidity_2_oid
+
+    if not oids:
+        return {}
+
+    results = await asyncio.gather(
+        *[async_get_snmp_value(host, oid, community) for oid in oids.values()],
+        return_exceptions=True,
+    )
+
+    parsed: dict[str, float | None] = {}
+    for key, raw in zip(oids.keys(), results, strict=True):
+        value = raw if not isinstance(raw, Exception) else None
+        if key == "snmp_input_frequency":
+            parsed[key] = _parse_frequency_hz(value)
+        elif key.startswith("snmp_external_temp"):
+            parsed[key] = _parse_external_temp_c(value)
+        else:
+            parsed[key] = _parse_external_humidity_pct(value)
+
+    return parsed
+
+
+def get_external_probe_data_detected_sync(
+    host: str,
+    community: str,
+    detection: dict[str, str | None],
+) -> dict[str, float | None]:
+    """Run detected external probe SNMP query in a dedicated event loop (sync wrapper)."""
+    return asyncio.run(
+        async_get_external_probe_data_detected(host, community, detection)
+    )
 
 
 def detect_device_type(model_string: str | None) -> APCDeviceType:

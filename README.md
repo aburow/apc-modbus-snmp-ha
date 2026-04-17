@@ -48,6 +48,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - External probe sensors are optional and are created only when probe values are returned by SNMP.
 - If no compatible probe is connected, those entities are not created (instead of showing permanently unavailable sensors).
 - Temperature is reported as native Celsius and exposed with Home Assistant temperature device class, so UI/unit settings can convert to Fahrenheit automatically.
+- External probe availability (and the specific probe OID variants) are detected during the hourly SNMP metadata refresh; probe values are not polled unless a compatible probe was detected.
 
 ### Core Features
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
@@ -250,6 +251,11 @@ At `info` log level, the coordinator now emits per-cycle boundary timing lines (
 At `info` log level, the coordinator also emits a per-cycle timing breakdown line:
 - `Poll timing breakdown: total=..., lock_wait=..., modbus=..., connect=..., block_reads=..., individual_reads=..., close=..., snmp_metadata=..., snmp_external=...`
 - Use this to identify whether latency is dominated by socket lock contention, Modbus reads, reconnects, or SNMP merges.
+
+Notes:
+- `snmp_metadata` is normally near-zero and only increases when the hourly SNMP metadata refresh runs.
+- `snmp_external` includes SNMP input-frequency (used when Modbus does not provide `input_frequency`, especially on SMT devices) and any detected external temp/humidity probes.
+- External temp/humidity probes are only polled if a compatible probe was detected during the hourly SNMP metadata refresh (look for the `SNMP probe detection (hourly)` info log line).
 
 For deeper data collection outside Home Assistant, use the standalone debug tools here:
 - https://github.com/aburow/apc_modbus_debug
