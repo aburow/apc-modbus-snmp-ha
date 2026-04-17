@@ -513,7 +513,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         snmp_external_elapsed = time.monotonic() - snmp_external_start
         self._apply_device_compat_aliases(data)
 
-        _LOGGER.debug(
+        _LOGGER.info(
             "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
             "connect=%.3fs, block_reads=%.3fs, individual_reads=%.3fs, close=%.3fs, "
             "snmp_metadata=%.3fs, snmp_external=%.3fs",

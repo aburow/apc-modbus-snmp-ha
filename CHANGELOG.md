@@ -2,10 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.15] - 2026-04-17
+### Changed
+- Promoted coordinator poll timing breakdown logs to `INFO` level so full phase timing is visible without enabling integration debug logging.
+- Updated troubleshooting docs to state that `Poll timing breakdown` is emitted at `info` level.
+
 ## [1.2.3-dev.14] - 2026-04-17
 ### Changed
 - Added fleet-aware scan interval guarding so larger APC deployments automatically use a safer effective polling floor at runtime to reduce recorder/database pressure.
-- Added coordinator debug poll-phase timing breakdown (`total`, `lock_wait`, `modbus`, `connect`, `block_reads`, `individual_reads`, `close`, `snmp_metadata`, `snmp_external`) for faster hotspot identification.
+- Added coordinator info-level poll-phase timing breakdown (`total`, `lock_wait`, `modbus`, `connect`, `block_reads`, `individual_reads`, `close`, `snmp_metadata`, `snmp_external`) for faster hotspot identification.
 - Documented the new poll timing breakdown log line in troubleshooting guidance.
 
 ### Added

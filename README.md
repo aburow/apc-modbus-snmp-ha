@@ -243,7 +243,7 @@ After updating the logger configuration:
 
 At `info` log level, the coordinator now emits per-cycle boundary timing lines (`Starting update cycle` and `Update cycle complete in ...s`) to help baseline poll performance without enabling full debug logging.
 
-At `debug` log level, the coordinator also emits a per-cycle timing breakdown line:
+At `info` log level, the coordinator also emits a per-cycle timing breakdown line:
 - `Poll timing breakdown: total=..., lock_wait=..., modbus=..., connect=..., block_reads=..., individual_reads=..., close=..., snmp_metadata=..., snmp_external=...`
 - Use this to identify whether latency is dominated by socket lock contention, Modbus reads, reconnects, or SNMP merges.
 
