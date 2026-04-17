@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.14] - 2026-04-17
+### Changed
+- Added fleet-aware scan interval guarding so larger APC deployments automatically use a safer effective polling floor at runtime to reduce recorder/database pressure.
+- Added coordinator debug poll-phase timing breakdown (`total`, `lock_wait`, `modbus`, `connect`, `block_reads`, `individual_reads`, `close`, `snmp_metadata`, `snmp_external`) for faster hotspot identification.
+- Documented the new poll timing breakdown log line in troubleshooting guidance.
+
+### Added
+- Added unit tests covering fleet-aware effective scan interval behavior across small, large, and capped-fleet scenarios.
+
 ## [1.2.3-dev.13] - 2026-04-14
 ### Added
 - Added SNMP fallback for `input_frequency` on SMT/AP9640-class devices (APC enterprise OID first, UPS-MIB fallback), while keeping Modbus values as primary when available.
