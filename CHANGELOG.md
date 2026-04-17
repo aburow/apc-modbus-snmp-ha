@@ -2,6 +2,16 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.16] - 2026-04-17
+### Added
+- Added config-flow option `keep_connection_open` to optionally reuse Modbus TCP sessions across poll cycles.
+- Added per-device `Keep Connection Open` switch entity on the device page to toggle open-session mode at runtime.
+
+### Changed
+- Added lock-safe reconnect helper flow shared across ensure/read/block retry paths.
+- Added idle-session reconnect guard before polling when open-session mode is enabled.
+- Poll timing breakdown now reports per-cycle reconnect/recreate counts.
+
 ## [1.2.3-dev.15] - 2026-04-17
 ### Changed
 - Promoted coordinator poll timing breakdown logs to `INFO` level so full phase timing is visible without enabling integration debug logging.

@@ -27,8 +27,10 @@ from .const import (
     CONF_DETECTION_VERSION,
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
+    CONF_KEEP_CONNECTION_OPEN,
     CONF_SNMP_COMMUNITY,
     CONF_UNIT,
+    DEFAULT_KEEP_CONNECTION_OPEN,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
@@ -150,6 +152,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     device_name = entry.data.get(CONF_DEVICE_NAME, DEFAULT_NAME)
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
+    keep_connection_open = entry.data.get(
+        CONF_KEEP_CONNECTION_OPEN, DEFAULT_KEEP_CONNECTION_OPEN
+    )
     configured_scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     device_type_str = entry.data.get(CONF_DEVICE_TYPE)
     device_type = APCDeviceType(device_type_str) if device_type_str else None
@@ -196,6 +201,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         io_lock,
         snmp_community,
         scan_interval,
+        keep_connection_open=keep_connection_open,
     )
 
     startup_stagger_delay = compute_startup_stagger_delay(

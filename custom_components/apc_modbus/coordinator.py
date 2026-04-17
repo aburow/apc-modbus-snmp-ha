@@ -25,7 +25,11 @@ from pymodbus.exceptions import ConnectionException, ModbusException
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import (
+    DEFAULT_IDLE_RECONNECT_SECONDS,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+)
 from .device_types import APCDeviceType, classify_device_type
 from . import registers_smart_ups
 from .snmp_helper import get_device_metadata_sync, get_external_probe_data_sync
@@ -50,6 +54,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         io_lock: asyncio.Lock,
         snmp_community: str,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
+        keep_connection_open: bool = False,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -66,6 +71,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry_id = entry_id
         self.timeout = timeout
         self.snmp_community = snmp_community
+        self._keep_connection_open = keep_connection_open
+        self._idle_reconnect_seconds = DEFAULT_IDLE_RECONNECT_SECONDS
         self._log_ctx = f"{self.device_name} {self.host}:{self.port} (unit {self.unit})"
         # Serialize Modbus client access to avoid concurrent reads on one socket.
         self._io_lock = io_lock
@@ -74,6 +81,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._backoff_until: float | None = None
         self._backoff_base = 2.0
         self._backoff_max = 60.0
+        self._last_io_monotonic = 0.0
+        self._reconnect_count = 0
+        self._recreate_count = 0
         # Small pacing delays for devices that drop connections on back-to-back reads.
         # Defaults for Smart-UPS; Rack PDU overrides in set_device_type().
         self._post_connect_delay = 0.05
@@ -392,6 +402,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         modbus_cycle_elapsed = 0.0
         snmp_metadata_elapsed = 0.0
         snmp_external_elapsed = 0.0
+        reconnects_at_start = self._reconnect_count
+        recreates_at_start = self._recreate_count
 
         _LOGGER.info(
             "[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id
@@ -454,26 +466,35 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._register_failure(str(err))
                 raise
             finally:
-                # Close per-cycle to avoid stale sockets on devices that drop idle connections.
-                close_start = time.monotonic()
-                try:
-                    close_request = functools.partial(self.client.close)
-                    await self.hass.async_add_executor_job(close_request)
-                    close_elapsed = time.monotonic() - close_start
+                if self._keep_connection_open:
                     _LOGGER.debug(
-                        "[%s] Closed Modbus client after update (%.3fs)",
+                        "[%s] Leaving Modbus client open after update",
                         self._log_ctx,
-                        close_elapsed,
                     )
-                except (
-                    ConnectionException,
-                    ModbusException,
-                    OSError,
-                    TimeoutError,
-                ) as close_err:
-                    _LOGGER.debug(
-                        "[%s] Error closing Modbus client: %s", self._log_ctx, close_err
-                    )
+                else:
+                    # Legacy safe mode: close per-cycle to avoid stale sockets.
+                    close_start = time.monotonic()
+                    try:
+                        close_request = functools.partial(self.client.close)
+                        await self.hass.async_add_executor_job(close_request)
+                        close_elapsed = time.monotonic() - close_start
+                        self._last_io_monotonic = 0.0
+                        _LOGGER.debug(
+                            "[%s] Closed Modbus client after update (%.3fs)",
+                            self._log_ctx,
+                            close_elapsed,
+                        )
+                    except (
+                        ConnectionException,
+                        ModbusException,
+                        OSError,
+                        TimeoutError,
+                    ) as close_err:
+                        _LOGGER.debug(
+                            "[%s] Error closing Modbus client: %s",
+                            self._log_ctx,
+                            close_err,
+                        )
                 modbus_cycle_elapsed = time.monotonic() - cycle_start
 
         if not data:
@@ -516,7 +537,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         _LOGGER.info(
             "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
             "connect=%.3fs, block_reads=%.3fs, individual_reads=%.3fs, close=%.3fs, "
-            "snmp_metadata=%.3fs, snmp_external=%.3fs",
+            "snmp_metadata=%.3fs, snmp_external=%.3fs, reconnects=%d, recreates=%d",
             self._log_ctx,
             time.monotonic() - poll_start,
             lock_wait,
@@ -527,6 +548,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             close_elapsed,
             snmp_metadata_elapsed,
             snmp_external_elapsed,
+            self._reconnect_count - reconnects_at_start,
+            self._recreate_count - recreates_at_start,
         )
 
         return data
@@ -625,8 +648,54 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
             data[key] = value
 
+    @property
+    def keep_connection_open_enabled(self) -> bool:
+        """Return whether open-session mode is enabled."""
+        return self._keep_connection_open
+
+    async def async_set_keep_connection_open(self, enabled: bool) -> None:
+        """Update open-session mode at runtime."""
+        enabled = bool(enabled)
+        if self._keep_connection_open == enabled:
+            return
+
+        self._keep_connection_open = enabled
+        if not enabled:
+            # Returning to legacy per-cycle close mode: drop any existing long-lived socket.
+            try:
+                close_request = functools.partial(self.client.close)
+                await self.hass.async_add_executor_job(close_request)
+            except (ConnectionException, ModbusException, OSError, TimeoutError):
+                pass
+            self._last_io_monotonic = 0.0
+
+        _LOGGER.info(
+            "[%s] keep_connection_open set to %s",
+            self._log_ctx,
+            self._keep_connection_open,
+        )
+
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""
+        if self._keep_connection_open and self._last_io_monotonic > 0:
+            idle_for = time.monotonic() - self._last_io_monotonic
+            if idle_for >= self._idle_reconnect_seconds:
+                _LOGGER.info(
+                    "[%s] Modbus socket idle for %.1fs; reconnecting before poll",
+                    self._log_ctx,
+                    idle_for,
+                )
+                reconnected = await self._async_reconnect(
+                    reason=f"idle>{self._idle_reconnect_seconds:.0f}s",
+                    recreate_client=False,
+                )
+                if not reconnected:
+                    reconnected = await self._async_reconnect(
+                        reason="idle_reconnect_retry",
+                        recreate_client=True,
+                    )
+                return reconnected
+
         try:
             connect_start = time.monotonic()
             connect_request = functools.partial(self.client.connect)
@@ -642,6 +711,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._connect_failures = 0
                 if had_failures:
                     self._metadata_needs_refresh = True
+                self._mark_io_activity()
                 if self._post_connect_delay > 0:
                     await asyncio.sleep(self._post_connect_delay)
                     _LOGGER.debug(
@@ -657,22 +727,54 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._log_ctx,
                     self._connect_failures,
                 )
-                await self._recreate_client()
                 self._connect_failures = 0
-                reconnect_start = time.monotonic()
-                reconnect_request = functools.partial(self.client.connect)
-                ok = await self.hass.async_add_executor_job(reconnect_request)
-                _LOGGER.debug(
-                    "[%s] client.connect() after recreate -> %s (%.3fs)",
-                    self._log_ctx,
-                    ok,
-                    time.monotonic() - reconnect_start,
+                ok = await self._async_reconnect(
+                    reason="connect_failures>=3",
+                    recreate_client=True,
                 )
                 return ok
             return False
         except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
             _LOGGER.debug("[%s] Connection attempt failed: %s", self._log_ctx, err)
             return False
+
+    def _mark_io_activity(self) -> None:
+        """Record the latest successful Modbus socket activity time."""
+        self._last_io_monotonic = time.monotonic()
+
+    async def _async_reconnect(self, *, reason: str, recreate_client: bool) -> bool:
+        """Reconnect the Modbus socket, optionally recreating the client object."""
+        self._reconnect_count += 1
+        if recreate_client:
+            self._recreate_count += 1
+            await self._recreate_client()
+        else:
+            try:
+                close_request = functools.partial(self.client.close)
+                await self.hass.async_add_executor_job(close_request)
+            except (ConnectionException, ModbusException, OSError, TimeoutError):
+                pass
+
+        reconnect_start = time.monotonic()
+        connect_request = functools.partial(self.client.connect)
+        ok = await self.hass.async_add_executor_job(connect_request)
+        _LOGGER.debug(
+            "[%s] reconnect(reason=%s, recreate=%s) -> %s (%.3fs, total_reconnects=%d, total_recreates=%d)",
+            self._log_ctx,
+            reason,
+            recreate_client,
+            ok,
+            time.monotonic() - reconnect_start,
+            self._reconnect_count,
+            self._recreate_count,
+        )
+        if ok:
+            self._connect_failures = 0
+            self._metadata_needs_refresh = True
+            self._mark_io_activity()
+            if self._post_connect_delay > 0:
+                await asyncio.sleep(self._post_connect_delay)
+        return ok
 
     async def _recreate_client(self) -> None:
         """Close and recreate the Modbus client to clear dead sockets."""
@@ -754,6 +856,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     continue
 
                 # Block read successful, increment counter
+                self._mark_io_activity()
                 _LOGGER.debug(
                     "[%s] Block read succeeded: %s (%.3fs)",
                     self._log_ctx,
@@ -820,21 +923,20 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._log_ctx,
                     )
                     try:
-                        # Close existing connection
-                        close_request = functools.partial(self.client.close)
-                        await self.hass.async_add_executor_job(close_request)
-
-                        # Recreate client on broken pipe / connection reset
-                        if "broken pipe" in err_str or "reset" in err_str:
-                            _LOGGER.debug(
-                                "[%s] Recreating Modbus client after socket error",
-                                self._log_ctx,
+                        recreate_for_socket_error = (
+                            "broken pipe" in err_str or "reset" in err_str
+                        )
+                        reconnected = await self._async_reconnect(
+                            reason=f"block:{block['name']}:{type(err).__name__}",
+                            recreate_client=recreate_for_socket_error,
+                        )
+                        if not reconnected and not recreate_for_socket_error:
+                            reconnected = await self._async_reconnect(
+                                reason=f"block:{block['name']}:retry_recreate",
+                                recreate_client=True,
                             )
-                            await self._recreate_client()
-
-                        # Reconnect
-                        connect_request = functools.partial(self.client.connect)
-                        await self.hass.async_add_executor_job(connect_request)
+                        if not reconnected:
+                            raise ConnectionException("Reconnect failed")
 
                         # Retry the block read
                         read_request = self._build_read_request(
@@ -843,6 +945,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         result = await self.hass.async_add_executor_job(read_request)
 
                         if not self._is_error_response(result):
+                            self._mark_io_activity()
                             _LOGGER.debug(
                                 "[%s] Block read succeeded after reconnect: %s (%.3fs)",
                                 self._log_ctx,
@@ -982,6 +1085,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 descriptor["address"], descriptor["count"]
             )
             result = await self.hass.async_add_executor_job(read_request)
+            self._mark_io_activity()
             return result
         except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
             # Connection likely dropped, attempt to reconnect and retry
@@ -1007,28 +1111,27 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
                 try:
-                    # Close existing connection
-                    close_request = functools.partial(self.client.close)
-                    await self.hass.async_add_executor_job(close_request)
-                except (ConnectionException, ModbusException, OSError, TimeoutError):
-                    pass  # Ignore close errors
-
-                try:
-                    if "broken pipe" in err_str or "reset" in err_str:
-                        _LOGGER.debug(
-                            "[%s] Recreating Modbus client after socket error",
-                            self._log_ctx,
+                    recreate_for_socket_error = (
+                        "broken pipe" in err_str or "reset" in err_str
+                    )
+                    reconnected = await self._async_reconnect(
+                        reason=f"register:{descriptor['key']}:{type(err).__name__}",
+                        recreate_client=recreate_for_socket_error,
+                    )
+                    if not reconnected and not recreate_for_socket_error:
+                        reconnected = await self._async_reconnect(
+                            reason=f"register:{descriptor['key']}:retry_recreate",
+                            recreate_client=True,
                         )
-                        await self._recreate_client()
-                    # Reconnect
-                    connect_request = functools.partial(self.client.connect)
-                    await self.hass.async_add_executor_job(connect_request)
+                    if not reconnected:
+                        return None
 
                     # Retry the read
                     read_request = self._build_read_request(
                         descriptor["address"], descriptor["count"]
                     )
                     result = await self.hass.async_add_executor_job(read_request)
+                    self._mark_io_activity()
                     _LOGGER.debug(
                         "[%s] Successfully reconnected and read register %s",
                         self._log_ctx,

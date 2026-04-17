@@ -59,6 +59,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button reapplies integration default entity enablement in Entity Registry
+- **Connection Mode Switch**: Per-device `Keep Connection Open` switch toggles persistent Modbus TCP session mode at runtime and persists the setting on the config entry
 - **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, capability discovery, and first refresh do not all hit at once
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
@@ -122,8 +123,11 @@ After installation, set up the integration through the UI:
    - **Port**: Modbus/TCP port (default: 502)
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
+   - **Keep Connection Open**: Reuse Modbus TCP session across polls (default: disabled)
 
 The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
+
+When **Keep Connection Open** is enabled, the coordinator avoids per-cycle socket close/open overhead, but still reconnects automatically on socket errors and after long idle windows.
 
 ### SNMP Requirements
 

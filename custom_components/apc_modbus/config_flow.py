@@ -14,8 +14,10 @@ from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SCAN_INTERVAL
 
 from .const import (
     CONF_DEVICE_NAME,
+    CONF_KEEP_CONNECTION_OPEN,
     CONF_SNMP_COMMUNITY,
     CONF_UNIT,
+    DEFAULT_KEEP_CONNECTION_OPEN,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
@@ -32,6 +34,9 @@ DATA_SCHEMA = vol.Schema(
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
         vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
         vol.Optional(CONF_UNIT, default=DEFAULT_UNIT): int,
+        vol.Optional(
+            CONF_KEEP_CONNECTION_OPEN, default=DEFAULT_KEEP_CONNECTION_OPEN
+        ): bool,
     }
 )
 
