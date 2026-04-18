@@ -111,6 +111,7 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             manufacturer="APC",
             model=coordinator.get_device_model_for_registry(),
             serial_number=coordinator.serial_number,
+            configuration_url=coordinator.get_configuration_url_for_registry(),
             sw_version=f"{coordinator.fw_version} ({coordinator.fw_date})"
             if coordinator.fw_version and coordinator.fw_date
             else coordinator.fw_version,

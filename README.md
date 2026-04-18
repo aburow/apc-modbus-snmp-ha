@@ -332,9 +332,9 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.3-dev.18 (Current Pre-release)
-- ✅ Single-phase UPS defaults now keep non-primary phase sensors (`Phase 2/3`) disabled by default to avoid zero-value placeholders.
-- ✅ Core-first visibility behavior remains unchanged for primary UPS metrics and statuses.
+### v1.2.3-dev.19 (Current Pre-release)
+- ✅ Device pages now expose `configuration_url` in Home Assistant device info, pointing to the APC management interface from the configured host.
+- ✅ Single-phase UPS defaults keep non-primary phase sensors (`Phase 2/3`) disabled by default to avoid zero-value placeholders.
 - ✅ Version metadata is aligned across integration and package files for reproducible pre-release publishing.
 
 ### v1.1.0

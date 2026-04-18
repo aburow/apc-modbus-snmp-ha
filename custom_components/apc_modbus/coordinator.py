@@ -18,6 +18,7 @@ import inspect
 import logging
 import time
 from datetime import timedelta
+from ipaddress import ip_address
 from typing import Any
 
 from pymodbus.client import ModbusTcpClient
@@ -174,6 +175,18 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
             return "Smart-UPS"
         return "APC Device"
+
+    def get_configuration_url_for_registry(self) -> str:
+        """Return a best-effort management URL for Home Assistant device info."""
+        host = (self.host or "").strip()
+        if not host:
+            return ""
+        try:
+            if ip_address(host).version == 6:
+                return f"http://[{host}]"
+        except ValueError:
+            pass
+        return f"http://{host}"
 
     def set_capabilities(self, capabilities: dict[str, int]) -> None:
         """Set device capabilities for dynamic entity generation (Rack PDU)."""

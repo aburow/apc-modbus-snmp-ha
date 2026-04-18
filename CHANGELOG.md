@@ -2,6 +2,13 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.19] - 2026-04-18
+### Added
+- Added `configuration_url` to Home Assistant device-info blocks so APC device pages include a direct management URL derived from the configured host (with IPv6-safe URL formatting).
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.3-dev.19`.
+
 ## [1.2.3-dev.18] - 2026-04-18
 ### Fixed
 - UPS phase-specific non-primary sensors (for example `_l2` and `_l3` variants) are now disabled by default in Entity Registry so single-phase SMT devices no longer surface Phase 2/3 zero-value placeholders by default.

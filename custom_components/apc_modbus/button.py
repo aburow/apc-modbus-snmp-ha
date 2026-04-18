@@ -62,6 +62,7 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             manufacturer="APC",
             model=coordinator.get_device_model_for_registry(),
             serial_number=coordinator.serial_number,
+            configuration_url=coordinator.get_configuration_url_for_registry(),
         )
 
     async def async_press(self) -> None:
@@ -108,6 +109,7 @@ class APCModbusRedetectDeviceTypeButton(
             manufacturer="APC",
             model=coordinator.get_device_model_for_registry(),
             serial_number=coordinator.serial_number,
+            configuration_url=coordinator.get_configuration_url_for_registry(),
         )
 
     async def async_press(self) -> None:
@@ -179,6 +181,7 @@ class APCModbusResetMonitorDefaultsButton(
             manufacturer="APC",
             model=coordinator.get_device_model_for_registry(),
             serial_number=coordinator.serial_number,
+            configuration_url=coordinator.get_configuration_url_for_registry(),
         )
 
     async def async_press(self) -> None:
