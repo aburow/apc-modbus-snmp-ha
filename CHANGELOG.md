@@ -2,6 +2,13 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.18] - 2026-04-18
+### Fixed
+- UPS phase-specific non-primary sensors (for example `_l2` and `_l3` variants) are now disabled by default in Entity Registry so single-phase SMT devices no longer surface Phase 2/3 zero-value placeholders by default.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.3-dev.18`.
+
 ## [1.2.3-dev.17] - 2026-04-17
 ### Added
 - Hourly SNMP metadata refresh now also detects which external temperature/humidity probe OIDs are available, and selects the best SNMP input-frequency OID for the device.

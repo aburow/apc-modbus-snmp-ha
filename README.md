@@ -332,12 +332,10 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.2 (Current)
-- ✅ Startup load smoothing for larger APC fleets with deterministic startup staggering
-- ✅ Gated device-family probing (no automatic rediscovery on transient connection loss)
-- ✅ Manual `Re-detect Device Type` control for targeted correction and reload
-- ✅ Coordinator cycle timing boundaries visible at `INFO` log level
-- ✅ Explicit sensor/binary-sensor icon mapping for consistent Home Assistant UI display
+### v1.2.3-dev.18 (Current Pre-release)
+- ✅ Single-phase UPS defaults now keep non-primary phase sensors (`Phase 2/3`) disabled by default to avoid zero-value placeholders.
+- ✅ Core-first visibility behavior remains unchanged for primary UPS metrics and statuses.
+- ✅ Version metadata is aligned across integration and package files for reproducible pre-release publishing.
 
 ### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)

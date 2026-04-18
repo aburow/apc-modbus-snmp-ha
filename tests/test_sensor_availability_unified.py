@@ -40,6 +40,21 @@ def test_non_core_ups_sensor_keys_disabled_by_default() -> None:
     )
 
 
+def test_non_primary_phase_ups_sensor_keys_disabled_by_default() -> None:
+    assert (
+        AVAILABILITY.is_sensor_enabled_by_default("output_voltage_l2", "smt_ups")
+        is False
+    )
+    assert (
+        AVAILABILITY.is_sensor_enabled_by_default("input_voltage_l3", "smt_ups")
+        is False
+    )
+    assert (
+        AVAILABILITY.is_sensor_enabled_by_default("output_load_percent_l2", "smart_ups")
+        is False
+    )
+
+
 def test_rack_pdu_core_enabled_and_non_core_disabled_by_default() -> None:
     assert (
         AVAILABILITY.is_sensor_enabled_by_default("device_real_power", "rack_pdu")

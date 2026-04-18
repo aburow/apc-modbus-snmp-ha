@@ -9,6 +9,8 @@ across projects and external tooling.
 
 from __future__ import annotations
 
+import re
+
 
 UPS_DEVICE_FAMILIES = ("smart_ups", "smt_ups", "ups", "unknown")
 RACK_PDU_DEVICE_FAMILIES = ("rack_pdu",)
@@ -72,6 +74,13 @@ RACK_PDU_SENSOR_CANONICAL_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("phase_l1_voltage",), "phase_l1_voltage"),
 )
 
+NON_PRIMARY_PHASE_SUFFIX_RE = re.compile(r"(?:^|_)(?:l|phase)([2-9]\d*)$")
+
+
+def _is_non_primary_phase_metric(local_key: str) -> bool:
+    match = NON_PRIMARY_PHASE_SUFFIX_RE.search(local_key.lower())
+    return bool(match and int(match.group(1)) >= 2)
+
 
 def _match_pattern_key(
     local_key: str, patterns: tuple[tuple[tuple[str, ...], str], ...]
@@ -106,6 +115,10 @@ def is_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
 
     if device_family not in UPS_DEVICE_FAMILIES:
         return True
+
+    if _is_non_primary_phase_metric(local_key):
+        return False
+
     canonical_key = resolve_sensor_canonical_key(local_key)
     return canonical_key in STANDARD_ENABLED_CANONICAL_SET
 
