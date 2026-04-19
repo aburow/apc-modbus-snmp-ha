@@ -2,6 +2,13 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3-dev.20] - 2026-04-20
+### Added
+- Added dependency-free `sensor_catalog_unified.py` with `ALL_SENSORS_UNIFIED` for exhaustive per-profile sensor picklists (`apc_modbus_smart`, `apc_modbus_smt`, `apc_modbus_rack_pdu`) without changing unified contract/profile membership semantics.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.3-dev.20`.
+
 ## [1.2.3-dev.19] - 2026-04-18
 ### Added
 - Added `configuration_url` to Home Assistant device-info blocks so APC device pages include a direct management URL derived from the configured host (with IPv6-safe URL formatting).
