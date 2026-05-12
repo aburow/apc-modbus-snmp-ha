@@ -1,4 +1,5 @@
 import importlib.util
+import asyncio
 import sys
 import types
 from pathlib import Path
@@ -68,3 +69,107 @@ def test_parse_frequency_hz_handles_hz_and_tenths() -> None:
     assert SNMP_HELPER._parse_frequency_hz("0") is None
     assert SNMP_HELPER._parse_frequency_hz("-1") is None
     assert SNMP_HELPER._parse_frequency_hz("not-a-number") is None
+
+
+def test_dedupe_oids_preserves_order() -> None:
+    assert SNMP_HELPER._dedupe_oids_preserve_order(["1", "2", "1", "3", "2"]) == [
+        "1",
+        "2",
+        "3",
+    ]
+
+
+def test_select_first_usable_candidate_is_local_only() -> None:
+    calls: list[str] = []
+
+    async def _should_not_be_called(*_args, **_kwargs):
+        calls.append("called")
+        return None
+
+    original = SNMP_HELPER.async_get_snmp_value
+    SNMP_HELPER.async_get_snmp_value = _should_not_be_called
+    try:
+        selected = SNMP_HELPER._select_first_usable_candidate_from_map(
+            ["oid_primary", "oid_fallback"],
+            {"oid_primary": "bad", "oid_fallback": "500"},
+            SNMP_HELPER._parse_frequency_hz,
+        )
+        assert selected == "oid_fallback"
+        assert calls == []
+    finally:
+        SNMP_HELPER.async_get_snmp_value = original
+
+
+def test_detect_external_probe_oids_dedup_and_order() -> None:
+    calls: list[str] = []
+    values = {
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1": "100",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_TEMP_C_BASE}.1": "101",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1": "450",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_HUMIDITY_BASE}.1": "46",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_TEMP_C_BASE}.2.1": "200",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_TEMP_C_BASE}.2": "201",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1": "550",
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_HUMIDITY_BASE}.2": "56",
+        SNMP_HELPER.SMARTUPS_OID_INPUT_FREQUENCY: "bad",
+        SNMP_HELPER.UPS_MIB_OID_INPUT_FREQUENCY_LINE1: "500",
+    }
+
+    async def _fake_get(
+        host: str, oid: str, community: str = "public", timeout: int = 5
+    ):
+        del host, community, timeout
+        calls.append(oid)
+        return values.get(oid)
+
+    original = SNMP_HELPER.async_get_snmp_value
+    SNMP_HELPER.async_get_snmp_value = _fake_get
+    try:
+        detection = asyncio.run(
+            SNMP_HELPER.async_detect_external_probe_oids("127.0.0.1", "public")
+        )
+    finally:
+        SNMP_HELPER.async_get_snmp_value = original
+
+    assert len(calls) == len(set(calls))
+    assert detection["frequency_oid"] == SNMP_HELPER.UPS_MIB_OID_INPUT_FREQUENCY_LINE1
+    assert detection["temp_1_oid"] == f"{SNMP_HELPER.UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1"
+    assert detection["humidity_1_oid"] == (
+        f"{SNMP_HELPER.UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1"
+    )
+
+
+def test_detected_probe_fetch_dedups_duplicate_oids_and_maps_all_keys() -> None:
+    calls: list[str] = []
+    shared_oid = "1.3.6.1.4.1.318.1.1.25.1.2.1.6.1.1"
+    values = {shared_oid: "250"}
+
+    async def _fake_get(
+        host: str, oid: str, community: str = "public", timeout: int = 5
+    ):
+        del host, community, timeout
+        calls.append(oid)
+        return values.get(oid)
+
+    detection = {
+        "frequency_oid": None,
+        "temp_1_oid": shared_oid,
+        "humidity_1_oid": None,
+        "temp_2_oid": shared_oid,
+        "humidity_2_oid": None,
+    }
+
+    original = SNMP_HELPER.async_get_snmp_value
+    SNMP_HELPER.async_get_snmp_value = _fake_get
+    try:
+        parsed = asyncio.run(
+            SNMP_HELPER.async_get_external_probe_data_detected(
+                "127.0.0.1", "public", detection
+            )
+        )
+    finally:
+        SNMP_HELPER.async_get_snmp_value = original
+
+    assert calls == [shared_oid]
+    assert parsed["snmp_external_temp_1"] == 25.0
+    assert parsed["snmp_external_temp_2"] == 25.0

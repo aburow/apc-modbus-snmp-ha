@@ -47,6 +47,57 @@ SMARTUPS_OID_INPUT_FREQUENCY = "1.3.6.1.4.1.318.1.1.1.3.2.4.0"
 UPS_MIB_OID_INPUT_FREQUENCY_LINE1 = "1.3.6.1.2.1.33.1.3.3.1.2.1"
 
 
+def _dedupe_oids_preserve_order(oids: list[str]) -> list[str]:
+    """Return unique OIDs in first-seen order."""
+    seen: set[str] = set()
+    unique: list[str] = []
+    for oid in oids:
+        if oid in seen:
+            continue
+        seen.add(oid)
+        unique.append(oid)
+    return unique
+
+
+async def _fetch_snmp_value_map(
+    host: str, community: str, oids: list[str]
+) -> dict[str, str | None]:
+    """Fetch OIDs once and return an OID->value map."""
+    unique_oids = _dedupe_oids_preserve_order(oids)
+    if not unique_oids:
+        return {}
+    results = await asyncio.gather(
+        *[async_get_snmp_value(host, oid, community) for oid in unique_oids],
+        return_exceptions=True,
+    )
+    value_map: dict[str, str | None] = {}
+    for oid, raw in zip(unique_oids, results, strict=True):
+        value_map[oid] = raw if not isinstance(raw, Exception) else None
+    return value_map
+
+
+def _select_first_present_candidate_from_map(
+    candidates: list[str], value_map: dict[str, str | None]
+) -> str | None:
+    """Pick the first candidate whose fetched value is present."""
+    for oid in candidates:
+        if value_map.get(oid) is not None:
+            return oid
+    return None
+
+
+def _select_first_usable_candidate_from_map(
+    candidates: list[str],
+    value_map: dict[str, str | None],
+    parser: Callable[[str | None], float | None],
+) -> str | None:
+    """Pick the first candidate whose fetched value parses as usable."""
+    for oid in candidates:
+        if parser(value_map.get(oid)) is not None:
+            return oid
+    return None
+
+
 async def async_get_snmp_value(
     host: str, oid: str, community: str = "public", timeout: int = 5
 ) -> str | None:
@@ -287,14 +338,15 @@ async def async_get_external_probe_data(
         ],
     }
 
+    all_candidates = [
+        oid for candidates in oid_candidates.values() for oid in candidates
+    ]
+    value_map = await _fetch_snmp_value_map(host, community, all_candidates)
+
     parsed: dict[str, float | None] = {}
     for key, candidates in oid_candidates.items():
-        raw_value: str | None = None
-        for oid in candidates:
-            raw_value = await async_get_snmp_value(host, oid, community)
-            if raw_value is not None:
-                break
-
+        selected_oid = _select_first_present_candidate_from_map(candidates, value_map)
+        raw_value = value_map.get(selected_oid) if selected_oid else None
         if key == "snmp_input_frequency":
             parsed[key] = _parse_frequency_hz(raw_value)
         elif key.startswith("snmp_external_temp"):
@@ -326,52 +378,52 @@ async def async_detect_external_probe_oids(
       - frequency_oid
     """
 
-    async def first_working_oid(
-        candidates: list[str],
-        parser: Callable[[str | None], float | None],
-    ) -> str | None:
-        for oid in candidates:
-            raw_value = await async_get_snmp_value(host, oid, community)
-            if parser(raw_value) is not None:
-                return oid
-        return None
-
-    temp_1_oid = await first_working_oid(
-        [f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1", f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1"],
-        _parse_external_temp_c,
-    )
-    humidity_1_oid = await first_working_oid(
-        [
-            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1",
-            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1",
-        ],
-        _parse_external_humidity_pct,
-    )
-    temp_2_oid = await first_working_oid(
-        [f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2.1", f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2"],
-        _parse_external_temp_c,
-    )
-    humidity_2_oid = await first_working_oid(
-        [
-            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1",
-            f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
-        ],
-        _parse_external_humidity_pct,
-    )
-
-    # Input frequency detection: pick the first OID that yields a sane Hz value.
-    frequency_oid = await first_working_oid(
-        [SMARTUPS_OID_INPUT_FREQUENCY, UPS_MIB_OID_INPUT_FREQUENCY_LINE1],
-        _parse_frequency_hz,
-    )
-
-    detection = {
-        "temp_1_oid": temp_1_oid,
-        "humidity_1_oid": humidity_1_oid,
-        "temp_2_oid": temp_2_oid,
-        "humidity_2_oid": humidity_2_oid,
-        "frequency_oid": frequency_oid,
+    candidates_by_key: dict[
+        str, tuple[list[str], Callable[[str | None], float | None]]
+    ] = {
+        "temp_1_oid": (
+            [
+                f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1.1",
+                f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.1",
+            ],
+            _parse_external_temp_c,
+        ),
+        "humidity_1_oid": (
+            [
+                f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1.1",
+                f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.1",
+            ],
+            _parse_external_humidity_pct,
+        ),
+        "temp_2_oid": (
+            [
+                f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2.1",
+                f"{UIO_SENSOR_STATUS_TEMP_C_BASE}.2",
+            ],
+            _parse_external_temp_c,
+        ),
+        "humidity_2_oid": (
+            [
+                f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2.1",
+                f"{UIO_SENSOR_STATUS_HUMIDITY_BASE}.2",
+            ],
+            _parse_external_humidity_pct,
+        ),
+        "frequency_oid": (
+            [SMARTUPS_OID_INPUT_FREQUENCY, UPS_MIB_OID_INPUT_FREQUENCY_LINE1],
+            _parse_frequency_hz,
+        ),
     }
+    all_candidates = [
+        oid for candidates, _parser in candidates_by_key.values() for oid in candidates
+    ]
+    value_map = await _fetch_snmp_value_map(host, community, all_candidates)
+    detection: dict[str, str | None] = {}
+    for key, (candidates, parser) in candidates_by_key.items():
+        detection[key] = _select_first_usable_candidate_from_map(
+            candidates, value_map, parser
+        )
+
     _LOGGER.debug("SNMP external probe OID detection for %s: %s", host, detection)
     return detection
 
@@ -419,14 +471,11 @@ async def async_get_external_probe_data_detected(
     if not oids:
         return {}
 
-    results = await asyncio.gather(
-        *[async_get_snmp_value(host, oid, community) for oid in oids.values()],
-        return_exceptions=True,
-    )
+    value_map = await _fetch_snmp_value_map(host, community, list(oids.values()))
 
     parsed: dict[str, float | None] = {}
-    for key, raw in zip(oids.keys(), results, strict=True):
-        value = raw if not isinstance(raw, Exception) else None
+    for key, oid in oids.items():
+        value = value_map.get(oid)
         if key == "snmp_input_frequency":
             parsed[key] = _parse_frequency_hz(value)
         elif key.startswith("snmp_external_temp"):
