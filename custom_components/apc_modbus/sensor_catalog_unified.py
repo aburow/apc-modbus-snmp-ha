@@ -9,6 +9,16 @@ external tools like ups2mqtt can consume it directly.
 This catalog is exhaustive/selectable metadata and does not change unified
 contract exposure or default-enabled behavior. Canonical `key` values are
 authoritative; `aliases` provide alternate names only.
+
+Category taxonomy (catalog metadata only):
+- core: primary operational telemetry typically used for baseline monitoring.
+- diagnostic: detailed status/fault/auxiliary telemetry for troubleshooting.
+- config: device configuration or setpoint-style values.
+- metadata: identity/capability/descriptive values, not live telemetry control.
+- external: values sourced from external probes or out-of-band probe channels.
+
+Category is classification metadata only and does not imply contract exposure,
+default-enabled behavior, or profile membership semantics.
 """
 
 ALL_SENSORS_UNIFIED = {

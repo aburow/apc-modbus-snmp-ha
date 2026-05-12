@@ -13,3 +13,6 @@ lint = [
   "sqlfluff==3.4.2",
   "yamllint==1.37.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
