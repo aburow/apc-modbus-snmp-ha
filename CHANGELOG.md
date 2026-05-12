@@ -2,6 +2,14 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.3] - 2026-05-13
+### Added
+- Added SNMP fallback/probe request hardening so candidate OIDs are pre-collected, deduplicated, fetched once per helper pass, and resolved locally in declared order.
+- Added regression tests to guard SNMP fallback/probe request count, candidate order, and duplicate OID mapping behavior.
+
+### Changed
+- Updated release documentation for the `1.2.3` stable release.
+
 ## [1.2.3-dev.20] - 2026-04-20
 ### Added
 - Added dependency-free `sensor_catalog_unified.py` with `ALL_SENSORS_UNIFIED` for exhaustive per-profile sensor picklists (`apc_modbus_smart`, `apc_modbus_smt`, `apc_modbus_rack_pdu`) without changing unified contract/profile membership semantics.

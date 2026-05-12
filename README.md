@@ -332,11 +332,10 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.3-dev.20 (Current Pre-release)
-- ✅ Added import-free `sensor_catalog_unified.py` with `ALL_SENSORS_UNIFIED` so downstream tools can build complete per-profile sensor picklists without changing unified contracts.
-- ✅ Device pages expose `configuration_url` in Home Assistant device info, pointing to the APC management interface from the configured host.
-- ✅ Single-phase UPS defaults keep non-primary phase sensors (`Phase 2/3`) disabled by default to avoid zero-value placeholders.
-- ✅ Version metadata is aligned across integration and package files for reproducible pre-release publishing.
+### v1.2.3 (Current)
+- ✅ Includes all `1.2.3-dev.*` improvements (interop profiles, bridge metadata contract updates, poll instrumentation/guards, and SNMP probe gating refinements).
+- ✅ SNMP probe/fallback helper paths now pre-collect candidate OIDs, deduplicate requests, and resolve fallback selection locally from fetched values.
+- ✅ Added test guardrails for SNMP fallback candidate order, duplicate OID fetch deduplication, and request-count stability.
 
 ### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
