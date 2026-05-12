@@ -9,6 +9,7 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ### Changed
 - Updated release documentation for the `1.2.3` stable release.
+- Synchronized authoritative integration/package version metadata to `1.2.3`.
 
 ## [1.2.3-dev.20] - 2026-04-20
 ### Added
