@@ -71,6 +71,15 @@ def test_parse_frequency_hz_handles_hz_and_tenths() -> None:
     assert SNMP_HELPER._parse_frequency_hz("not-a-number") is None
 
 
+def test_parse_external_probe_values_accept_float_and_suffix_text() -> None:
+    assert SNMP_HELPER._parse_external_temp_c("25.0") == 25.0
+    assert SNMP_HELPER._parse_external_temp_c("25 C") == 25.0
+    assert SNMP_HELPER._parse_external_temp_c("250") == 25.0
+    assert SNMP_HELPER._parse_external_humidity_pct("45.0") == 45.0
+    assert SNMP_HELPER._parse_external_humidity_pct("45 %") == 45.0
+    assert SNMP_HELPER._parse_external_humidity_pct("450") == 45.0
+
+
 def test_dedupe_oids_preserves_order() -> None:
     assert SNMP_HELPER._dedupe_oids_preserve_order(["1", "2", "1", "3", "2"]) == [
         "1",

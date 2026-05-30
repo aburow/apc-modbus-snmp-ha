@@ -125,14 +125,17 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         serial_number: str | None,
         fw_version: str | None,
         fw_date: str | None,
+        *,
+        mark_refresh_complete: bool = True,
     ) -> None:
         """Set device metadata from SNMP query."""
         self.hw_model = self._clean_metadata_value(hw_model)
         self.serial_number = self._clean_metadata_value(serial_number)
         self.fw_version = self._clean_metadata_value(fw_version)
         self.fw_date = self._clean_metadata_value(fw_date)
-        self._metadata_needs_refresh = False
-        self._metadata_last_refresh_monotonic = time.monotonic()
+        if mark_refresh_complete:
+            self._metadata_needs_refresh = False
+            self._metadata_last_refresh_monotonic = time.monotonic()
         _LOGGER.debug(
             "Device metadata set: model=%s, serial=%s, firmware=%s",
             self.hw_model,

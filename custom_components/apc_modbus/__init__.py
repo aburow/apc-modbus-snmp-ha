@@ -266,6 +266,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 serial_number=metadata.get("serial_number"),
                 fw_version=metadata.get("firmware_version"),
                 fw_date=metadata.get("firmware_date"),
+                mark_refresh_complete=False,
             )
             if metadata.get("model"):
                 snmp_hint_device_type = detect_device_type(metadata.get("model"))

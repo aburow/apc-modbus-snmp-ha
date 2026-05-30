@@ -335,7 +335,11 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.4-dev.5 (Pre-release)
+### v1.2.4-dev.6 (Pre-release)
+- ✅ Restores startup SNMP probe-detection polling on first post-restart cycle (probe detection is no longer deferred until manual re-detect/hourly refresh).
+- ✅ Improves external probe SNMP value parsing for detection/polling (`25.0`, `25 C`, `45 %`, and tenths-style values), so valid probe OIDs are retained and polled regularly.
+
+### v1.2.4-dev.5
 - ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
 - ✅ Newly connected external temp/humidity probe components can now be detected immediately after re-detect instead of waiting up to the hourly SNMP metadata refresh.
 - ✅ Lint/tooling dependency stack updated (`grain-lint`, `ruff`, `semgrep`, `yamllint`, `sqlfluff>=4.2.0`) for current CI/security baselines.

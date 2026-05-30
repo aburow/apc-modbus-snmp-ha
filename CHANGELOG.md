@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.4-dev.6] - 2026-05-30
+### Fixed
+- Restored startup SNMP probe-detection polling on first coordinator cycle after restart by preventing startup metadata hydration from marking the periodic SNMP refresh as already complete.
+- Hardened external probe OID detection/value parsing to accept common SNMP value formats (numeric strings with decimals and unit suffix text), preventing valid temp/humidity probe OIDs from being dropped and skipped in regular polling.
+- Added regression coverage for tolerant external probe parser behavior.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.4-dev.6`.
+
 ## [1.2.4-dev.5] - 2026-05-30
 ### Fixed
 - Updated the `Re-detect Device Type` button flow to force an immediate SNMP metadata/probe detection refresh when the device family is unchanged, so newly connected external probe components are detected without waiting for the hourly metadata cycle.

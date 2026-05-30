@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 from collections.abc import Callable
 
@@ -24,6 +25,7 @@ from pysnmp.hlapi.v3arch.asyncio import (
 from .device_types import APCDeviceType
 
 _LOGGER = logging.getLogger(__name__)
+NUMERIC_VALUE_RE = re.compile(r"[-+]?\d+(?:\.\d+)?")
 
 # APC Smart-UPS SNMP OIDs (1.3.6.1.4.1.318.1.1.1.*)
 SMARTUPS_OID_MODEL = "1.3.6.1.4.1.318.1.1.1.1.1.1.0"
@@ -266,8 +268,11 @@ def _parse_external_temp_c(value: str | None) -> float | None:
     """
     if value is None:
         return None
+    match = NUMERIC_VALUE_RE.search(str(value))
+    if not match:
+        return None
     try:
-        raw = int(str(value).strip())
+        raw = float(match.group(0))
     except (TypeError, ValueError):
         return None
 
@@ -275,7 +280,7 @@ def _parse_external_temp_c(value: str | None) -> float | None:
         return None
     if raw > 120:
         return raw / 10.0
-    return float(raw)
+    return raw
 
 
 def _parse_external_humidity_pct(value: str | None) -> float | None:
@@ -285,15 +290,18 @@ def _parse_external_humidity_pct(value: str | None) -> float | None:
     """
     if value is None:
         return None
+    match = NUMERIC_VALUE_RE.search(str(value))
+    if not match:
+        return None
     try:
-        raw = int(str(value).strip())
+        raw = float(match.group(0))
     except (TypeError, ValueError):
         return None
     if raw < 0:
         return None
     if raw > 100:
         return raw / 10.0
-    return float(raw)
+    return raw
 
 
 def _parse_frequency_hz(value: str | None) -> float | None:
