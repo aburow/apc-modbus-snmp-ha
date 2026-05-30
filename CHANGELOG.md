@@ -2,13 +2,16 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
-## [1.2.4-dev] - Unreleased
+## [1.2.4-dev.1] - 2026-05-30
 ### Added
 - Added dynamic SNMP external probe entity creation so newly detected AP9335T/AP9335TH temperature or humidity probes can be added after the hourly SNMP detection refresh without requiring a Home Assistant restart.
 - Added diagnostics for Modbus TCP idle socket reuse. The diagnostics now test both a short 3-second idle interval and the configured Home Assistant polling interval, then report whether Keep Connection Open is likely to hit stale sockets.
 
 ### Fixed
 - Fixed SNMP external probe entities being skipped when probe OID detection succeeded but no current probe value had been merged into coordinator data yet.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.4-dev.1`.
 
 ## [1.2.3] - 2026-05-13
 ### Added

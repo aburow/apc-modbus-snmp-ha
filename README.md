@@ -338,6 +338,11 @@ For detailed release notes, see `CHANGELOG.md`.
 - ✅ SNMP probe/fallback helper paths now pre-collect candidate OIDs, deduplicate requests, and resolve fallback selection locally from fetched values.
 - ✅ Added test guardrails for SNMP fallback candidate order, duplicate OID fetch deduplication, and request-count stability.
 
+### v1.2.4-dev.1 (Pre-release)
+- ✅ Fixes external probe entity creation when SNMP probe OID detection succeeds before a probe value is merged into coordinator data.
+- ✅ Adds runtime creation of newly detected external probe entities after hourly SNMP detection refresh.
+- ✅ Adds diagnostics for Modbus TCP idle socket reuse at both 3 seconds and the configured Home Assistant polling interval.
+
 ### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
 - ✅ Improved Rack PDU detection and stale-entity cleanup
