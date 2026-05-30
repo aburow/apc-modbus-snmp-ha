@@ -58,6 +58,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         timeout: int,
         io_lock: asyncio.Lock,
         snmp_community: str,
+        snmp_port: int,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         keep_connection_open: bool = False,
     ) -> None:
@@ -76,6 +77,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry_id = entry_id
         self.timeout = timeout
         self.snmp_community = snmp_community
+        self.snmp_port = snmp_port
         self._keep_connection_open = keep_connection_open
         self._idle_reconnect_seconds = DEFAULT_IDLE_RECONNECT_SECONDS
         self._log_ctx = f"{self.device_name} {self.host}:{self.port} (unit {self.unit})"
@@ -610,6 +612,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.host,
                 self.snmp_community,
                 self.device_type,
+                self.snmp_port,
             )
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.debug("[%s] Metadata SNMP query failed: %s", self._log_ctx, err)
@@ -632,6 +635,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 detect_external_probe_oids_sync,
                 self.host,
                 self.snmp_community,
+                self.snmp_port,
             )
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.debug(
@@ -697,6 +701,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.host,
                 self.snmp_community,
                 effective_detection,
+                self.snmp_port,
             )
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.debug(

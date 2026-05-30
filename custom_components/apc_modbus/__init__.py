@@ -29,12 +29,14 @@ from .const import (
     CONF_DEVICE_TYPE,
     CONF_KEEP_CONNECTION_OPEN,
     CONF_SNMP_COMMUNITY,
+    CONF_SNMP_PORT,
     CONF_UNIT,
     DEFAULT_KEEP_CONNECTION_OPEN,
     DEFAULT_NAME,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SNMP_COMMUNITY,
+    DEFAULT_SNMP_PORT,
     DEFAULT_UNIT,
     DOMAIN,
     KEY_CLIENT,
@@ -163,6 +165,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     device_name = entry.data.get(CONF_DEVICE_NAME, DEFAULT_NAME)
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
+    snmp_port = entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT)
     keep_connection_open = entry.data.get(
         CONF_KEEP_CONNECTION_OPEN, DEFAULT_KEEP_CONNECTION_OPEN
     )
@@ -211,6 +214,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         5,
         io_lock,
         snmp_community,
+        snmp_port,
         scan_interval,
         keep_connection_open=keep_connection_open,
     )
@@ -239,7 +243,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Querying SNMP metadata from %s (entry_id=%s)", host, entry.entry_id
         )
         metadata = await hass.async_add_executor_job(
-            get_device_metadata_sync, host, snmp_community, device_type
+            get_device_metadata_sync,
+            host,
+            snmp_community,
+            device_type,
+            snmp_port,
         )
         if metadata and any(
             [

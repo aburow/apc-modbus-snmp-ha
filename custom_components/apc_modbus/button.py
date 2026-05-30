@@ -23,7 +23,9 @@ from .const import (
     CONF_DETECTION_VERSION,
     CONF_DEVICE_TYPE,
     CONF_KEEP_CONNECTION_OPEN,
+    CONF_SNMP_PORT,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_SNMP_PORT,
     DOMAIN,
     KEY_COORDINATOR,
 )
@@ -84,6 +86,7 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             self.coordinator.unit,
             self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
             self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
+            self._entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT),
         )
 
         dump_json = json.dumps(dump, indent=2, sort_keys=False)

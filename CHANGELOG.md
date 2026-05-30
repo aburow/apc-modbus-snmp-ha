@@ -2,6 +2,16 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.4-dev.3] - 2026-05-30
+### Added
+- Added configurable SNMP UDP port support (`snmp_port`) alongside Modbus TCP port configuration.
+- Added diagnostics output field `snmp_port` and SNMP collection paths now honor the configured SNMP port.
+- Added regression coverage for SNMP helper and diagnostics SNMP-port propagation.
+
+### Changed
+- Updated setup/config-flow and coordinator SNMP paths so metadata, external probe detection, and external probe reads use the configured SNMP port instead of fixed UDP/161.
+- Synchronized authoritative integration/package version metadata to `1.2.4-dev.3`.
+
 ## [1.2.4-dev.2] - 2026-05-30
 ### Added
 - Added explicit diagnostics `external_probe_tests` output with SNMP external probe OID detection and detected-probe value read checks, including structured error reporting.

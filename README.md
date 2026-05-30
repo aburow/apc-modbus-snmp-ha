@@ -124,6 +124,7 @@ After installation, set up the integration through the UI:
 5. Optional advanced settings:
    - **Device Name**: Friendly name for the device (default: "APC UPS")
    - **Port**: Modbus/TCP port (default: 502)
+   - **SNMP Port**: SNMP UDP port (default: 161)
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
    - **Keep Connection Open**: Reuse Modbus TCP session across polls (default: disabled)
@@ -334,7 +335,12 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.4-dev.2 (Pre-release)
+### v1.2.4-dev.3 (Pre-release)
+- ✅ Adds configurable SNMP UDP port (`SNMP Port`) while retaining configurable Modbus TCP port (`Port`).
+- ✅ SNMP metadata, external-probe detection, and external-probe polling now use the configured SNMP port.
+- ✅ Diagnostics now include `integration_version` and `snmp_port` so dumps show exact build/port context.
+
+### v1.2.4-dev.2
 - ✅ Enables detected external probe entities (`snmp_external_*`) by default so they are immediately visible in Home Assistant.
 - ✅ Adds diagnostics `external_probe_tests` with SNMP probe OID detection and detected-probe read validation output.
 - ✅ Includes idle Modbus TCP keep-open diagnostics against both 3-second and configured polling intervals.

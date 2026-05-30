@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 import types
 from pathlib import Path
@@ -55,6 +56,11 @@ DIAGNOSTIC_COLLECTOR = _load_module(
     "custom_components.apc_modbus.diagnostic_collector",
     PACKAGE_ROOT / "diagnostic_collector.py",
 )
+
+
+def test_integration_version_matches_manifest() -> None:
+    manifest = json.loads((PACKAGE_ROOT / "manifest.json").read_text(encoding="utf-8"))
+    assert DIAGNOSTIC_COLLECTOR.INTEGRATION_VERSION == manifest["version"]
 
 
 def test_detection_summary_uses_exact_runtime_legacy_probe_count() -> None:
@@ -141,6 +147,26 @@ def test_decode_snmp_input_frequency_uses_upsmib_when_apc_missing() -> None:
         "input_frequency_hz": 50.1,
         "input_frequency_source": "upsmib_input_frequency_line1",
     }
+
+
+def test_collect_snmp_data_uses_configured_snmp_port() -> None:
+    original_get = DIAGNOSTIC_COLLECTOR.async_get_snmp_value
+    seen_ports: set[int] = set()
+
+    async def _fake_get(host, oid, community, timeout=5, snmp_port=161):
+        del host, oid, community, timeout
+        seen_ports.add(snmp_port)
+        return None
+
+    DIAGNOSTIC_COLLECTOR.async_get_snmp_value = _fake_get
+    try:
+        _ = DIAGNOSTIC_COLLECTOR.asyncio.run(
+            DIAGNOSTIC_COLLECTOR._collect_snmp_data("192.0.2.1", "public", 1161)
+        )
+    finally:
+        DIAGNOSTIC_COLLECTOR.async_get_snmp_value = original_get
+
+    assert seen_ports == {1161}
 
 
 def test_modbus_tcp_idle_probe_uses_supplied_timer() -> None:
@@ -285,7 +311,7 @@ def test_collect_external_probe_tests_success() -> None:
     )
     try:
         result = DIAGNOSTIC_COLLECTOR._collect_external_probe_tests(
-            "192.0.2.1", "public"
+            "192.0.2.1", "public", 1161
         )
     finally:
         DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync = original_detect
@@ -304,7 +330,7 @@ def test_collect_external_probe_tests_detection_failure() -> None:
     ).throw(TimeoutError("snmp timeout"))
     try:
         result = DIAGNOSTIC_COLLECTOR._collect_external_probe_tests(
-            "192.0.2.1", "public"
+            "192.0.2.1", "public", 1161
         )
     finally:
         DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync = original_detect

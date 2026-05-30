@@ -7,11 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import socket
 import struct
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from .device_types import classify_device_type
@@ -85,6 +87,22 @@ IPV4_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 SERIAL_FIELD_RE = re.compile(
     r"(?i)\b(sn|serial(?:\s+number)?)\s*[:=]\s*([A-Za-z0-9._/-]+)"
 )
+
+
+def _load_integration_version() -> str:
+    """Return integration version from manifest.json when available."""
+    manifest_path = Path(__file__).with_name("manifest.json")
+    try:
+        with manifest_path.open(encoding="utf-8") as manifest_file:
+            manifest = json.load(manifest_file)
+    except (OSError, ValueError, TypeError):
+        return "unknown"
+
+    version = manifest.get("version")
+    return version if isinstance(version, str) and version else "unknown"
+
+
+INTEGRATION_VERSION = _load_integration_version()
 
 
 def _modbus_read_holding_registers(
@@ -326,9 +344,14 @@ def _build_detection_summary(modbus_probes: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def _collect_snmp_data(host: str, community: str) -> dict[str, Any]:
+async def _collect_snmp_data(
+    host: str, community: str, snmp_port: int
+) -> dict[str, Any]:
     values = await asyncio.gather(
-        *(async_get_snmp_value(host, oid, community) for oid in SNMP_OIDS.values()),
+        *(
+            async_get_snmp_value(host, oid, community, snmp_port=snmp_port)
+            for oid in SNMP_OIDS.values()
+        ),
         return_exceptions=True,
     )
     result: dict[str, Any] = {}
@@ -378,12 +401,14 @@ def _collect_modbus_block(
     }
 
 
-def _collect_external_probe_tests(host: str, community: str) -> dict[str, Any]:
+def _collect_external_probe_tests(
+    host: str, community: str, snmp_port: int
+) -> dict[str, Any]:
     """Collect explicit SNMP external probe detection and read tests."""
     tests: dict[str, Any] = {}
 
     try:
-        detection = detect_external_probe_oids_sync(host, community)
+        detection = detect_external_probe_oids_sync(host, community, snmp_port)
         tests["detect"] = {"ok": True, "detection": detection}
     except (
         OSError,
@@ -403,7 +428,9 @@ def _collect_external_probe_tests(host: str, community: str) -> dict[str, Any]:
         return tests
 
     try:
-        values = get_external_probe_data_detected_sync(host, community, detection)
+        values = get_external_probe_data_detected_sync(
+            host, community, detection, snmp_port
+        )
         tests["read_detected"] = {
             "ok": True,
             "value_count": len(values),
@@ -580,37 +607,44 @@ def _add_decodes(dump: dict[str, Any]) -> None:
 def collect_diagnostic_dump(
     host: str,
     community: str,
-    port: int,
+    modbus_port: int,
     unit_id: int,
     idle_probe_seconds: int | float | None = None,
     keep_connection_open: bool | None = None,
+    snmp_port: int = 161,
 ) -> dict[str, Any]:
     """Collect SNMP and Modbus diagnostic data for one APC device."""
     dump: dict[str, Any] = {
         "generated_at": datetime.now(tz=UTC).isoformat(timespec="seconds"),
+        "integration_version": INTEGRATION_VERSION,
         "host": REDACTED_IP,
-        "port": port,
+        "port": modbus_port,
+        "snmp_port": snmp_port,
         "unit_id": unit_id,
-        "snmp": asyncio.run(_collect_snmp_data(host, community)),
+        "snmp": asyncio.run(_collect_snmp_data(host, community, snmp_port)),
         "modbus": {},
         "modbus_probes": {},
         "modbus_tcp_idle_probe": _build_modbus_tcp_idle_probe(
             host,
-            port,
+            modbus_port,
             unit_id,
             idle_probe_seconds,
             keep_connection_open=keep_connection_open,
         ),
-        "external_probe_tests": _collect_external_probe_tests(host, community),
+        "external_probe_tests": _collect_external_probe_tests(
+            host, community, snmp_port
+        ),
     }
 
     for start, count in MODBUS_BLOCKS:
         key = f"0x{start:04X}_count_{count}"
-        dump["modbus"][key] = _collect_modbus_block(host, port, unit_id, start, count)
+        dump["modbus"][key] = _collect_modbus_block(
+            host, modbus_port, unit_id, start, count
+        )
 
     for probe_name, start, count in MODBUS_PROBES:
         dump["modbus_probes"][probe_name] = _collect_modbus_block(
-            host, port, unit_id, start, count
+            host, modbus_port, unit_id, start, count
         )
 
     _add_decodes(dump)

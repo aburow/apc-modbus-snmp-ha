@@ -60,14 +60,17 @@ def _dedupe_oids_preserve_order(oids: list[str]) -> list[str]:
 
 
 async def _fetch_snmp_value_map(
-    host: str, community: str, oids: list[str]
+    host: str, community: str, oids: list[str], snmp_port: int = 161
 ) -> dict[str, str | None]:
     """Fetch OIDs once and return an OID->value map."""
     unique_oids = _dedupe_oids_preserve_order(oids)
     if not unique_oids:
         return {}
     results = await asyncio.gather(
-        *[async_get_snmp_value(host, oid, community) for oid in unique_oids],
+        *[
+            async_get_snmp_value(host, oid, community, snmp_port=snmp_port)
+            for oid in unique_oids
+        ],
         return_exceptions=True,
     )
     value_map: dict[str, str | None] = {}
@@ -99,7 +102,11 @@ def _select_first_usable_candidate_from_map(
 
 
 async def async_get_snmp_value(
-    host: str, oid: str, community: str = "public", timeout: int = 5
+    host: str,
+    oid: str,
+    community: str = "public",
+    timeout: int = 5,
+    snmp_port: int = 161,
 ) -> str | None:
     """Query single SNMP OID and return string value.
 
@@ -117,7 +124,7 @@ async def async_get_snmp_value(
 
         # Create UDP transport target
         target = await UdpTransportTarget.create(
-            (host, 161), timeout=timeout, retries=3
+            (host, snmp_port), timeout=timeout, retries=3
         )
 
         # Execute SNMP GET command
@@ -174,6 +181,7 @@ async def async_get_device_metadata(
     host: str,
     community: str = "public",
     device_type: APCDeviceType | None = None,
+    snmp_port: int = 161,
 ) -> dict[str, Any]:
     """Query all device metadata via SNMP.
 
@@ -206,10 +214,12 @@ async def async_get_device_metadata(
             oid_firmware_date = SMARTUPS_OID_FIRMWARE_DATE
 
         results = await asyncio.gather(
-            async_get_snmp_value(host, oid_model, community),
-            async_get_snmp_value(host, oid_serial, community),
-            async_get_snmp_value(host, oid_firmware, community),
-            async_get_snmp_value(host, oid_firmware_date, community),
+            async_get_snmp_value(host, oid_model, community, snmp_port=snmp_port),
+            async_get_snmp_value(host, oid_serial, community, snmp_port=snmp_port),
+            async_get_snmp_value(host, oid_firmware, community, snmp_port=snmp_port),
+            async_get_snmp_value(
+                host, oid_firmware_date, community, snmp_port=snmp_port
+            ),
             return_exceptions=True,
         )
         model, serial, firmware, fw_date = [
@@ -241,9 +251,12 @@ def get_device_metadata_sync(
     host: str,
     community: str = "public",
     device_type: APCDeviceType | None = None,
+    snmp_port: int = 161,
 ) -> dict[str, Any]:
     """Run SNMP metadata query in a dedicated event loop (sync wrapper)."""
-    return asyncio.run(async_get_device_metadata(host, community, device_type))
+    return asyncio.run(
+        async_get_device_metadata(host, community, device_type, snmp_port)
+    )
 
 
 def _parse_external_temp_c(value: str | None) -> float | None:
@@ -302,7 +315,7 @@ def _parse_frequency_hz(value: str | None) -> float | None:
 
 
 async def async_get_external_probe_data(
-    host: str, community: str = "public"
+    host: str, community: str = "public", snmp_port: int = 161
 ) -> dict[str, float | None]:
     """Query APC external probe values via SNMP.
 
@@ -341,7 +354,9 @@ async def async_get_external_probe_data(
     all_candidates = [
         oid for candidates in oid_candidates.values() for oid in candidates
     ]
-    value_map = await _fetch_snmp_value_map(host, community, all_candidates)
+    value_map = await _fetch_snmp_value_map(
+        host, community, all_candidates, snmp_port=snmp_port
+    )
 
     parsed: dict[str, float | None] = {}
     for key, candidates in oid_candidates.items():
@@ -360,13 +375,14 @@ async def async_get_external_probe_data(
 def get_external_probe_data_sync(
     host: str,
     community: str = "public",
+    snmp_port: int = 161,
 ) -> dict[str, float | None]:
     """Run external probe SNMP query in a dedicated event loop (sync wrapper)."""
-    return asyncio.run(async_get_external_probe_data(host, community))
+    return asyncio.run(async_get_external_probe_data(host, community, snmp_port))
 
 
 async def async_detect_external_probe_oids(
-    host: str, community: str = "public"
+    host: str, community: str = "public", snmp_port: int = 161
 ) -> dict[str, str | None]:
     """Detect which external probe OIDs are available.
 
@@ -417,7 +433,9 @@ async def async_detect_external_probe_oids(
     all_candidates = [
         oid for candidates, _parser in candidates_by_key.values() for oid in candidates
     ]
-    value_map = await _fetch_snmp_value_map(host, community, all_candidates)
+    value_map = await _fetch_snmp_value_map(
+        host, community, all_candidates, snmp_port=snmp_port
+    )
     detection: dict[str, str | None] = {}
     for key, (candidates, parser) in candidates_by_key.items():
         detection[key] = _select_first_usable_candidate_from_map(
@@ -431,15 +449,17 @@ async def async_detect_external_probe_oids(
 def detect_external_probe_oids_sync(
     host: str,
     community: str = "public",
+    snmp_port: int = 161,
 ) -> dict[str, str | None]:
     """Run external probe detection in a dedicated event loop (sync wrapper)."""
-    return asyncio.run(async_detect_external_probe_oids(host, community))
+    return asyncio.run(async_detect_external_probe_oids(host, community, snmp_port))
 
 
 async def async_get_external_probe_data_detected(
     host: str,
     community: str,
     detection: dict[str, str | None],
+    snmp_port: int = 161,
 ) -> dict[str, float | None]:
     """Fetch external probe values using a previously-detected OID map.
 
@@ -471,7 +491,9 @@ async def async_get_external_probe_data_detected(
     if not oids:
         return {}
 
-    value_map = await _fetch_snmp_value_map(host, community, list(oids.values()))
+    value_map = await _fetch_snmp_value_map(
+        host, community, list(oids.values()), snmp_port=snmp_port
+    )
 
     parsed: dict[str, float | None] = {}
     for key, oid in oids.items():
@@ -490,10 +512,11 @@ def get_external_probe_data_detected_sync(
     host: str,
     community: str,
     detection: dict[str, str | None],
+    snmp_port: int = 161,
 ) -> dict[str, float | None]:
     """Run detected external probe SNMP query in a dedicated event loop (sync wrapper)."""
     return asyncio.run(
-        async_get_external_probe_data_detected(host, community, detection)
+        async_get_external_probe_data_detected(host, community, detection, snmp_port)
     )
 
 

@@ -116,9 +116,13 @@ def test_detect_external_probe_oids_dedup_and_order() -> None:
     }
 
     async def _fake_get(
-        host: str, oid: str, community: str = "public", timeout: int = 5
+        host: str,
+        oid: str,
+        community: str = "public",
+        timeout: int = 5,
+        snmp_port: int = 161,
     ):
-        del host, community, timeout
+        del host, community, timeout, snmp_port
         calls.append(oid)
         return values.get(oid)
 
@@ -145,9 +149,13 @@ def test_detected_probe_fetch_dedups_duplicate_oids_and_maps_all_keys() -> None:
     values = {shared_oid: "250"}
 
     async def _fake_get(
-        host: str, oid: str, community: str = "public", timeout: int = 5
+        host: str,
+        oid: str,
+        community: str = "public",
+        timeout: int = 5,
+        snmp_port: int = 161,
     ):
-        del host, community, timeout
+        del host, community, timeout, snmp_port
         calls.append(oid)
         return values.get(oid)
 
