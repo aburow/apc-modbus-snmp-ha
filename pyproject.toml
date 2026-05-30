@@ -10,7 +10,7 @@ lint = [
   "pytest>=8,<9",
   "ruff==0.15.4",
   "semgrep==1.156.0",
-  "sqlfluff==3.4.2",
+  "sqlfluff==4.2.0",
   "yamllint==1.37.1",
 ]
 
