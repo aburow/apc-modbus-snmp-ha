@@ -15,7 +15,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .device_types import classify_device_type
-from .snmp_helper import async_get_snmp_value
+from .snmp_helper import (
+    async_get_snmp_value,
+    detect_external_probe_oids_sync,
+    get_external_probe_data_detected_sync,
+)
 
 MBAP_HEADER_LENGTH = 7
 MIN_MODBUS_RESPONSE_LENGTH = 9
@@ -374,6 +378,56 @@ def _collect_modbus_block(
     }
 
 
+def _collect_external_probe_tests(host: str, community: str) -> dict[str, Any]:
+    """Collect explicit SNMP external probe detection and read tests."""
+    tests: dict[str, Any] = {}
+
+    try:
+        detection = detect_external_probe_oids_sync(host, community)
+        tests["detect"] = {"ok": True, "detection": detection}
+    except (
+        OSError,
+        TimeoutError,
+        RuntimeError,
+        ValueError,
+        asyncio.TimeoutError,
+    ) as err:
+        tests["detect"] = {
+            "ok": False,
+            "error": {
+                "code": "snmp_external_probe_detection_failed",
+                "message": str(err),
+                "exception_type": type(err).__name__,
+            },
+        }
+        return tests
+
+    try:
+        values = get_external_probe_data_detected_sync(host, community, detection)
+        tests["read_detected"] = {
+            "ok": True,
+            "value_count": len(values),
+            "values": values,
+        }
+    except (
+        OSError,
+        TimeoutError,
+        RuntimeError,
+        ValueError,
+        asyncio.TimeoutError,
+    ) as err:
+        tests["read_detected"] = {
+            "ok": False,
+            "error": {
+                "code": "snmp_external_probe_read_failed",
+                "message": str(err),
+                "exception_type": type(err).__name__,
+            },
+        }
+
+    return tests
+
+
 def _run_modbus_tcp_idle_probe_once(
     host: str,
     port: int,
@@ -547,6 +601,7 @@ def collect_diagnostic_dump(
             idle_probe_seconds,
             keep_connection_open=keep_connection_open,
         ),
+        "external_probe_tests": _collect_external_probe_tests(host, community),
     }
 
     for start, count in MODBUS_BLOCKS:

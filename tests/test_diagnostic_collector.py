@@ -32,7 +32,19 @@ if "custom_components.apc_modbus.snmp_helper" not in sys.modules:
     async def async_get_snmp_value(*args, **kwargs):
         return None
 
+    def detect_external_probe_oids_sync(*args, **kwargs):
+        del args, kwargs
+        return {}
+
+    def get_external_probe_data_detected_sync(*args, **kwargs):
+        del args, kwargs
+        return {}
+
     snmp_helper.async_get_snmp_value = async_get_snmp_value
+    snmp_helper.detect_external_probe_oids_sync = detect_external_probe_oids_sync
+    snmp_helper.get_external_probe_data_detected_sync = (
+        get_external_probe_data_detected_sync
+    )
     sys.modules["custom_components.apc_modbus.snmp_helper"] = snmp_helper
 
 _load_module(
@@ -247,3 +259,57 @@ def test_modbus_tcp_idle_probe_reports_reuse_failure_risk() -> None:
     assert "configured Home Assistant polling interval" in result["risk"]
     assert "higher than the configured polling interval" in result["risk"]
     assert "disable Keep Connection Open" in result["risk"]
+
+
+def test_collect_external_probe_tests_success() -> None:
+    original_detect = DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync
+    original_read = DIAGNOSTIC_COLLECTOR.get_external_probe_data_detected_sync
+
+    detection = {
+        "temp_1_oid": "1.3.6.1.4.1.318.1.1.25.1.2.1.6.1.1",
+        "humidity_1_oid": None,
+        "temp_2_oid": None,
+        "humidity_2_oid": None,
+        "frequency_oid": "1.3.6.1.4.1.318.1.1.1.3.2.4.0",
+    }
+    values = {
+        "snmp_external_temp_1": 24.5,
+        "snmp_input_frequency": 50.0,
+    }
+
+    DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync = lambda *_args, **_kwargs: (
+        detection
+    )
+    DIAGNOSTIC_COLLECTOR.get_external_probe_data_detected_sync = (
+        lambda *_args, **_kwargs: values
+    )
+    try:
+        result = DIAGNOSTIC_COLLECTOR._collect_external_probe_tests(
+            "192.0.2.1", "public"
+        )
+    finally:
+        DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync = original_detect
+        DIAGNOSTIC_COLLECTOR.get_external_probe_data_detected_sync = original_read
+
+    assert result["detect"] == {"ok": True, "detection": detection}
+    assert result["read_detected"]["ok"] is True
+    assert result["read_detected"]["value_count"] == 2
+    assert result["read_detected"]["values"] == values
+
+
+def test_collect_external_probe_tests_detection_failure() -> None:
+    original_detect = DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync
+    DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync = lambda *_args, **_kwargs: (
+        _ for _ in ()
+    ).throw(TimeoutError("snmp timeout"))
+    try:
+        result = DIAGNOSTIC_COLLECTOR._collect_external_probe_tests(
+            "192.0.2.1", "public"
+        )
+    finally:
+        DIAGNOSTIC_COLLECTOR.detect_external_probe_oids_sync = original_detect
+
+    assert result["detect"]["ok"] is False
+    assert result["detect"]["error"]["code"] == "snmp_external_probe_detection_failed"
+    assert result["detect"]["error"]["exception_type"] == "TimeoutError"
+    assert "read_detected" not in result

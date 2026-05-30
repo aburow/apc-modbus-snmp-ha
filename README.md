@@ -46,6 +46,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ### External Probe Behavior (AP9335T/AP9335TH)
 - External probe sensors are optional and are created when compatible probe OIDs are detected by SNMP.
+- When detected, external probe entities are enabled by default so they appear immediately in Home Assistant.
 - If no compatible probe is connected, those entities are not created (instead of showing permanently unavailable sensors).
 - Temperature is reported as native Celsius and exposed with Home Assistant temperature device class, so UI/unit settings can convert to Fahrenheit automatically.
 - External probe availability (and the specific probe OID variants) are detected during the hourly SNMP metadata refresh; probe values are not polled unless a compatible probe was detected.
@@ -333,15 +334,15 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.3 (Current)
+### v1.2.4-dev.2 (Pre-release)
+- ✅ Enables detected external probe entities (`snmp_external_*`) by default so they are immediately visible in Home Assistant.
+- ✅ Adds diagnostics `external_probe_tests` with SNMP probe OID detection and detected-probe read validation output.
+- ✅ Includes idle Modbus TCP keep-open diagnostics against both 3-second and configured polling intervals.
+
+### v1.2.3 (Current Stable)
 - ✅ Includes all `1.2.3-dev.*` improvements (interop profiles, bridge metadata contract updates, poll instrumentation/guards, and SNMP probe gating refinements).
 - ✅ SNMP probe/fallback helper paths now pre-collect candidate OIDs, deduplicate requests, and resolve fallback selection locally from fetched values.
 - ✅ Added test guardrails for SNMP fallback candidate order, duplicate OID fetch deduplication, and request-count stability.
-
-### v1.2.4-dev.1 (Pre-release)
-- ✅ Fixes external probe entity creation when SNMP probe OID detection succeeds before a probe value is merged into coordinator data.
-- ✅ Adds runtime creation of newly detected external probe entities after hourly SNMP detection refresh.
-- ✅ Adds diagnostics for Modbus TCP idle socket reuse at both 3 seconds and the configured Home Assistant polling interval.
 
 ### v1.1.0
 - ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)

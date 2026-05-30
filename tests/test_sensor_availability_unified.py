@@ -32,7 +32,7 @@ def test_ups_core_sensor_keys_enabled_by_default() -> None:
 def test_non_core_ups_sensor_keys_disabled_by_default() -> None:
     assert (
         AVAILABILITY.is_sensor_enabled_by_default("snmp_external_temp_1", "smart_ups")
-        is False
+        is True
     )
     assert (
         AVAILABILITY.is_sensor_enabled_by_default("battery_temperature", "smt_ups")
