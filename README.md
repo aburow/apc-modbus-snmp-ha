@@ -335,7 +335,11 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.4-dev.6 (Pre-release)
+### v1.2.4-dev.7 (Pre-release)
+- ✅ Diagnostics now preserve external probe detection OID fields (`*_oid`) without redacting them as IP-like strings.
+- ✅ Added regression coverage to ensure probe detection OIDs remain visible in diagnostic output.
+
+### v1.2.4-dev.6
 - ✅ Restores startup SNMP probe-detection polling on first post-restart cycle (probe detection is no longer deferred until manual re-detect/hourly refresh).
 - ✅ Improves external probe SNMP value parsing for detection/polling (`25.0`, `25 C`, `45 %`, and tenths-style values), so valid probe OIDs are retained and polled regularly.
 

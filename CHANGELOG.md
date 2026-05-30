@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.4-dev.7] - 2026-05-30
+### Fixed
+- Diagnostics sanitization now preserves external probe detection OID fields (`*_oid`) so valid OID values are shown as-is in diagnostic dumps instead of being redacted as IP-like strings.
+- Added regression coverage ensuring detection OID values remain unredacted.
+
+### Changed
+- Added local `debug/` workspace ignore rule to reduce accidental dirty-worktree noise from diagnostic artifacts.
+- Synchronized authoritative integration/package version metadata to `1.2.4-dev.7`.
+
 ## [1.2.4-dev.6] - 2026-05-30
 ### Fixed
 - Restored startup SNMP probe-detection polling on first coordinator cycle after restart by preventing startup metadata hydration from marking the periodic SNMP refresh as already complete.

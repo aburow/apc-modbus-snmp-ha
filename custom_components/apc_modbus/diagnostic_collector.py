@@ -291,7 +291,7 @@ def _sanitize_data(value: Any, host: str, community: str) -> Any:
         sanitized: dict[str, Any] = {}
         for key, item in value.items():
             # Keep SNMP OIDs as-is for troubleshooting/reference readability.
-            if key == "oid":
+            if key == "oid" or key.endswith("_oid"):
                 sanitized[key] = item
                 continue
             sanitized[key] = _sanitize_data(item, host, community)

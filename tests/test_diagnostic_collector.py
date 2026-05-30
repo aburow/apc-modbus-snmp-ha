@@ -339,3 +339,18 @@ def test_collect_external_probe_tests_detection_failure() -> None:
     assert result["detect"]["error"]["code"] == "snmp_external_probe_detection_failed"
     assert result["detect"]["error"]["exception_type"] == "TimeoutError"
     assert "read_detected" not in result
+
+
+def test_sanitize_preserves_detection_oid_values() -> None:
+    sanitized = DIAGNOSTIC_COLLECTOR._sanitize_data(
+        {
+            "detection": {
+                "temp_1_oid": "1.3.6.1.4.1.318.1.1.25.1.2.1.6.1.1",
+                "frequency_oid": "1.3.6.1.4.1.318.1.1.1.3.2.4.0",
+            }
+        },
+        host="192.168.101.43",
+        community="public",
+    )
+    assert sanitized["detection"]["temp_1_oid"] == "1.3.6.1.4.1.318.1.1.25.1.2.1.6.1.1"
+    assert sanitized["detection"]["frequency_oid"] == "1.3.6.1.4.1.318.1.1.1.3.2.4.0"

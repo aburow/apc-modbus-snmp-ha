@@ -13,6 +13,7 @@ build/
 # Test files and exploratory code
 localonly/
 docs/
+debug/
 
 # Local lint/tooling
 .tools/
