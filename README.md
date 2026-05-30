@@ -335,34 +335,15 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.4-dev.7 (Pre-release)
-- ✅ Diagnostics now preserve external probe detection OID fields (`*_oid`) without redacting them as IP-like strings.
-- ✅ Added regression coverage to ensure probe detection OIDs remain visible in diagnostic output.
-
-### v1.2.4-dev.6
-- ✅ Restores startup SNMP probe-detection polling on first post-restart cycle (probe detection is no longer deferred until manual re-detect/hourly refresh).
-- ✅ Improves external probe SNMP value parsing for detection/polling (`25.0`, `25 C`, `45 %`, and tenths-style values), so valid probe OIDs are retained and polled regularly.
-
-### v1.2.4-dev.5
-- ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
-- ✅ Newly connected external temp/humidity probe components can now be detected immediately after re-detect instead of waiting up to the hourly SNMP metadata refresh.
-- ✅ Lint/tooling dependency stack updated (`grain-lint`, `ruff`, `semgrep`, `yamllint`, `sqlfluff>=4.2.0`) for current CI/security baselines.
-
-### v1.2.4-dev.4
-- ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
-- ✅ Newly connected external temp/humidity probe components can now be detected immediately after re-detect instead of waiting up to the hourly SNMP metadata refresh.
-
-### v1.2.4-dev.3
+### v1.2.4 (Current Stable)
 - ✅ Adds configurable SNMP UDP port (`SNMP Port`) while retaining configurable Modbus TCP port (`Port`).
-- ✅ SNMP metadata, external-probe detection, and external-probe polling now use the configured SNMP port.
-- ✅ Diagnostics now include `integration_version` and `snmp_port` so dumps show exact build/port context.
+- ✅ Restores startup SNMP probe-detection polling on first post-restart cycle.
+- ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
+- ✅ Improves external probe SNMP value parsing (`25.0`, `25 C`, `45 %`, tenths-style values), so valid probe OIDs are retained and polled regularly.
+- ✅ Diagnostics now include `integration_version`, `snmp_port`, and `external_probe_tests`.
+- ✅ Diagnostics preserve external probe detection OID fields (`*_oid`) without redacting them as IP-like strings.
 
-### v1.2.4-dev.2
-- ✅ Enables detected external probe entities (`snmp_external_*`) by default so they are immediately visible in Home Assistant.
-- ✅ Adds diagnostics `external_probe_tests` with SNMP probe OID detection and detected-probe read validation output.
-- ✅ Includes idle Modbus TCP keep-open diagnostics against both 3-second and configured polling intervals.
-
-### v1.2.3 (Current Stable)
+### v1.2.3
 - ✅ Includes all `1.2.3-dev.*` improvements (interop profiles, bridge metadata contract updates, poll instrumentation/guards, and SNMP probe gating refinements).
 - ✅ SNMP probe/fallback helper paths now pre-collect candidate OIDs, deduplicate requests, and resolve fallback selection locally from fetched values.
 - ✅ Added test guardrails for SNMP fallback candidate order, duplicate OID fetch deduplication, and request-count stability.

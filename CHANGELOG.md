@@ -2,6 +2,23 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.4] - 2026-05-31
+### Added
+- Added configurable SNMP UDP port support (`snmp_port`) alongside Modbus TCP port configuration.
+- Added diagnostics output fields `integration_version` and `snmp_port`.
+- Added diagnostics `external_probe_tests` output with SNMP external probe OID detection and detected-probe value read checks, including structured error reporting.
+
+### Fixed
+- External SNMP probe entities are now created/enabled reliably from detected probe OIDs, including cases where OID detection succeeds before probe values are merged.
+- Restored startup SNMP probe-detection polling on first coordinator cycle after restart.
+- `Re-detect Device Type` now forces immediate SNMP metadata/probe detection refresh when the device family is unchanged.
+- External probe detection/value parsing now accepts common SNMP formats (decimal/unit-suffixed values) so valid probe OIDs are retained for regular polling.
+- Diagnostics sanitization now preserves external probe detection OID fields (`*_oid`) as raw OID values.
+
+### Changed
+- Lint/developer dependency stack updated (`grain-lint`, `ruff`, `semgrep`, `yamllint`, `sqlfluff>=4.2.0`).
+- Synchronized authoritative integration/package version metadata to `1.2.4`.
+
 ## [1.2.4-dev.7] - 2026-05-30
 ### Fixed
 - Diagnostics sanitization now preserves external probe detection OID fields (`*_oid`) so valid OID values are shown as-is in diagnostic dumps instead of being redacted as IP-like strings.
