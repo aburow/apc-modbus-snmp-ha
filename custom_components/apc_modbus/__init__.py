@@ -49,6 +49,7 @@ from .device_types import (
     is_concrete_device_type,
     should_probe_device_type,
 )
+from .external_probe_entities import filter_available_external_probe_keys
 from .register_factory import get_registers_for_device
 from .scan_interval_guard import compute_effective_scan_interval
 from .snmp_helper import detect_device_type, get_device_metadata_sync
@@ -56,28 +57,36 @@ from .startup_stagger import compute_startup_stagger_delay
 
 _LOGGER = logging.getLogger(__name__)
 
-OPTIONAL_SNMP_EXTERNAL_KEYS = {
-    "snmp_external_temp_1",
-    "snmp_external_humidity_1",
-    "snmp_external_temp_2",
-    "snmp_external_humidity_2",
-}
-
 
 def _get_expected_entity_unique_ids(
     coordinator: APCModbusCoordinator, entry_id: str
 ) -> set[str]:
     """Build expected unique_ids for current device type and capabilities."""
     if coordinator.device_type == APCDeviceType.SMART_UPS:
-        from .const import BINARY_SENSOR_DESCRIPTIONS, SENSOR_DESCRIPTIONS
+        from .const import (
+            BINARY_SENSOR_DESCRIPTIONS,
+            SENSOR_DESCRIPTIONS,
+            SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
+        )
 
-        sensor_keys = {description.key for description in SENSOR_DESCRIPTIONS}
+        sensor_keys = {
+            description.key
+            for description in [
+                *SENSOR_DESCRIPTIONS,
+                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
+            ]
+        }
         binary_keys = {description.key for description in BINARY_SENSOR_DESCRIPTIONS}
     elif coordinator.device_type == APCDeviceType.SMT_UPS:
         from . import registers_smt_ups
+        from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
 
         sensor_keys = {
-            description.key for description in registers_smt_ups.SENSOR_DESCRIPTIONS
+            description.key
+            for description in [
+                *registers_smt_ups.SENSOR_DESCRIPTIONS,
+                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
+            ]
         }
         binary_keys = {
             description.key
@@ -85,6 +94,7 @@ def _get_expected_entity_unique_ids(
         }
     elif coordinator.device_type == APCDeviceType.RACK_PDU:
         from . import registers_rack_pdu
+        from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
 
         sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(
             coordinator.device_capabilities
@@ -92,21 +102,22 @@ def _get_expected_entity_unique_ids(
         binary_descriptions = registers_rack_pdu.get_binary_sensor_descriptions(
             coordinator.device_capabilities
         )
-        sensor_keys = {description.key for description in sensor_descriptions}
+        sensor_keys = {
+            description.key
+            for description in [
+                *sensor_descriptions,
+                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
+            ]
+        }
         binary_keys = {description.key for description in binary_descriptions}
     else:
         return set()
 
-    available_optional_keys = {
-        key
-        for key in OPTIONAL_SNMP_EXTERNAL_KEYS
-        if coordinator.data.get(key) is not None
-    }
-    sensor_keys = {
-        key
-        for key in sensor_keys
-        if key not in OPTIONAL_SNMP_EXTERNAL_KEYS or key in available_optional_keys
-    }
+    sensor_keys = filter_available_external_probe_keys(
+        sensor_keys,
+        coordinator.data,
+        getattr(coordinator, "_snmp_probe_detection", None),
+    )
 
     all_keys = sensor_keys | binary_keys
     return {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}

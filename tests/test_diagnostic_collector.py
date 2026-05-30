@@ -129,3 +129,121 @@ def test_decode_snmp_input_frequency_uses_upsmib_when_apc_missing() -> None:
         "input_frequency_hz": 50.1,
         "input_frequency_source": "upsmib_input_frequency_line1",
     }
+
+
+def test_modbus_tcp_idle_probe_uses_supplied_timer() -> None:
+    sleeps: list[float] = []
+
+    def _fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    original_sleep = DIAGNOSTIC_COLLECTOR.time.sleep
+    original_connect = DIAGNOSTIC_COLLECTOR.socket.create_connection
+    original_read = DIAGNOSTIC_COLLECTOR._modbus_read_holding_registers_on_connection
+    original_parse = DIAGNOSTIC_COLLECTOR._parse_modbus_response
+
+    class _FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def _fake_connect(*args, **kwargs):
+        del args, kwargs
+        return _FakeConnection()
+
+    def _fake_read(*args, **kwargs):
+        del args, kwargs
+        return b"raw"
+
+    def _fake_parse(raw):
+        assert raw == b"raw"
+        return {"registers": [0]}
+
+    DIAGNOSTIC_COLLECTOR.time.sleep = _fake_sleep
+    DIAGNOSTIC_COLLECTOR.socket.create_connection = _fake_connect
+    DIAGNOSTIC_COLLECTOR._modbus_read_holding_registers_on_connection = _fake_read
+    DIAGNOSTIC_COLLECTOR._parse_modbus_response = _fake_parse
+    try:
+        result = DIAGNOSTIC_COLLECTOR._build_modbus_tcp_idle_probe(
+            "192.0.2.1",
+            502,
+            1,
+            10,
+            keep_connection_open=True,
+        )
+    finally:
+        DIAGNOSTIC_COLLECTOR.time.sleep = original_sleep
+        DIAGNOSTIC_COLLECTOR.socket.create_connection = original_connect
+        DIAGNOSTIC_COLLECTOR._modbus_read_holding_registers_on_connection = (
+            original_read
+        )
+        DIAGNOSTIC_COLLECTOR._parse_modbus_response = original_parse
+
+    assert sleeps == [3.0, 10.0]
+    assert result["short_idle_seconds_tested"] == 3
+    assert result["configured_idle_seconds_tested"] == 10
+    assert result["keep_connection_open"] is True
+    assert result["short_idle"]["first_read"] == {"ok": True}
+    assert result["short_idle"]["second_read"] == {"ok": True}
+    assert result["short_idle"]["socket_survived_idle"] is True
+    assert result["configured_idle"]["first_read"] == {"ok": True}
+    assert result["configured_idle"]["second_read"] == {"ok": True}
+    assert result["configured_idle"]["socket_survived_idle"] is True
+
+
+def test_modbus_tcp_idle_probe_reports_reuse_failure_risk() -> None:
+    original_sleep = DIAGNOSTIC_COLLECTOR.time.sleep
+    original_connect = DIAGNOSTIC_COLLECTOR.socket.create_connection
+    original_read = DIAGNOSTIC_COLLECTOR._modbus_read_holding_registers_on_connection
+
+    class _FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    calls = 0
+
+    def _fake_connect(*args, **kwargs):
+        del args, kwargs
+        return _FakeConnection()
+
+    def _fake_read(*args, **kwargs):
+        nonlocal calls
+        del args, kwargs
+        calls += 1
+        if calls == 4:
+            raise BrokenPipeError("broken pipe")
+        return b"\x00\x01\x00\x00\x00\x05\x01\x03\x02\x00\x00"
+
+    DIAGNOSTIC_COLLECTOR.time.sleep = lambda _seconds: None
+    DIAGNOSTIC_COLLECTOR.socket.create_connection = _fake_connect
+    DIAGNOSTIC_COLLECTOR._modbus_read_holding_registers_on_connection = _fake_read
+    try:
+        result = DIAGNOSTIC_COLLECTOR._build_modbus_tcp_idle_probe(
+            "192.0.2.1",
+            502,
+            1,
+            10,
+            keep_connection_open=True,
+        )
+    finally:
+        DIAGNOSTIC_COLLECTOR.time.sleep = original_sleep
+        DIAGNOSTIC_COLLECTOR.socket.create_connection = original_connect
+        DIAGNOSTIC_COLLECTOR._modbus_read_holding_registers_on_connection = (
+            original_read
+        )
+
+    assert result["short_idle"]["socket_survived_idle"] is True
+    assert result["configured_idle"]["socket_survived_idle"] is False
+    assert (
+        result["configured_idle"]["second_read"]["error"]["exception_type"]
+        == "BrokenPipeError"
+    )
+    assert "Modbus TCP Timeout" in result["risk"]
+    assert "configured Home Assistant polling interval" in result["risk"]
+    assert "higher than the configured polling interval" in result["risk"]
+    assert "disable Keep Connection Open" in result["risk"]

@@ -10,6 +10,7 @@ import asyncio
 import re
 import socket
 import struct
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,6 +25,9 @@ INT16_MODULUS = 0x10000
 ASCII_PRINTABLE_START = 32
 ASCII_PRINTABLE_END = 126
 FREQUENCY_TENTHS_THRESHOLD = 400
+IDLE_PROBE_ADDRESS = 0x0000
+IDLE_PROBE_COUNT = 1
+SHORT_IDLE_PROBE_SECONDS = 3
 
 MODBUS_EXCEPTION_NAMES: dict[int, str] = {
     1: "Illegal Function",
@@ -82,6 +86,21 @@ SERIAL_FIELD_RE = re.compile(
 def _modbus_read_holding_registers(
     host: str, port: int, unit_id: int, address: int, count: int, timeout: int = 5
 ) -> bytes:
+    with socket.create_connection((host, port), timeout=timeout) as connection:
+        return _modbus_read_holding_registers_on_connection(
+            connection,
+            unit_id,
+            address,
+            count,
+        )
+
+
+def _modbus_read_holding_registers_on_connection(
+    connection: socket.socket,
+    unit_id: int,
+    address: int,
+    count: int,
+) -> bytes:
     transaction_id = 1
     protocol_id = 0
     request_length = 6
@@ -96,18 +115,17 @@ def _modbus_read_holding_registers(
     pdu = struct.pack(">BHH", function_code, address, count)
     payload_request = mbap_header + pdu
 
-    with socket.create_connection((host, port), timeout=timeout) as connection:
-        connection.sendall(payload_request)
-        header = connection.recv(MBAP_HEADER_LENGTH)
-        if len(header) < MBAP_HEADER_LENGTH:
-            raise RuntimeError("Short MBAP header")
+    connection.sendall(payload_request)
+    header = connection.recv(MBAP_HEADER_LENGTH)
+    if len(header) < MBAP_HEADER_LENGTH:
+        raise RuntimeError("Short MBAP header")
 
-        _, _, response_length, _ = struct.unpack(">HHHB", header)
-        payload = connection.recv(response_length - 1)
-        if len(payload) < (response_length - 1):
-            raise RuntimeError("Short PDU")
+    _, _, response_length, _ = struct.unpack(">HHHB", header)
+    payload = connection.recv(response_length - 1)
+    if len(payload) < (response_length - 1):
+        raise RuntimeError("Short PDU")
 
-        return header + payload
+    return header + payload
 
 
 def _parse_modbus_response(response: bytes) -> dict[str, Any]:
@@ -356,6 +374,122 @@ def _collect_modbus_block(
     }
 
 
+def _run_modbus_tcp_idle_probe_once(
+    host: str,
+    port: int,
+    unit_id: int,
+    idle_seconds: int | float | None,
+) -> dict[str, Any]:
+    """Test whether one Modbus TCP socket survives one idle interval."""
+    result: dict[str, Any] = {
+        "enabled": idle_seconds is not None,
+        "idle_seconds_tested": idle_seconds,
+        "address": IDLE_PROBE_ADDRESS,
+        "count": IDLE_PROBE_COUNT,
+    }
+    if idle_seconds is None:
+        result["skipped_reason"] = "no_idle_seconds_supplied"
+        return result
+
+    try:
+        idle_seconds_float = float(idle_seconds)
+    except (TypeError, ValueError):
+        result["error"] = {
+            "code": "invalid_idle_seconds",
+            "message": f"Invalid idle seconds: {idle_seconds!r}",
+        }
+        return result
+
+    if idle_seconds_float < 0:
+        result["error"] = {
+            "code": "invalid_idle_seconds",
+            "message": "Idle seconds must not be negative",
+        }
+        return result
+
+    try:
+        with socket.create_connection((host, port), timeout=5) as connection:
+            first_raw = _modbus_read_holding_registers_on_connection(
+                connection,
+                unit_id,
+                IDLE_PROBE_ADDRESS,
+                IDLE_PROBE_COUNT,
+            )
+            first_parsed = _parse_modbus_response(first_raw)
+            result["first_read"] = {"ok": "error" not in first_parsed}
+
+            time.sleep(idle_seconds_float)
+
+            second_raw = _modbus_read_holding_registers_on_connection(
+                connection,
+                unit_id,
+                IDLE_PROBE_ADDRESS,
+                IDLE_PROBE_COUNT,
+            )
+            second_parsed = _parse_modbus_response(second_raw)
+            result["second_read"] = {"ok": "error" not in second_parsed}
+            result["socket_survived_idle"] = "error" not in second_parsed
+    except (OSError, RuntimeError, struct.error) as err:
+        result["socket_survived_idle"] = False
+        result["second_read"] = {
+            "ok": False,
+            "error": {
+                "code": "modbus_idle_reuse_failed",
+                "message": str(err),
+                "exception_type": type(err).__name__,
+            },
+        }
+
+    return result
+
+
+def _build_modbus_tcp_idle_probe(
+    host: str,
+    port: int,
+    unit_id: int,
+    idle_seconds: int | float | None,
+    *,
+    keep_connection_open: bool | None = None,
+) -> dict[str, Any]:
+    """Test whether Modbus TCP sockets survive short and configured idle intervals."""
+    result: dict[str, Any] = {
+        "enabled": idle_seconds is not None,
+        "configured_idle_seconds_tested": idle_seconds,
+        "short_idle_seconds_tested": SHORT_IDLE_PROBE_SECONDS,
+        "keep_connection_open": keep_connection_open,
+        "short_idle": _run_modbus_tcp_idle_probe_once(
+            host,
+            port,
+            unit_id,
+            SHORT_IDLE_PROBE_SECONDS,
+        ),
+    }
+    if idle_seconds is None:
+        result["configured_idle"] = {
+            "enabled": False,
+            "skipped_reason": "no_idle_seconds_supplied",
+        }
+        return result
+
+    result["configured_idle"] = _run_modbus_tcp_idle_probe_once(
+        host,
+        port,
+        unit_id,
+        idle_seconds,
+    )
+
+    configured_survived = result["configured_idle"].get("socket_survived_idle")
+    if keep_connection_open and configured_survived is False:
+        result["risk"] = (
+            "The UPS closed the Modbus TCP connection before the configured Home "
+            "Assistant polling "
+            "interval elapsed. If your UPS exposes a Modbus TCP Timeout setting, "
+            "set it higher than the configured polling interval. Otherwise, disable "
+            "Keep Connection Open for this device."
+        )
+    return result
+
+
 def _add_decodes(dump: dict[str, Any]) -> None:
     snmp_decode = _decode_snmp_input_frequency(dump.get("snmp", {}))
     if snmp_decode:
@@ -390,7 +524,12 @@ def _add_decodes(dump: dict[str, Any]) -> None:
 
 
 def collect_diagnostic_dump(
-    host: str, community: str, port: int, unit_id: int
+    host: str,
+    community: str,
+    port: int,
+    unit_id: int,
+    idle_probe_seconds: int | float | None = None,
+    keep_connection_open: bool | None = None,
 ) -> dict[str, Any]:
     """Collect SNMP and Modbus diagnostic data for one APC device."""
     dump: dict[str, Any] = {
@@ -401,6 +540,13 @@ def collect_diagnostic_dump(
         "snmp": asyncio.run(_collect_snmp_data(host, community)),
         "modbus": {},
         "modbus_probes": {},
+        "modbus_tcp_idle_probe": _build_modbus_tcp_idle_probe(
+            host,
+            port,
+            unit_id,
+            idle_probe_seconds,
+            keep_connection_open=keep_connection_open,
+        ),
     }
 
     for start, count in MODBUS_BLOCKS:

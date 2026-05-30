@@ -45,10 +45,11 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - And more...
 
 ### External Probe Behavior (AP9335T/AP9335TH)
-- External probe sensors are optional and are created only when probe values are returned by SNMP.
+- External probe sensors are optional and are created when compatible probe OIDs are detected by SNMP.
 - If no compatible probe is connected, those entities are not created (instead of showing permanently unavailable sensors).
 - Temperature is reported as native Celsius and exposed with Home Assistant temperature device class, so UI/unit settings can convert to Fahrenheit automatically.
 - External probe availability (and the specific probe OID variants) are detected during the hourly SNMP metadata refresh; probe values are not polled unless a compatible probe was detected.
+- If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
 - **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
@@ -128,7 +129,7 @@ After installation, set up the integration through the UI:
 
 The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
 
-When **Keep Connection Open** is enabled, the coordinator avoids per-cycle socket close/open overhead, but still reconnects automatically on socket errors and after long idle windows.
+When **Keep Connection Open** is enabled, the coordinator avoids per-cycle socket close/open overhead, but still reconnects automatically on socket errors and after long idle windows. Some APC Network Management Cards close idle Modbus TCP sockets before the next Home Assistant poll. The diagnostics button tests whether a socket survives both a short idle interval and the configured Home Assistant polling interval, and reports a risk message if the UPS closes the connection too soon. If your UPS exposes a Modbus TCP Timeout setting, set it higher than the configured polling interval; otherwise, disable **Keep Connection Open** for that device.
 
 ### SNMP Requirements
 

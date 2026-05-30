@@ -17,7 +17,16 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_DETECTION_VERSION, CONF_DEVICE_TYPE, DOMAIN, KEY_COORDINATOR
+from homeassistant.const import CONF_SCAN_INTERVAL
+
+from .const import (
+    CONF_DETECTION_VERSION,
+    CONF_DEVICE_TYPE,
+    CONF_KEEP_CONNECTION_OPEN,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    KEY_COORDINATOR,
+)
 from .coordinator import APCModbusCoordinator
 from .device_types import DETECTION_VERSION, choose_device_type
 from .diagnostic_collector import collect_diagnostic_dump
@@ -37,7 +46,7 @@ async def async_setup_entry(
     ]
     async_add_entities(
         [
-            APCModbusDiagnosticButton(coordinator, entry.entry_id),
+            APCModbusDiagnosticButton(coordinator, entry),
             APCModbusRedetectDeviceTypeButton(coordinator, entry),
             APCModbusResetMonitorDefaultsButton(coordinator, entry.entry_id),
         ]
@@ -51,13 +60,13 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
     _attr_name = "Run Diagnostics"
     _attr_icon = "mdi:stethoscope"
 
-    def __init__(self, coordinator: APCModbusCoordinator, entry_id: str) -> None:
+    def __init__(self, coordinator: APCModbusCoordinator, entry: ConfigEntry) -> None:
         """Initialize button entity."""
         super().__init__(coordinator)
-        self._entry_id = entry_id
-        self._attr_unique_id = f"{DOMAIN}_{entry_id}_run_diagnostics"
+        self._entry = entry
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_run_diagnostics"
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry_id)},
+            identifiers={(DOMAIN, entry.entry_id)},
             name=coordinator.device_name,
             manufacturer="APC",
             model=coordinator.get_device_model_for_registry(),
@@ -73,10 +82,12 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             self.coordinator.snmp_community,
             self.coordinator.port,
             self.coordinator.unit,
+            self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+            self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
         )
 
         dump_json = json.dumps(dump, indent=2, sort_keys=False)
-        notification_id = f"{DOMAIN}_{self._entry_id}_diagnostics"
+        notification_id = f"{DOMAIN}_{self._entry.entry_id}_diagnostics"
         async_create(
             self.hass,
             f"```json\n{dump_json}\n```",

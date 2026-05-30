@@ -23,17 +23,11 @@ from .const import (
 )
 from .coordinator import APCModbusCoordinator
 from .device_types import APCDeviceType
+from .external_probe_entities import is_external_probe_entity_available
 from .icons_unified import resolve_sensor_icon
 from .sensor_availability_unified import is_sensor_enabled_by_default
 
 _LOGGER = logging.getLogger(__name__)
-
-OPTIONAL_SNMP_EXTERNAL_KEYS = {
-    "snmp_external_temp_1",
-    "snmp_external_humidity_1",
-    "snmp_external_temp_2",
-    "snmp_external_humidity_2",
-}
 
 
 async def async_setup_entry(
@@ -70,14 +64,27 @@ async def async_setup_entry(
 
         sensor_descriptions = SENSOR_DESCRIPTIONS
 
+    external_sensor_descriptions = {
+        description.key: description
+        for description in SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
+    }
+
     # SNMP-backed external probe sensors are available across supported families.
     sensor_descriptions = [*sensor_descriptions, *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS]
     sensor_descriptions = [
         description
         for description in sensor_descriptions
-        if description.key not in OPTIONAL_SNMP_EXTERNAL_KEYS
-        or coordinator.data.get(description.register_key) is not None
+        if is_external_probe_entity_available(
+            description.key,
+            coordinator.data,
+            getattr(coordinator, "_snmp_probe_detection", None),
+        )
     ]
+    added_external_probe_keys = {
+        description.key
+        for description in sensor_descriptions
+        if description.key in external_sensor_descriptions
+    }
 
     _LOGGER.debug(
         "Setting up %d sensors for device type %s",
@@ -88,6 +95,35 @@ async def async_setup_entry(
     async_add_entities(
         APCModbusSensor(coordinator, description, entry.entry_id)
         for description in sensor_descriptions
+    )
+
+    def _add_newly_detected_external_probe_entities() -> None:
+        """Add optional external probe entities detected after setup."""
+        detection = getattr(coordinator, "_snmp_probe_detection", None)
+        new_descriptions = []
+        for key, description in external_sensor_descriptions.items():
+            if key in added_external_probe_keys:
+                continue
+            if not is_external_probe_entity_available(key, coordinator.data, detection):
+                continue
+            added_external_probe_keys.add(key)
+            new_descriptions.append(description)
+
+        if not new_descriptions:
+            return
+
+        _LOGGER.info(
+            "Adding %d newly detected SNMP external probe sensor(s): %s",
+            len(new_descriptions),
+            ", ".join(description.key for description in new_descriptions),
+        )
+        async_add_entities(
+            APCModbusSensor(coordinator, description, entry.entry_id)
+            for description in new_descriptions
+        )
+
+    entry.async_on_unload(
+        coordinator.async_add_listener(_add_newly_detected_external_probe_entities)
     )
 
 
