@@ -755,6 +755,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._keep_connection_open,
         )
 
+    def mark_snmp_metadata_refresh_needed(self) -> None:
+        """Force SNMP metadata/probe detection refresh on next poll cycle."""
+        self._metadata_needs_refresh = True
+
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""
         if self._keep_connection_open and self._last_io_monotonic > 0:

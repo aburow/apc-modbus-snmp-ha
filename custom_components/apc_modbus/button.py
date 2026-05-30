@@ -156,9 +156,13 @@ class APCModbusRedetectDeviceTypeButton(
                 "integration entry was reloaded."
             )
         else:
+            # Re-run SNMP metadata/probe detection immediately so newly connected
+            # external probe components are discovered without waiting the hourly cycle.
+            self.coordinator.mark_snmp_metadata_refresh_needed()
+            await self.coordinator.async_request_refresh()
             message = (
                 f"Device type remains `{selected_device_type.value}`. "
-                "No reload was required."
+                "No reload was required. SNMP probe detection refresh was forced."
             )
 
         notification_id = f"{DOMAIN}_{self._entry.entry_id}_redetect_device_type"

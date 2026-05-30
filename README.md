@@ -335,7 +335,16 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.4-dev.3 (Pre-release)
+### v1.2.4-dev.5 (Pre-release)
+- ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
+- ✅ Newly connected external temp/humidity probe components can now be detected immediately after re-detect instead of waiting up to the hourly SNMP metadata refresh.
+- ✅ Lint/tooling dependency stack updated (`grain-lint`, `ruff`, `semgrep`, `yamllint`, `sqlfluff>=4.2.0`) for current CI/security baselines.
+
+### v1.2.4-dev.4
+- ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
+- ✅ Newly connected external temp/humidity probe components can now be detected immediately after re-detect instead of waiting up to the hourly SNMP metadata refresh.
+
+### v1.2.4-dev.3
 - ✅ Adds configurable SNMP UDP port (`SNMP Port`) while retaining configurable Modbus TCP port (`Port`).
 - ✅ SNMP metadata, external-probe detection, and external-probe polling now use the configured SNMP port.
 - ✅ Diagnostics now include `integration_version` and `snmp_port` so dumps show exact build/port context.

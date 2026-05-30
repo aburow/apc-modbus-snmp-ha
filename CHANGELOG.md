@@ -2,6 +2,21 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.4-dev.5] - 2026-05-30
+### Fixed
+- Updated the `Re-detect Device Type` button flow to force an immediate SNMP metadata/probe detection refresh when the device family is unchanged, so newly connected external probe components are detected without waiting for the hourly metadata cycle.
+
+### Changed
+- Updated lint/developer dependency versions (`grain-lint`, `ruff`, `semgrep`, `yamllint`) and raised `sqlfluff` constraint to `>=4.2.0`.
+- Synchronized authoritative integration/package version metadata to `1.2.4-dev.5`.
+
+## [1.2.4-dev.4] - 2026-05-30
+### Fixed
+- Updated the `Re-detect Device Type` button flow to force an immediate SNMP metadata/probe detection refresh when the device family is unchanged, so newly connected external probe components are detected without waiting for the hourly metadata cycle.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.4-dev.4`.
+
 ## [1.2.4-dev.3] - 2026-05-30
 ### Added
 - Added configurable SNMP UDP port support (`snmp_port`) alongside Modbus TCP port configuration.
