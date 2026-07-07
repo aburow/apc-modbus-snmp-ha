@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Anthony Burow
 
 """Unified device-info resolver for external bridge consumers.

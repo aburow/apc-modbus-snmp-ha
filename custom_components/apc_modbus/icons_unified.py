@@ -1,5 +1,5 @@
 # SPDX-FileCopyrightText: 2026 github.com/aburow
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 """
 Unified icon mapping for UPS/PDU metrics.
