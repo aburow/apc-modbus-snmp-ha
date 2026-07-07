@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.5] - 2026-07-07
+### Fixed
+- Normalized the root `LICENSE` file to the canonical GNU Affero General Public License v3.0 text so GitHub Licensee and HACS can identify the repository license.
+- Updated existing source SPDX headers to consistently declare `AGPL-3.0-or-later`.
+
+### Changed
+- Moved the project-specific license statement and SPDX identifier to `README.md`.
+- Synchronized authoritative integration/package version metadata to `1.2.5`.
+
 ## [1.2.4] - 2026-05-31
 ### Added
 - Added configurable SNMP UDP port support (`snmp_port`) alongside Modbus TCP port configuration.

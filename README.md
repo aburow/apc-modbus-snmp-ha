@@ -335,7 +335,11 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.4 (Current Stable)
+### v1.2.5 (Current Stable)
+- ✅ Normalizes the repository license for GitHub Licensee and HACS detection.
+- ✅ Declares `AGPL-3.0-or-later` consistently in project documentation and existing source SPDX headers.
+
+### v1.2.4
 - ✅ Adds configurable SNMP UDP port (`SNMP Port`) while retaining configurable Modbus TCP port (`Port`).
 - ✅ Restores startup SNMP probe-detection polling on first post-restart cycle.
 - ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
