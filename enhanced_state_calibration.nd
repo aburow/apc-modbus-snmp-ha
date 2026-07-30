@@ -1,0 +1,56 @@
+# Enhanced runtime-calibration state
+
+## Goal
+
+Expose the APC runtime-calibration state as a read-only Home Assistant enum
+sensor so users can see when a UPS is calibrating its battery runtime.
+
+## Scope
+
+- Apply to Smart-UPS and SMT/SMX/SRT UPS families only; do not create the
+  entity for Rack PDUs.
+- Add `upsAdvTestCalibrationResults` to the existing regular self-test SNMP
+  polling set:
+  `1.3.6.1.4.1.318.1.1.1.7.2.6.0`.
+- Reuse the existing executor-backed SNMP helper, OID deduplication, and
+  coordinator merge path. Do not create a separate poll, configuration option,
+  write control, or dependency.
+
+## Entity
+
+- Coordinator and register key: `snmp_runtime_calibration_status`.
+- Entity name: `Runtime Calibration Status`.
+- Model it as an enum sensor with a stable config-entry-based unique ID and
+  enable it by default for supported UPS families.
+- Decode the integer result as:
+
+  | Value | State |
+  | ---: | --- |
+  | 1 | Calibration Complete |
+  | 2 | Cannot Calibrate — Battery Not Fully Charged |
+  | 3 | Calibration In Progress |
+  | 4 | Calibration Refused |
+  | 5 | Calibration Aborted |
+  | 6 | Calibration Pending |
+
+- Preserve an unknown numeric value as `Unknown (<value>)`.
+- If the OID is absent, invalid, or unavailable, retain the entity and report
+  it unavailable. It must not interrupt Modbus data, other SNMP telemetry, or
+  setup.
+
+## Boundaries
+
+- This is status telemetry only. Do not expose the calibration command OID or
+  add a button that can start or cancel calibration.
+- Do not alter the existing self-test sensors, polling cadence, sensor
+  availability rules, energy rollover tracking, or release metadata.
+
+## Tests and acceptance
+
+- Extend the existing self-test helper tests to assert that the calibration OID
+  is requested with the existing five OIDs, parsed as an integer, and remains
+  independently unavailable on an OID failure.
+- Test all six enum labels and an unknown code.
+- Test supported UPS setup creates the default-enabled entity with its stable
+  unique ID; Rack PDU setup must not create it.
+- Run `./.venv/bin/pytest -q` and `make lint`.

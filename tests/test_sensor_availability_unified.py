@@ -1,3 +1,4 @@
+import ast
 import importlib.util
 from pathlib import Path
 
@@ -47,6 +48,7 @@ def test_self_test_sensors_are_enabled_only_for_ups_families() -> None:
         "snmp_last_self_test_date",
         "snmp_self_test_time",
         "snmp_self_test_day",
+        "snmp_runtime_calibration_status",
     )
     for key in keys:
         assert AVAILABILITY.is_sensor_enabled_by_default(key, "smart_ups")
@@ -93,3 +95,59 @@ def test_entity_enabled_default_contract_api() -> None:
     assert AVAILABILITY.entity_enabled_default("battery_temperature") is False
     assert AVAILABILITY.entity_enabled_default("unknown_metric_key") is False
     assert AVAILABILITY.entity_enabled_default(None) is True
+
+
+def test_runtime_calibration_sensor_has_human_readable_enum_states() -> None:
+    const_path = MODULE_PATH.with_name("const.py")
+    tree = ast.parse(const_path.read_text())
+    descriptions = next(
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name)
+            and target.id == "SNMP_SELF_TEST_SENSOR_DESCRIPTIONS"
+            for target in node.targets
+        )
+    )
+    calibration = next(
+        node
+        for node in descriptions.elts
+        if isinstance(node, ast.Call)
+        and any(
+            keyword.arg == "key"
+            and isinstance(keyword.value, ast.Constant)
+            and keyword.value.value == "snmp_runtime_calibration_status"
+            for keyword in node.keywords
+        )
+    )
+    value_map = ast.literal_eval(
+        next(
+            keyword.value
+            for keyword in calibration.keywords
+            if keyword.arg == "value_map"
+        )
+    )
+
+    assert value_map == {
+        1: "Calibration Complete",
+        2: "Cannot Calibrate — Battery Not Fully Charged",
+        3: "Calibration In Progress",
+        4: "Calibration Refused",
+        5: "Calibration Aborted",
+        6: "Calibration Pending",
+    }
+
+
+def test_runtime_calibration_unknown_codes_use_sensor_fallback() -> None:
+    sensor_source = MODULE_PATH.with_name("sensor.py").read_text()
+    assert 'value_map.get(code, f"Unknown ({code})")' in sensor_source
+
+
+def test_runtime_calibration_sensor_is_added_only_for_ups_families() -> None:
+    sensor_source = MODULE_PATH.with_name("sensor.py").read_text()
+    assert (
+        "if coordinator.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):"
+        in (sensor_source)
+    )
+    assert "*SNMP_SELF_TEST_SENSOR_DESCRIPTIONS" in sensor_source

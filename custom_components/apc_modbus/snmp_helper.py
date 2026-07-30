@@ -54,6 +54,7 @@ SELF_TEST_OIDS = {
     "snmp_last_self_test_date": "1.3.6.1.4.1.318.1.1.1.7.2.4.0",
     "snmp_self_test_time": "1.3.6.1.4.1.318.1.1.1.7.2.8.0",
     "snmp_self_test_day": "1.3.6.1.4.1.318.1.1.1.7.2.9.0",
+    "snmp_runtime_calibration_status": "1.3.6.1.4.1.318.1.1.1.7.2.6.0",
 }
 SELF_TEST_TIME_RE = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 SELF_TEST_DATE_RE = re.compile(r"\d{2}/\d{2}/(?:\d{2}|\d{4})")
@@ -385,6 +386,9 @@ async def async_get_self_test_data(
         ),
         "snmp_self_test_day": _parse_self_test_enum(
             value_map.get(SELF_TEST_OIDS["snmp_self_test_day"])
+        ),
+        "snmp_runtime_calibration_status": _parse_self_test_enum(
+            value_map.get(SELF_TEST_OIDS["snmp_runtime_calibration_status"])
         ),
     }
 

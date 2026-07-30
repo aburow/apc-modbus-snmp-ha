@@ -81,13 +81,14 @@ def test_parse_external_probe_values_accept_float_and_suffix_text() -> None:
     assert SNMP_HELPER._parse_external_humidity_pct("450") == 45.0
 
 
-def test_self_test_data_uses_only_the_five_read_only_oids_and_decodes_values() -> None:
+def test_self_test_data_uses_read_only_oids_and_decodes_values() -> None:
     calls: list[str] = []
     values = {
         SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_schedule"]: "3",
         SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_result"]: "1",
         SNMP_HELPER.SELF_TEST_OIDS["snmp_last_self_test_date"]: "07/31/26",
         SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_time"]: "09:30",
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_runtime_calibration_status"]: "3",
     }
 
     async def _fake_get(*args, **kwargs):
@@ -109,7 +110,28 @@ def test_self_test_data_uses_only_the_five_read_only_oids_and_decodes_values() -
         "snmp_last_self_test_date": date(2026, 7, 31),
         "snmp_self_test_time": "09:30",
         "snmp_self_test_day": None,
+        "snmp_runtime_calibration_status": 3,
     }
+
+
+def test_runtime_calibration_oid_failure_is_independently_unavailable() -> None:
+    values = {
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_schedule"]: "3",
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_runtime_calibration_status"]: None,
+    }
+
+    async def _fake_get(*args, **kwargs):
+        return values.get(args[1])
+
+    original = SNMP_HELPER.async_get_snmp_value
+    SNMP_HELPER.async_get_snmp_value = _fake_get
+    try:
+        parsed = asyncio.run(SNMP_HELPER.async_get_self_test_data("127.0.0.1"))
+    finally:
+        SNMP_HELPER.async_get_snmp_value = original
+
+    assert parsed["snmp_self_test_schedule"] == 3
+    assert parsed["snmp_runtime_calibration_status"] is None
 
 
 def test_self_test_parsers_reject_invalid_dates_and_times() -> None:

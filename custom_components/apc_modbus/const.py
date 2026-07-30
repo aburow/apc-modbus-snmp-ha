@@ -291,6 +291,20 @@ SNMP_SELF_TEST_SENSOR_DESCRIPTIONS = [
             7: "Sunday",
         },
     ),
+    APCModbusSensorDescription(
+        key="snmp_runtime_calibration_status",
+        name="Runtime Calibration Status",
+        device_class=SensorDeviceClass.ENUM,
+        register_key="snmp_runtime_calibration_status",
+        value_map={
+            1: "Calibration Complete",
+            2: "Cannot Calibrate — Battery Not Fully Charged",
+            3: "Calibration In Progress",
+            4: "Calibration Refused",
+            5: "Calibration Aborted",
+            6: "Calibration Pending",
+        },
+    ),
 ]
 
 BINARY_SENSOR_DESCRIPTIONS = [

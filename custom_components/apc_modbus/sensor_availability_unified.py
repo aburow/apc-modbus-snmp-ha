@@ -112,6 +112,7 @@ def is_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
     if (
         local_key.lower().startswith("snmp_self_test_")
         or local_key == "snmp_last_self_test_date"
+        or local_key == "snmp_runtime_calibration_status"
     ):
         return device_family in UPS_DEVICE_FAMILIES
     if local_key.lower().startswith("snmp_external_"):

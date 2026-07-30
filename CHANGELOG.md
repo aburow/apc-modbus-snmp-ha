@@ -2,6 +2,16 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.4] - 2026-07-31
+### Added
+- Added a default-enabled Runtime Calibration Status sensor for Smart-UPS and
+  SMT/SMX/SRT devices. It reports APC's calibration state in human-readable
+  terms through the regular SNMP self-test poll.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.4`.
+
 ## [1.2.6-dev.3] - 2026-07-31
 ### Fixed
 - Restored config-flow loading by using Home Assistant-serializable validation
