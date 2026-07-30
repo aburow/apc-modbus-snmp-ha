@@ -2,6 +2,11 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.1] - 2026-07-31
+### Added
+- Added default-enabled Smart-UPS and SMT/SMX/SRT self-test sensors for the automatic test schedule, last result, last date, scheduled time, and scheduled day.
+- Self-test values are read through the regular SNMP poll, decoded into Home Assistant-friendly date, time, and enum states, and remain independently unavailable when an OID is unsupported.
+
 ## [1.2.5] - 2026-07-07
 ### Fixed
 - Normalized the root `LICENSE` file to the canonical GNU Affero General Public License v3.0 text so GitHub Licensee and HACS can identify the repository license.

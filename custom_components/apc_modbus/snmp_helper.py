@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from datetime import date, datetime
 from typing import Any
 from collections.abc import Callable
 
@@ -47,6 +48,14 @@ UIO_SENSOR_STATUS_HUMIDITY_BASE = "1.3.6.1.4.1.318.1.1.25.1.2.1.7"
 # APC enterprise OID first, then RFC1628 UPS-MIB line 1 frequency.
 SMARTUPS_OID_INPUT_FREQUENCY = "1.3.6.1.4.1.318.1.1.1.3.2.4.0"
 UPS_MIB_OID_INPUT_FREQUENCY_LINE1 = "1.3.6.1.2.1.33.1.3.3.1.2.1"
+SELF_TEST_OIDS = {
+    "snmp_self_test_schedule": "1.3.6.1.4.1.318.1.1.1.7.2.1.0",
+    "snmp_self_test_result": "1.3.6.1.4.1.318.1.1.1.7.2.3.0",
+    "snmp_last_self_test_date": "1.3.6.1.4.1.318.1.1.1.7.2.4.0",
+    "snmp_self_test_time": "1.3.6.1.4.1.318.1.1.1.7.2.8.0",
+    "snmp_self_test_day": "1.3.6.1.4.1.318.1.1.1.7.2.9.0",
+}
+SELF_TEST_TIME_RE = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 
 
 def _dedupe_oids_preserve_order(oids: list[str]) -> list[str]:
@@ -320,6 +329,65 @@ def _parse_frequency_hz(value: str | None) -> float | None:
     if raw > 400:
         return raw / 10.0
     return raw
+
+
+def _parse_self_test_date(value: str | None) -> date | None:
+    """Parse the PowerNet-MIB's mm/dd/yy self-test date."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%m/%d/%y").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_self_test_time(value: str | None) -> str | None:
+    """Validate a timezone-free PowerNet-MIB self-test time."""
+    if not value:
+        return None
+    value = value.strip()
+    return value if SELF_TEST_TIME_RE.fullmatch(value) else None
+
+
+def _parse_self_test_enum(value: str | None) -> int | None:
+    """Parse a PowerNet-MIB self-test enum code."""
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+async def async_get_self_test_data(
+    host: str, community: str = "public", snmp_port: int = 161
+) -> dict[str, int | str | date | None]:
+    """Query and decode Smart-UPS self-test state and schedule data."""
+    value_map = await _fetch_snmp_value_map(
+        host, community, list(SELF_TEST_OIDS.values()), snmp_port=snmp_port
+    )
+    return {
+        "snmp_self_test_schedule": _parse_self_test_enum(
+            value_map.get(SELF_TEST_OIDS["snmp_self_test_schedule"])
+        ),
+        "snmp_self_test_result": _parse_self_test_enum(
+            value_map.get(SELF_TEST_OIDS["snmp_self_test_result"])
+        ),
+        "snmp_last_self_test_date": _parse_self_test_date(
+            value_map.get(SELF_TEST_OIDS["snmp_last_self_test_date"])
+        ),
+        "snmp_self_test_time": _parse_self_test_time(
+            value_map.get(SELF_TEST_OIDS["snmp_self_test_time"])
+        ),
+        "snmp_self_test_day": _parse_self_test_enum(
+            value_map.get(SELF_TEST_OIDS["snmp_self_test_day"])
+        ),
+    }
+
+
+def get_self_test_data_sync(
+    host: str, community: str = "public", snmp_port: int = 161
+) -> dict[str, int | str | date | None]:
+    """Run the self-test SNMP query in a dedicated event loop."""
+    return asyncio.run(async_get_self_test_data(host, community, snmp_port))
 
 
 async def async_get_external_probe_data(

@@ -40,6 +40,19 @@ def test_non_core_ups_sensor_keys_disabled_by_default() -> None:
     )
 
 
+def test_self_test_sensors_are_enabled_only_for_ups_families() -> None:
+    keys = (
+        "snmp_self_test_schedule",
+        "snmp_self_test_result",
+        "snmp_last_self_test_date",
+        "snmp_self_test_time",
+        "snmp_self_test_day",
+    )
+    for key in keys:
+        assert AVAILABILITY.is_sensor_enabled_by_default(key, "smart_ups")
+        assert not AVAILABILITY.is_sensor_enabled_by_default(key, "rack_pdu")
+
+
 def test_non_primary_phase_ups_sensor_keys_disabled_by_default() -> None:
     assert (
         AVAILABILITY.is_sensor_enabled_by_default("output_voltage_l2", "smt_ups")

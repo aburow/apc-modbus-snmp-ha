@@ -2,6 +2,7 @@ import importlib.util
 import asyncio
 import sys
 import types
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,6 +79,43 @@ def test_parse_external_probe_values_accept_float_and_suffix_text() -> None:
     assert SNMP_HELPER._parse_external_humidity_pct("45.0") == 45.0
     assert SNMP_HELPER._parse_external_humidity_pct("45 %") == 45.0
     assert SNMP_HELPER._parse_external_humidity_pct("450") == 45.0
+
+
+def test_self_test_data_uses_only_the_five_read_only_oids_and_decodes_values() -> None:
+    calls: list[str] = []
+    values = {
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_schedule"]: "3",
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_result"]: "1",
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_last_self_test_date"]: "07/31/26",
+        SNMP_HELPER.SELF_TEST_OIDS["snmp_self_test_time"]: "09:30",
+    }
+
+    async def _fake_get(*args, **kwargs):
+        calls.append(args[1])
+        return values.get(args[1])
+
+    original = SNMP_HELPER.async_get_snmp_value
+    SNMP_HELPER.async_get_snmp_value = _fake_get
+    try:
+        parsed = asyncio.run(SNMP_HELPER.async_get_self_test_data("127.0.0.1"))
+    finally:
+        SNMP_HELPER.async_get_snmp_value = original
+
+    assert set(calls) == set(SNMP_HELPER.SELF_TEST_OIDS.values())
+    assert "1.3.6.1.4.1.318.1.1.1.7.2.2.0" not in SNMP_HELPER.SELF_TEST_OIDS.values()
+    assert parsed == {
+        "snmp_self_test_schedule": 3,
+        "snmp_self_test_result": 1,
+        "snmp_last_self_test_date": date(2026, 7, 31),
+        "snmp_self_test_time": "09:30",
+        "snmp_self_test_day": None,
+    }
+
+
+def test_self_test_parsers_reject_invalid_dates_and_times() -> None:
+    assert SNMP_HELPER._parse_self_test_date("13/31/26") is None
+    assert SNMP_HELPER._parse_self_test_time("24:00") is None
+    assert SNMP_HELPER._parse_self_test_time("9:30") is None
 
 
 def test_dedupe_oids_preserves_order() -> None:

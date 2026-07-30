@@ -109,6 +109,11 @@ def resolve_rack_pdu_sensor_canonical_key(local_key: str) -> str | None:
 
 def is_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
     """Return whether a sensor should be entity-registry enabled by default."""
+    if (
+        local_key.lower().startswith("snmp_self_test_")
+        or local_key == "snmp_last_self_test_date"
+    ):
+        return device_family in UPS_DEVICE_FAMILIES
     if local_key.lower().startswith("snmp_external_"):
         # External SNMP probes should be visible immediately when detected.
         return True

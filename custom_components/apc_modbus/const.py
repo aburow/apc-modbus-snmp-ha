@@ -236,6 +236,62 @@ SNMP_EXTERNAL_SENSOR_DESCRIPTIONS = [
     ),
 ]
 
+SNMP_SELF_TEST_SENSOR_DESCRIPTIONS = [
+    APCModbusSensorDescription(
+        key="snmp_self_test_schedule",
+        name="Automatic Self-Test Schedule",
+        device_class=SensorDeviceClass.ENUM,
+        register_key="snmp_self_test_schedule",
+        value_map={
+            1: "Unknown",
+            2: "Biweekly",
+            3: "Weekly",
+            4: "At Turn On",
+            5: "Never",
+            6: "Every 4 Weeks",
+            7: "Every 12 Weeks",
+            8: "Biweekly Since Last Test",
+            9: "Weekly Since Last Test",
+            10: "Every 8 Weeks",
+            11: "Every 26 Weeks",
+            12: "Every 52 Weeks",
+        },
+    ),
+    APCModbusSensorDescription(
+        key="snmp_self_test_result",
+        name="Last Self-Test Result",
+        device_class=SensorDeviceClass.ENUM,
+        register_key="snmp_self_test_result",
+        value_map={1: "OK", 2: "Failed", 3: "Invalid Test", 4: "Test In Progress"},
+    ),
+    APCModbusSensorDescription(
+        key="snmp_last_self_test_date",
+        name="Last Self-Test Date",
+        device_class=SensorDeviceClass.DATE,
+        register_key="snmp_last_self_test_date",
+    ),
+    APCModbusSensorDescription(
+        key="snmp_self_test_time",
+        name="Automatic Self-Test Time",
+        register_key="snmp_self_test_time",
+    ),
+    APCModbusSensorDescription(
+        key="snmp_self_test_day",
+        name="Automatic Self-Test Day",
+        device_class=SensorDeviceClass.ENUM,
+        register_key="snmp_self_test_day",
+        value_map={
+            1: "Monday",
+            2: "Tuesday",
+            3: "Wednesday",
+            4: "Thursday",
+            5: "Friday",
+            6: "Saturday",
+            7: "Sunday",
+        },
+    ),
+]
+
 BINARY_SENSOR_DESCRIPTIONS = [
     # Status Word 1 - Faults
     APCModbusBinarySensorDescription(

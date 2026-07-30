@@ -37,6 +37,7 @@ from .snmp_helper import (
     detect_external_probe_oids_sync,
     get_device_metadata_sync,
     get_external_probe_data_detected_sync,
+    get_self_test_data_sync,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -556,6 +557,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         snmp_external_start = time.monotonic()
         await self._merge_snmp_external_probe_data(data)
         snmp_external_elapsed = time.monotonic() - snmp_external_start
+
+        await self._merge_snmp_self_test_data(data)
         self._apply_device_compat_aliases(data)
 
         _LOGGER.info(
@@ -730,6 +733,23 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                 continue
             data[key] = value
+
+    async def _merge_snmp_self_test_data(self, data: dict[str, Any]) -> None:
+        """Fetch and merge Smart-UPS self-test telemetry on every update."""
+        if self.device_type not in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
+            return
+        try:
+            values = await self.hass.async_add_executor_job(
+                get_self_test_data_sync,
+                self.host,
+                self.snmp_community,
+                self.snmp_port,
+            )
+        except (OSError, TimeoutError, RuntimeError, ValueError) as err:
+            _LOGGER.debug("[%s] Self-test SNMP query failed: %s", self._log_ctx, err)
+            return
+        if isinstance(values, dict):
+            data.update(values)
 
     @property
     def keep_connection_open_enabled(self) -> bool:
