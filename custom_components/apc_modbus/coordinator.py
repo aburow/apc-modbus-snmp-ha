@@ -25,6 +25,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusException
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.storage import Store
 
 from .const import (
     DEFAULT_IDLE_RECONNECT_SECONDS,
@@ -32,6 +33,7 @@ from .const import (
     DOMAIN,
 )
 from .device_types import APCDeviceType, classify_device_type
+from .output_energy_tracker import OutputEnergyTracker
 from . import registers_smart_ups
 from .snmp_helper import (
     detect_external_probe_oids_sync,
@@ -42,6 +44,7 @@ from .snmp_helper import (
 
 _LOGGER = logging.getLogger(__name__)
 METADATA_REFRESH_INTERVAL_SECONDS = 3600
+OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS = 60
 
 
 class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -62,6 +65,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         snmp_port: int,
         scan_interval: int = DEFAULT_SCAN_INTERVAL,
         keep_connection_open: bool = False,
+        output_energy_completed_rollovers: int = 0,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -119,6 +123,43 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name for name in ("device_id", "slave", "unit") if name in read_params
         ]
         self._resolved_unit_param: str | None = None
+        self._output_energy_tracker = OutputEnergyTracker.from_storage(
+            None, output_energy_completed_rollovers
+        )
+        self._output_energy_store = Store[dict[str, Any]](
+            hass, 1, f"{DOMAIN}.{entry_id}_output_energy"
+        )
+        self._output_energy_tracker_restored = False
+        self._output_energy_reset_logged = False
+
+    async def async_restore_output_energy_tracker(self) -> None:
+        """Restore the SMT output-energy tracker before its first update."""
+        state = await self._output_energy_store.async_load()
+        self._output_energy_tracker = OutputEnergyTracker.from_storage(
+            state, self._output_energy_tracker.offset_wh // (2**32)
+        )
+        self._output_energy_tracker_restored = True
+
+    async def _async_track_output_energy(self, data: dict[str, Any]) -> None:
+        """Publish and persist the compensated SMT output-energy counter."""
+        raw_wh = data.get("output_energy")
+        if self.device_type != APCDeviceType.SMT_UPS or not isinstance(raw_wh, int):
+            return
+        if not self._output_energy_tracker_restored:
+            await self.async_restore_output_energy_tracker()
+        total_wh, reason = self._output_energy_tracker.update(
+            raw_wh, self.serial_number
+        )
+        if reason == "reset" and not self._output_energy_reset_logged:
+            _LOGGER.warning(
+                "[%s] Output Energy counter decreased; preserving continuity as a meter reset",
+                self._log_ctx,
+            )
+            self._output_energy_reset_logged = True
+        data["output_energy_kwh"] = total_wh / 1000
+        self._output_energy_store.async_delay_save(
+            self._output_energy_tracker.as_dict, OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS
+        )
 
     def set_device_metadata(
         self,
@@ -560,6 +601,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         await self._merge_snmp_self_test_data(data)
         self._apply_device_compat_aliases(data)
+        await self._async_track_output_energy(data)
 
         _LOGGER.info(
             "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "

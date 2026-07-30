@@ -2,6 +2,17 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.2] - 2026-07-31
+### Added
+- Added rollover-safe SMT/SMX/SRT Output Energy telemetry in kWh, including a
+  one-time completed-rollovers setup value for already-old UPS units.
+
+### Changed
+- Output Energy now has a new kWh entity identity, preserving the existing Wh
+  entity's long-term statistics history.
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.2`.
+
 ## [1.2.6-dev.1] - 2026-07-31
 ### Added
 - Added default-enabled Smart-UPS and SMT/SMX/SRT self-test sensors for the automatic test schedule, last result, last date, scheduled time, and scheduled day.

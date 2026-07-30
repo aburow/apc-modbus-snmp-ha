@@ -433,12 +433,12 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         register_key="input_frequency",
     ),
     APCModbusSensorDescription(
-        key="output_energy",
+        key="output_energy_kwh",
         name="Output Energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        register_key="output_energy",
+        register_key="output_energy_kwh",
     ),
     APCModbusSensorDescription(
         key="input_voltage",

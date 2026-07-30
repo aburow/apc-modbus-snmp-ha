@@ -28,6 +28,7 @@ from .const import (
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
     CONF_KEEP_CONNECTION_OPEN,
+    CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS,
     CONF_SNMP_COMMUNITY,
     CONF_SNMP_PORT,
     CONF_UNIT,
@@ -217,6 +218,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         snmp_port,
         scan_interval,
         keep_connection_open=keep_connection_open,
+        output_energy_completed_rollovers=entry.data.get(
+            CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS, 0
+        ),
     )
 
     startup_stagger_delay = compute_startup_stagger_delay(
@@ -335,6 +339,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     coordinator.set_device_type(selected_device_type)
+    if coordinator.device_type == APCDeviceType.SMT_UPS:
+        await coordinator.async_restore_output_energy_tracker()
 
     # Load full block polling register profile for detected device type.
     registers, blocks, reg_map = get_registers_for_device(coordinator.device_type)

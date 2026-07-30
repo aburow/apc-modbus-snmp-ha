@@ -600,11 +600,11 @@ ALL_SENSORS_UNIFIED = {
                 "category": "core",
             },
             {
-                "key": "output_energy",
+                "key": "output_energy_kwh",
                 "label": "Output Energy",
                 "source": "modbus",
                 "register": 145,
-                "unit": "Wh",
+                "unit": "kWh",
                 "category": "core",
             },
             {
