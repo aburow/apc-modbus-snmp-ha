@@ -56,6 +56,7 @@ SELF_TEST_OIDS = {
     "snmp_self_test_day": "1.3.6.1.4.1.318.1.1.1.7.2.9.0",
 }
 SELF_TEST_TIME_RE = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
+SELF_TEST_DATE_RE = re.compile(r"\d{2}/\d{2}/(?:\d{2}|\d{4})")
 
 
 def _dedupe_oids_preserve_order(oids: list[str]) -> list[str]:
@@ -332,12 +333,17 @@ def _parse_frequency_hz(value: str | None) -> float | None:
 
 
 def _parse_self_test_date(value: str | None) -> date | None:
-    """Parse the PowerNet-MIB's mm/dd/yy self-test date."""
+    """Parse the PowerNet-MIB's mm/dd/yy or mm/dd/yyyy self-test date."""
     if not value:
         return None
+    value = value.strip()
+    if not SELF_TEST_DATE_RE.fullmatch(value):
+        return None
     try:
-        return datetime.strptime(value.strip(), "%m/%d/%y").date()
-    except (TypeError, ValueError):
+        return datetime.strptime(
+            value, "%m/%d/%Y" if len(value) == 10 else "%m/%d/%y"
+        ).date()
+    except ValueError:
         return None
 
 

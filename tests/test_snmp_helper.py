@@ -113,6 +113,8 @@ def test_self_test_data_uses_only_the_five_read_only_oids_and_decodes_values() -
 
 
 def test_self_test_parsers_reject_invalid_dates_and_times() -> None:
+    assert SNMP_HELPER._parse_self_test_date("07/31/26") == date(2026, 7, 31)
+    assert SNMP_HELPER._parse_self_test_date("07/31/2026") == date(2026, 7, 31)
     assert SNMP_HELPER._parse_self_test_date("13/31/26") is None
     assert SNMP_HELPER._parse_self_test_time("24:00") is None
     assert SNMP_HELPER._parse_self_test_time("9:30") is None
