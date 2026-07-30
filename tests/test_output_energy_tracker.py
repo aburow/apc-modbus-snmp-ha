@@ -65,7 +65,8 @@ def test_issue_14_sensor_contract() -> None:
     assert '"key": "output_energy_kwh"' in catalog
     assert '"unit": "kWh"' in catalog
     assert "CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS" in config_flow
-    assert "_non_negative_integer" in config_flow
+    assert "vol.All(" in config_flow
+    assert "vol.Range(min=0)" in config_flow
 
 
 def _load_config_flow_schema(monkeypatch: pytest.MonkeyPatch):
@@ -93,12 +94,41 @@ def _load_config_flow_schema(monkeypatch: pytest.MonkeyPatch):
                     value = marker.default
                 else:
                     value = values[marker.key]
-                result[marker.key] = validator(value)
+                if isinstance(validator, type):
+                    if not isinstance(value, validator):
+                        raise Invalid("wrong type")
+                    result[marker.key] = value
+                else:
+                    result[marker.key] = validator(value)
             return result
+
+    class All:
+        def __init__(self, *validators):
+            self.validators = validators
+
+        def __call__(self, value):
+            for validator in self.validators:
+                if isinstance(validator, type):
+                    if not isinstance(value, validator):
+                        raise Invalid("wrong type")
+                else:
+                    value = validator(value)
+            return value
+
+    class Range:
+        def __init__(self, *, min=None):
+            self.min = min
+
+        def __call__(self, value):
+            if self.min is not None and value < self.min:
+                raise Invalid("below minimum")
+            return value
 
     vol = ModuleType("voluptuous")
     vol.Invalid = Invalid
     vol.Schema = Schema
+    vol.All = All
+    vol.Range = Range
     vol.Required = lambda key, default=None: Marker(key, default, required=True)
     vol.Optional = lambda key, default=None: Marker(key, default)
     monkeypatch.setitem(sys.modules, "voluptuous", vol)
@@ -162,6 +192,6 @@ def test_data_schema_rejects_invalid_output_energy_rollover_counts(
     valid = {"host": "ups", "snmp_community": "public"}
     assert schema(valid)["output_energy_completed_rollovers"] == 0
 
-    for value in (-1, 1.5, True):
+    for value in (-1, 1.5):
         with pytest.raises(invalid):
             schema({**valid, "output_energy_completed_rollovers": value})

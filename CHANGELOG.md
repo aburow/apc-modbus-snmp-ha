@@ -2,6 +2,15 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.3] - 2026-07-31
+### Fixed
+- Restored config-flow loading by using Home Assistant-serializable validation
+  for the Output Energy completed-rollovers field.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.3`.
+
 ## [1.2.6-dev.2] - 2026-07-31
 ### Added
 - Added rollover-safe SMT/SMX/SRT Output Energy telemetry in kWh, including a

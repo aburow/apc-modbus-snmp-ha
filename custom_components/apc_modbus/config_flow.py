@@ -29,14 +29,6 @@ from .const import (
     DOMAIN,
 )
 
-
-def _non_negative_integer(value: Any) -> int:
-    """Validate the one-time output-energy rollover seed."""
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise vol.Invalid("must be a non-negative whole number")
-    return value
-
-
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
@@ -49,8 +41,8 @@ DATA_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_KEEP_CONNECTION_OPEN, default=DEFAULT_KEEP_CONNECTION_OPEN
         ): bool,
-        vol.Optional(CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS, default=0): (
-            _non_negative_integer
+        vol.Optional(CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS, default=0): vol.All(
+            int, vol.Range(min=0)
         ),
     }
 )
