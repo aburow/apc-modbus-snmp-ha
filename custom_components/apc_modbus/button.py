@@ -87,6 +87,9 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
             self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
             self._entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT),
+            self.coordinator.transport_mode,
+            self.coordinator.transport_promotion_reason,
+            self.coordinator.snmp_availability,
         )
 
         dump_json = json.dumps(dump, indent=2, sort_keys=False)
@@ -128,6 +131,7 @@ class APCModbusRedetectDeviceTypeButton(
 
     async def async_press(self) -> None:
         """Run Modbus device detection again and reload if the result changed."""
+        snmp_retry_succeeded = await self.coordinator.async_retry_snmp_metadata()
         detected_device_type = await self.coordinator.async_detect_device_type()
         selected_device_type = choose_device_type(
             stored_device_type=self.coordinator.device_type,
@@ -153,16 +157,15 @@ class APCModbusRedetectDeviceTypeButton(
             await self.hass.config_entries.async_reload(self._entry.entry_id)
             message = (
                 f"Device type resolved as `{selected_device_type.value}` and the "
-                "integration entry was reloaded."
+                "integration entry was reloaded. "
+                f"SNMP retry {'succeeded' if snmp_retry_succeeded else 'failed'}."
             )
         else:
-            # Re-run SNMP metadata/probe detection immediately so newly connected
-            # external probe components are discovered without waiting the hourly cycle.
-            self.coordinator.mark_snmp_metadata_refresh_needed()
             await self.coordinator.async_request_refresh()
             message = (
                 f"Device type remains `{selected_device_type.value}`. "
-                "No reload was required. SNMP probe detection refresh was forced."
+                "No reload was required. "
+                f"Explicit SNMP retry {'succeeded' if snmp_retry_succeeded else 'failed'}."
             )
 
         notification_id = f"{DOMAIN}_{self._entry.entry_id}_redetect_device_type"

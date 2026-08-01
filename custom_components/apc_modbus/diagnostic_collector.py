@@ -16,7 +16,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .device_types import classify_device_type
+from .device_types import (
+    classify_device_type,
+    ProbeKind,
+    ProbeOutcome,
+)
 from .snmp_helper import (
     async_get_snmp_value,
     detect_external_probe_oids_sync,
@@ -34,6 +38,7 @@ FREQUENCY_TENTHS_THRESHOLD = 400
 IDLE_PROBE_ADDRESS = 0x0000
 IDLE_PROBE_COUNT = 1
 SHORT_IDLE_PROBE_SECONDS = 3
+ONE_REQUEST_INTER_REQUEST_DELAY_SECONDS = 0.05
 
 MODBUS_EXCEPTION_NAMES: dict[int, str] = {
     1: "Illegal Function",
@@ -303,44 +308,52 @@ def _sanitize_data(value: Any, host: str, community: str) -> Any:
     return value
 
 
-def _probe_block_ok(modbus_block: dict[str, Any] | None, count: int) -> bool:
-    """Return True when a collected Modbus block contains a successful read."""
+def _probe_outcome(modbus_block: dict[str, Any] | None, count: int) -> ProbeOutcome:
+    """Turn diagnostic wire results into the runtime classifier input."""
     if not modbus_block or "parsed" not in modbus_block:
-        return False
+        return ProbeOutcome(ProbeKind.TRANSPORT_FAILURE)
     parsed = modbus_block["parsed"]
     registers = parsed.get("registers")
-    return isinstance(registers, list) and len(registers) == count
+    if isinstance(registers, list):
+        return (
+            ProbeOutcome(ProbeKind.RESPONSE, tuple(registers))
+            if len(registers) == count
+            else ProbeOutcome(ProbeKind.SHORT_RESPONSE)
+        )
+    error = parsed.get("error", {})
+    if error.get("code") == "modbus_exception":
+        return ProbeOutcome(
+            ProbeKind.MODBUS_EXCEPTION, exception_code=error.get("exception_code")
+        )
+    return ProbeOutcome(ProbeKind.SHORT_RESPONSE)
 
 
 def _build_detection_summary(modbus_probes: dict[str, Any]) -> dict[str, Any]:
     """Summarize exact runtime probe results using the same classifier as HA."""
-    rack_pdu_capabilities_ok = _probe_block_ok(
-        modbus_probes.get("rack_pdu_capabilities"), 5
-    )
-    rack_pdu_measurements_ok = _probe_block_ok(
-        modbus_probes.get("rack_pdu_measurements"), 6
-    )
-    legacy_probe_ok = _probe_block_ok(modbus_probes.get("legacy_ups_id"), 1)
-    smt_status_ok = _probe_block_ok(modbus_probes.get("smt_status"), 23)
-    smt_measurements_ok = _probe_block_ok(modbus_probes.get("smt_measurements"), 26)
-
-    detected = classify_device_type(
-        rack_pdu_capabilities_ok=rack_pdu_capabilities_ok,
-        rack_pdu_measurements_ok=rack_pdu_measurements_ok,
-        legacy_probe_ok=legacy_probe_ok,
-        smt_status_ok=smt_status_ok,
-        smt_measurements_ok=smt_measurements_ok,
-    )
+    probes = {
+        "rack_pdu_capabilities": _probe_outcome(
+            modbus_probes.get("rack_pdu_capabilities"), 5
+        ),
+        "rack_pdu_measurements": _probe_outcome(
+            modbus_probes.get("rack_pdu_measurements"), 6
+        ),
+        "legacy_ups_id": _probe_outcome(modbus_probes.get("legacy_ups_id"), 1),
+        "smt_status": _probe_outcome(modbus_probes.get("smt_status"), 23),
+        "smt_measurements": _probe_outcome(modbus_probes.get("smt_measurements"), 26),
+    }
+    detected = classify_device_type(probes)
 
     return {
         "detected_device_type": detected.value if detected else None,
         "probe_results": {
-            "rack_pdu_capabilities_ok": rack_pdu_capabilities_ok,
-            "rack_pdu_measurements_ok": rack_pdu_measurements_ok,
-            "legacy_probe_ok": legacy_probe_ok,
-            "smt_status_ok": smt_status_ok,
-            "smt_measurements_ok": smt_measurements_ok,
+            name: {
+                "category": outcome.kind.value,
+                "registers": list(outcome.registers) if outcome.registers else None,
+                "exception_code": outcome.exception_code,
+            }
+            for name, outcome in probes.items()
         },
+        "decision": "definitive" if detected else "ambiguous",
     }
 
 
@@ -531,8 +544,15 @@ def _build_modbus_tcp_idle_probe(
     idle_seconds: int | float | None,
     *,
     keep_connection_open: bool | None = None,
+    transport_mode: str = "session",
 ) -> dict[str, Any]:
     """Test whether Modbus TCP sockets survive short and configured idle intervals."""
+    if transport_mode == "one_request_per_connection":
+        return {
+            "enabled": False,
+            "skipped_reason": "one_request_per_connection",
+            "keep_connection_open": keep_connection_open,
+        }
     result: dict[str, Any] = {
         "enabled": idle_seconds is not None,
         "configured_idle_seconds_tested": idle_seconds,
@@ -612,6 +632,9 @@ def collect_diagnostic_dump(
     idle_probe_seconds: int | float | None = None,
     keep_connection_open: bool | None = None,
     snmp_port: int = 161,
+    transport_mode: str = "session",
+    transport_promotion_reason: str | None = None,
+    snmp_availability: str = "unknown",
 ) -> dict[str, Any]:
     """Collect SNMP and Modbus diagnostic data for one APC device."""
     dump: dict[str, Any] = {
@@ -621,7 +644,11 @@ def collect_diagnostic_dump(
         "port": modbus_port,
         "snmp_port": snmp_port,
         "unit_id": unit_id,
-        "snmp": asyncio.run(_collect_snmp_data(host, community, snmp_port)),
+        "snmp": (
+            asyncio.run(_collect_snmp_data(host, community, snmp_port))
+            if snmp_availability != "unavailable"
+            else {"skipped_reason": "snmp_unavailable"}
+        ),
         "modbus": {},
         "modbus_probes": {},
         "modbus_tcp_idle_probe": _build_modbus_tcp_idle_probe(
@@ -630,22 +657,38 @@ def collect_diagnostic_dump(
             unit_id,
             idle_probe_seconds,
             keep_connection_open=keep_connection_open,
+            transport_mode=transport_mode,
         ),
-        "external_probe_tests": _collect_external_probe_tests(
-            host, community, snmp_port
+        "external_probe_tests": (
+            _collect_external_probe_tests(host, community, snmp_port)
+            if snmp_availability != "unavailable"
+            else {"skipped_reason": "snmp_unavailable"}
         ),
+        "transport": {
+            "configured_keep_connection_open": keep_connection_open,
+            "effective_mode": transport_mode,
+            "promotion_reason": transport_promotion_reason,
+            "inter_request_delay_seconds": (
+                ONE_REQUEST_INTER_REQUEST_DELAY_SECONDS
+                if transport_mode == "one_request_per_connection"
+                else None
+            ),
+        },
+        "snmp_availability": snmp_availability,
     }
 
-    for start, count in MODBUS_BLOCKS:
-        key = f"0x{start:04X}_count_{count}"
-        dump["modbus"][key] = _collect_modbus_block(
-            host, modbus_port, unit_id, start, count
-        )
-
-    for probe_name, start, count in MODBUS_PROBES:
-        dump["modbus_probes"][probe_name] = _collect_modbus_block(
-            host, modbus_port, unit_id, start, count
-        )
+    requests = [
+        ("modbus", f"0x{start:04X}_count_{count}", start, count)
+        for start, count in MODBUS_BLOCKS
+    ] + [("probe", name, start, count) for name, start, count in MODBUS_PROBES]
+    for index, (kind, key, start, count) in enumerate(requests):
+        if index and transport_mode == "one_request_per_connection":
+            time.sleep(ONE_REQUEST_INTER_REQUEST_DELAY_SECONDS)
+        block = _collect_modbus_block(host, modbus_port, unit_id, start, count)
+        if kind == "modbus":
+            dump["modbus"][key] = block
+        else:
+            dump["modbus_probes"][key] = block
 
     _add_decodes(dump)
     dump["detection"] = _build_detection_summary(dump["modbus_probes"])

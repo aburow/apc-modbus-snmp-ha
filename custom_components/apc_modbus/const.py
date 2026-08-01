@@ -33,6 +33,7 @@ CONF_SNMP_PORT = "snmp_port"
 CONF_DEVICE_TYPE = "device_type"
 CONF_DETECTION_VERSION = "detection_version"
 CONF_KEEP_CONNECTION_OPEN = "keep_connection_open"
+CONF_TRANSPORT_MODE = "transport_mode"
 CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS = "output_energy_completed_rollovers"
 
 KEY_CLIENT = "modbus_client"

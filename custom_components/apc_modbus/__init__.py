@@ -28,6 +28,7 @@ from .const import (
     CONF_DEVICE_NAME,
     CONF_DEVICE_TYPE,
     CONF_KEEP_CONNECTION_OPEN,
+    CONF_TRANSPORT_MODE,
     CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS,
     CONF_SNMP_COMMUNITY,
     CONF_SNMP_PORT,
@@ -170,6 +171,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     keep_connection_open = entry.data.get(
         CONF_KEEP_CONNECTION_OPEN, DEFAULT_KEEP_CONNECTION_OPEN
     )
+    transport_mode = entry.data.get(CONF_TRANSPORT_MODE, "session")
     configured_scan_interval = entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     device_type_str = entry.data.get(CONF_DEVICE_TYPE)
     device_type = APCDeviceType(device_type_str) if device_type_str else None
@@ -218,6 +220,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         snmp_port,
         scan_interval,
         keep_connection_open=keep_connection_open,
+        transport_mode=transport_mode,
+        transport_mode_persist=lambda mode: hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_TRANSPORT_MODE: mode}
+        ),
         output_energy_completed_rollovers=entry.data.get(
             CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS, 0
         ),
@@ -279,10 +285,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     "SNMP metadata strongly suggests a Rack PDU model: %s",
                     metadata.get("model"),
                 )
+            coordinator.set_snmp_availability(True)
         else:
             _LOGGER.debug("SNMP query returned empty metadata")
+            coordinator.set_snmp_availability(False, "no_metadata")
     except (OSError, TimeoutError, RuntimeError, ValueError) as err:
         _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
+        coordinator.set_snmp_availability(False, type(err).__name__)
         # Continue without metadata - Modbus sensors still work
 
     if should_probe_device_type(
@@ -312,17 +321,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         detected_device_type=detected_device_type,
         snmp_hint_device_type=snmp_hint_device_type,
     )
-    if detected_device_type is None and original_device_type is None:
-        if is_concrete_device_type(snmp_hint_device_type):
-            _LOGGER.warning(
-                "Device type auto-detection via Modbus was ambiguous; using SNMP hint %s instead",
-                selected_device_type.value,
-            )
-        else:
-            _LOGGER.warning(
-                "Device type auto-detection was ambiguous; defaulting to %s",
-                selected_device_type.value,
-            )
+    if selected_device_type is None:
+        raise ConfigEntryNotReady("Modbus device family detection was ambiguous")
 
     # Persist corrected/derived concrete device type and detection version.
     if is_concrete_device_type(selected_device_type) and (

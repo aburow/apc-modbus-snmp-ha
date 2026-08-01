@@ -2,6 +2,21 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.5] - 2026-08-02
+### Fixed
+- Replaced response-length device detection with definitive Modbus schema
+  detection for legacy Smart-UPS, SMT/SMX/SRT-compatible SmartConnect devices,
+  and Rack PDUs.
+- Added compatibility handling for APC devices that allow one Modbus request per
+  TCP connection, including diagnostics-aware transport reporting.
+
+### Changed
+- SNMP is now optional enrichment. When unavailable at startup, routine SNMP
+  requests and SNMP-only values are suppressed until an explicit re-detect
+  retries enrichment.
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.5`.
+
 ## [1.2.6-dev.4] - 2026-07-31
 ### Added
 - Added a default-enabled Runtime Calibration Status sensor for Smart-UPS and

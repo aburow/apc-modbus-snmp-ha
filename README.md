@@ -53,16 +53,16 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
-- **SNMP Required**: SNMP queries retrieve device model, serial number, firmware information
+- **Optional SNMP Enrichment**: SNMP adds model, serial, firmware, self-test, and compatible external-probe data; Modbus monitoring does not require it
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
 - **Manual Diagnostics Button**: Per-device `Run Diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
-- **Targeted Re-detection**: Device family probes run on first add, when strong SNMP identity conflicts with the stored family, or when you manually trigger re-detection
+- **Schema-Based Detection**: Modbus probes distinguish legacy Smart-UPS, SMT/SMX/SRT (including SmartConnect-compatible SMT schema), and Rack PDU register families without SNMP
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button reapplies integration default entity enablement in Entity Registry
-- **Connection Mode Switch**: Per-device `Keep Connection Open` switch toggles persistent Modbus TCP session mode at runtime and persists the setting on the config entry
+- **Connection Compatibility**: Devices that allow one request per TCP connection automatically use a safe per-request connection mode; it temporarily overrides `Keep Connection Open` without changing the user's preference
 - **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, capability discovery, and first refresh do not all hit at once
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
@@ -131,16 +131,14 @@ After installation, set up the integration through the UI:
 
 The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
 
-When **Keep Connection Open** is enabled, the coordinator avoids per-cycle socket close/open overhead, but still reconnects automatically on socket errors and after long idle windows. Some APC Network Management Cards close idle Modbus TCP sockets before the next Home Assistant poll. The diagnostics button tests whether a socket survives both a short idle interval and the configured Home Assistant polling interval, and reports a risk message if the UPS closes the connection too soon. If your UPS exposes a Modbus TCP Timeout setting, set it higher than the configured polling interval; otherwise, disable **Keep Connection Open** for that device.
+When **Keep Connection Open** is enabled, the coordinator avoids per-cycle socket close/open overhead, but still reconnects automatically on socket errors and after long idle windows. Some APC devices permit only one Modbus request per TCP connection; the integration detects that transport constraint and safely reconnects for each request instead. In that mode, the Keep Connection Open preference remains stored but is not effective, and the idle-socket diagnostic is skipped. If your UPS exposes a Modbus TCP Timeout setting, set it higher than the configured polling interval; otherwise, disable **Keep Connection Open** for that device.
 
 ### SNMP Requirements
 
-SNMP is **required to be enabled** on the device, but metadata retrieval is optional:
-- The integration will retry SNMP queries 3 times at startup
-- During auto-detect setup, metadata lookup queries both UPS and Rack PDU OID families to populate correct device info fields
-- If SNMP queries fail, setup proceeds without device metadata (Modbus still works)
-- Device info (model, serial, firmware) will be empty until SNMP succeeds
-- Once SNMP becomes available, metadata is retrieved on next restart
+SNMP is optional. It enriches Modbus monitoring with device metadata, input-frequency fallback, external probes, and Smart-UPS self-test data:
+- During setup, the integration attempts SNMP metadata retrieval without blocking Modbus detection
+- If SNMP is unavailable, setup and Modbus monitoring continue; routine SNMP calls are disabled for that entry to avoid repeated failures
+- SNMP-backed metadata and entities remain unavailable until you run **Re-detect Device Type**, which explicitly retries SNMP enrichment
 - The integration relies on Home Assistant's bundled SNMP support and does not add a separate `pysnmp` dependency
 - Current SNMP implementation uses SNMP v2c reads in this integration path
 
@@ -151,7 +149,7 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
 - If setup fails, check Home Assistant logs for SNMP error details
 
 **Fallback Behavior:**
-- If SNMP is unavailable at startup, the integration will still function
+- If SNMP is unavailable at startup, the integration will still function and stops routine SNMP retry traffic
 - All Modbus sensors will work normally
 - Device info will show as unavailable until SNMP is accessible
 - No loss of Modbus monitoring functionality
@@ -163,6 +161,7 @@ SNMP is **required to be enabled** on the device, but metadata retrieval is opti
 - Smart-UPS VT series
 - Smart-UPS C series
 - Any Smart-UPS model with Modbus/TCP support
+- SmartConnect variants that expose the documented SMT Modbus schema
 
 **Tested on:**
 - Smart-UPS 1500

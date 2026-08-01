@@ -165,6 +165,12 @@ def test_smt_profile_core_register_mapping_matches_table() -> None:
     assert register_map["output_frequency"]["scale"] == 128
     assert register_map["input_frequency"]["address"] == 0x0090
     assert register_map["input_frequency"]["scale"] == 128
+    assert register_map["battery_state_of_charge"]["address"] == 0x0082
+    assert register_map["battery_state_of_charge"]["scale"] == 512
+    assert register_map["input_voltage"]["address"] == 0x0097
+    assert register_map["input_voltage"]["scale"] == 64
+    assert register_map["output_voltage"]["address"] == 0x008E
+    assert register_map["output_voltage"]["scale"] == 64
 
 
 def test_rack_pdu_profile_does_not_expose_input_frequency() -> None:
