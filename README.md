@@ -33,7 +33,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
   - Per-outlet monitoring (up to 64 metered outlets)
   - Per-bank monitoring (up to 12 banks)
 
-### Smart-UPS Sensors (43 total)
+### Smart-UPS Sensors
 - Input/output voltage and current
 - Battery charge percentage and runtime
 - Load percentage and transfer switch status
@@ -53,7 +53,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
-- **Optional SNMP Enrichment**: SNMP adds model, serial, firmware, self-test, and compatible external-probe data; Modbus monitoring does not require it
+- **Optional SNMP Enrichment**: Without SNMP, the integration provides base Modbus monitoring only. SNMP adds model, serial, firmware, self-test, input-frequency fallback, and compatible external-probe data.
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
@@ -120,7 +120,7 @@ After installation, set up the integration through the UI:
 3. Search for and select **APC UPS Modbus**
 4. Fill in the required configuration:
    - **Host**: Modbus/TCP host name or address of the device
-   - **SNMP Community**: SNMP community string (default: "public")
+   - **SNMP Community**: SNMP community string (default: "public"; optional enrichment)
 5. Optional advanced settings:
    - **Device Name**: Friendly name for the device (default: "APC UPS")
    - **Port**: Modbus/TCP port (default: 502)
@@ -150,9 +150,9 @@ SNMP is optional. It enriches Modbus monitoring with device metadata, input-freq
 
 **Fallback Behavior:**
 - If SNMP is unavailable at startup, the integration will still function and stops routine SNMP retry traffic
-- All Modbus sensors will work normally
-- Device info will show as unavailable until SNMP is accessible
-- No loss of Modbus monitoring functionality
+- Base Modbus sensors will work normally
+- SNMP-backed metadata, self-test data, input-frequency fallback, and external-probe data remain unavailable until SNMP is accessible
+- Run **Re-detect Device Type** after correcting SNMP connectivity to retry enrichment
 
 ## Supported Devices
 
@@ -186,7 +186,7 @@ SNMP is optional. It enriches Modbus monitoring with device metadata, input-freq
 - Home Assistant 2024.1 or later
 - APC UPS or Rack PDU with:
   - **Modbus/TCP** enabled (port 502, configurable)
-  - **SNMP** enabled (port 161)
+  - **SNMP** enabled (port 161, optional; required only for SNMP enrichment)
 - Network connectivity to the device
 - Python 3.13+ (built into current Home Assistant)
 
@@ -206,7 +206,10 @@ SNMP is optional. It enriches Modbus monitoring with device metadata, input-freq
 ## Entity Discovery
 
 ### Smart-UPS
-All 51 entities (39 sensors + 12 binary sensors) are created automatically upon setup.
+The available entity set depends on the device family, supported register map,
+and SNMP connectivity. Base Modbus entities are created during setup;
+SNMP-backed values and optional external-probe entities require successful SNMP
+capability detection.
 
 ### NetShelter Rack PDU
 Entity creation is dynamic based on device capabilities:
@@ -248,9 +251,9 @@ After updating the logger configuration:
 - Reproduce the issue
 - Collect the relevant log lines from Home Assistant
 
-At `info` log level, the coordinator now emits per-cycle boundary timing lines (`Starting update cycle` and `Update cycle complete in ...s`) to help baseline poll performance without enabling full debug logging.
-
-At `info` log level, the coordinator also emits a per-cycle timing breakdown line:
+At `debug` log level, the coordinator emits per-cycle boundary timing lines
+(`Starting update cycle` and `Update cycle complete in ...s`) and a timing
+breakdown:
 - `Poll timing breakdown: total=..., lock_wait=..., modbus=..., connect=..., block_reads=..., individual_reads=..., close=..., snmp_metadata=..., snmp_external=...`
 - Use this to identify whether latency is dominated by socket lock contention, Modbus reads, reconnects, or SNMP merges.
 
@@ -284,7 +287,8 @@ For device-family correction without deleting and re-adding an entry, use the bu
   6. Test SNMP manually: `snmpget -v 2c -c public <device-host> 1.3.6.1.4.1.318.1.1.1.1.1.1.0`
   7. Once fixed, restart Home Assistant or reload the integration
 
-**Note:** The integration will retry SNMP queries 3 times with delays, but won't block setup.
+**Note:** After correcting SNMP settings or connectivity, use **Re-detect Device
+Type** to retry SNMP enrichment without deleting the integration entry.
 
 ### Modbus Connection Issues
 - **Error**: "Unable to connect to APC device"
