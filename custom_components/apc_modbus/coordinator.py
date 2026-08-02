@@ -23,12 +23,14 @@ from typing import Any, Callable
 
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ConnectionException, ModbusException
+from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.storage import Store
 
 from .const import (
     DEFAULT_IDLE_RECONNECT_SECONDS,
+    DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
 )
@@ -50,6 +52,7 @@ from .snmp_state import has_usable_metadata
 
 _LOGGER = logging.getLogger(__name__)
 METADATA_REFRESH_INTERVAL_SECONDS = 3600
+SELF_TEST_REFRESH_INTERVAL_SECONDS = 60
 OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS = 60
 
 
@@ -129,6 +132,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.snmp_failure_category: str | None = None
         # External-probe availability/OID selection, refreshed during hourly SNMP metadata poll.
         self._snmp_probe_detection: dict[str, str | None] = {}
+        self._snmp_self_test_data: dict[str, Any] = {}
+        self._self_test_last_refresh_monotonic = 0.0
         # Device type and capabilities (for multi-device support)
         self.device_type: APCDeviceType = APCDeviceType.SMART_UPS
         self.device_capabilities: dict[str, int] = {}
@@ -406,7 +411,16 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     @property
     def effective_keep_connection_open(self) -> bool:
         """Return the runtime connection policy without changing user preference."""
-        return self._keep_connection_open and self.transport_mode == "session"
+        same_endpoint_entries = sum(
+            entry.data.get(CONF_HOST) == self.host
+            and entry.data.get(CONF_PORT, DEFAULT_PORT) == self.port
+            for entry in self.hass.config_entries.async_entries(DOMAIN)
+        )
+        return (
+            self._keep_connection_open
+            and self.transport_mode == "session"
+            and same_endpoint_entries == 1
+        )
 
     def _read_holding_registers_compat(self, address: int, count: int):
         """Read holding registers across pymodbus API variations.
@@ -543,7 +557,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         reconnects_at_start = self._reconnect_count
         recreates_at_start = self._recreate_count
 
-        _LOGGER.info(
+        _LOGGER.debug(
             "[%s] Starting update cycle (entry_id=%s)", self._log_ctx, self.entry_id
         )
 
@@ -596,6 +610,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     individual_reads_start = time.monotonic()
                     mode_before_individual_reads = self.transport_mode
+                    errors.clear()
                     await self._try_individual_reads(data, errors)
                     individual_reads_elapsed = time.monotonic() - individual_reads_start
                     if self.transport_mode != mode_before_individual_reads:
@@ -608,11 +623,6 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         block_read_ok = await self._try_block_reads(data, errors)
                         if not block_read_ok:
                             await self._try_individual_reads(data, errors)
-                    _LOGGER.debug(
-                        "[%s] Individual reads fallback complete (data keys: %s)",
-                        self._log_ctx,
-                        list(data.keys()),
-                    )
                     _LOGGER.debug(
                         "[%s] Individual reads fallback complete (data keys: %s)",
                         self._log_ctx,
@@ -675,7 +685,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             len(data),
             ", ".join(sorted(data.keys())),
         )
-        _LOGGER.info(
+        _LOGGER.debug(
             "[%s] Update cycle complete in %.3fs",
             self._log_ctx,
             modbus_cycle_elapsed,
@@ -696,7 +706,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._apply_device_compat_aliases(data)
         await self._async_track_output_energy(data)
 
-        _LOGGER.info(
+        _LOGGER.debug(
             "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
             "connect=%.3fs, block_reads=%.3fs, individual_reads=%.3fs, close=%.3fs, "
             "snmp_metadata=%.3fs, snmp_external=%.3fs, reconnects=%d, recreates=%d",
@@ -878,11 +888,18 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data[key] = value
 
     async def _merge_snmp_self_test_data(self, data: dict[str, Any]) -> None:
-        """Fetch and merge Smart-UPS self-test telemetry on every update."""
+        """Refresh and merge Smart-UPS self-test telemetry once per minute."""
         if self.snmp_availability != "available" or self.device_type not in (
             APCDeviceType.SMART_UPS,
             APCDeviceType.SMT_UPS,
         ):
+            return
+        now = time.monotonic()
+        if (
+            now - self._self_test_last_refresh_monotonic
+            < SELF_TEST_REFRESH_INTERVAL_SECONDS
+        ):
+            data.update(self._snmp_self_test_data)
             return
         try:
             values = await self.hass.async_add_executor_job(
@@ -893,8 +910,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
             _LOGGER.debug("[%s] Self-test SNMP query failed: %s", self._log_ctx, err)
+            data.update(self._snmp_self_test_data)
             return
         if isinstance(values, dict):
+            self._snmp_self_test_data = values
+            self._self_test_last_refresh_monotonic = now
             data.update(values)
 
     @property
@@ -905,18 +925,19 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_set_keep_connection_open(self, enabled: bool) -> None:
         """Update open-session mode at runtime."""
         enabled = bool(enabled)
-        if self._keep_connection_open == enabled:
-            return
+        async with self._io_lock:
+            if self._keep_connection_open == enabled:
+                return
 
-        self._keep_connection_open = enabled
-        if not enabled:
-            # Returning to legacy per-cycle close mode: drop any existing long-lived socket.
-            try:
-                close_request = functools.partial(self.client.close)
-                await self.hass.async_add_executor_job(close_request)
-            except (ConnectionException, ModbusException, OSError, TimeoutError):
-                pass
-            self._last_io_monotonic = 0.0
+            self._keep_connection_open = enabled
+            if not enabled:
+                # Returning to legacy per-cycle close mode: drop any existing long-lived socket.
+                try:
+                    close_request = functools.partial(self.client.close)
+                    await self.hass.async_add_executor_job(close_request)
+                except (ConnectionException, ModbusException, OSError, TimeoutError):
+                    pass
+                self._last_io_monotonic = 0.0
 
         _LOGGER.info(
             "[%s] keep_connection_open set to %s",
@@ -1295,8 +1316,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if addr in self.register_map:
                         errors.append(self.register_map[addr]["key"])
 
-        # Return True if at least one block succeeded
-        return block_success_count > 0
+        # Fall back when any block or decode failed; partial data is not a complete poll.
+        return block_success_count == len(self.register_blocks) and not errors
 
     async def _try_individual_reads(
         self, data: dict[str, Any], errors: list[str]

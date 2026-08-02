@@ -143,16 +143,27 @@ def _modbus_read_holding_registers_on_connection(
     payload_request = mbap_header + pdu
 
     connection.sendall(payload_request)
-    header = connection.recv(MBAP_HEADER_LENGTH)
-    if len(header) < MBAP_HEADER_LENGTH:
-        raise RuntimeError("Short MBAP header")
+    header = _recv_exact(connection, MBAP_HEADER_LENGTH)
 
     _, _, response_length, _ = struct.unpack(">HHHB", header)
-    payload = connection.recv(response_length - 1)
-    if len(payload) < (response_length - 1):
-        raise RuntimeError("Short PDU")
+    if response_length < 2:
+        raise RuntimeError("Invalid MBAP length")
+    payload = _recv_exact(connection, response_length - 1)
 
     return header + payload
+
+
+def _recv_exact(connection: socket.socket, size: int) -> bytes:
+    """Read exactly one Modbus TCP frame segment from a stream socket."""
+    chunks: list[bytes] = []
+    remaining = size
+    while remaining:
+        chunk = connection.recv(remaining)
+        if not chunk:
+            raise RuntimeError("Short Modbus TCP response")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
 
 
 def _parse_modbus_response(response: bytes) -> dict[str, Any]:
@@ -677,18 +688,21 @@ def collect_diagnostic_dump(
         "snmp_availability": snmp_availability,
     }
 
-    requests = [
-        ("modbus", f"0x{start:04X}_count_{count}", start, count)
-        for start, count in MODBUS_BLOCKS
-    ] + [("probe", name, start, count) for name, start, count in MODBUS_PROBES]
-    for index, (kind, key, start, count) in enumerate(requests):
+    blocks_by_range: dict[tuple[int, int], dict[str, Any]] = {}
+    for index, (start, count) in enumerate(MODBUS_BLOCKS):
         if index and transport_mode == "one_request_per_connection":
             time.sleep(ONE_REQUEST_INTER_REQUEST_DELAY_SECONDS)
         block = _collect_modbus_block(host, modbus_port, unit_id, start, count)
-        if kind == "modbus":
-            dump["modbus"][key] = block
-        else:
-            dump["modbus_probes"][key] = block
+        dump["modbus"][f"0x{start:04X}_count_{count}"] = block
+        blocks_by_range[start, count] = block
+
+    for name, start, count in MODBUS_PROBES:
+        block = blocks_by_range.get((start, count))
+        if block is None:
+            if transport_mode == "one_request_per_connection":
+                time.sleep(ONE_REQUEST_INTER_REQUEST_DELAY_SECONDS)
+            block = _collect_modbus_block(host, modbus_port, unit_id, start, count)
+        dump["modbus_probes"][name] = block
 
     _add_decodes(dump)
     dump["detection"] = _build_detection_summary(dump["modbus_probes"])

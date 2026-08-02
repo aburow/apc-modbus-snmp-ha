@@ -1,4 +1,5 @@
 import importlib.util
+import struct
 import sys
 import types
 from pathlib import Path
@@ -133,8 +134,30 @@ def test_constrained_diagnostics_pace_every_fresh_connection(monkeypatch) -> Non
         transport_promotion_reason="ConnectionRefusedError",
         snmp_availability="unavailable",
     )
-    request_count = len(collector.MODBUS_BLOCKS) + len(collector.MODBUS_PROBES)
+    request_count = len(collector.MODBUS_BLOCKS) + sum(
+        (start, count) not in collector.MODBUS_BLOCKS
+        for _name, start, count in collector.MODBUS_PROBES
+    )
     assert pauses == [collector.ONE_REQUEST_INTER_REQUEST_DELAY_SECONDS] * (
         request_count - 1
     )
     assert dump["transport"]["promotion_reason"] == "ConnectionRefusedError"
+
+
+def test_modbus_read_handles_fragmented_tcp_responses() -> None:
+    header = struct.pack(">HHHB", 1, 0, 5, 1)
+    socket_chunks = [header[:3], header[3:], b"\x03", b"\x02\x12\x34"]
+
+    class FragmentedSocket:
+        def sendall(self, _payload: bytes) -> None:
+            pass
+
+        def recv(self, _size: int) -> bytes:
+            return socket_chunks.pop(0)
+
+    assert (
+        collector._modbus_read_holding_registers_on_connection(
+            FragmentedSocket(), 1, 0, 1
+        )
+        == header + b"\x03\x02\x12\x34"
+    )

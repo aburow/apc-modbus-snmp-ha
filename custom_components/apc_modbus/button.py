@@ -78,19 +78,20 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
 
     async def async_press(self) -> None:
         """Run diagnostics and show the dump in a persistent-notification modal."""
-        dump = await self.hass.async_add_executor_job(
-            collect_diagnostic_dump,
-            self.coordinator.host,
-            self.coordinator.snmp_community,
-            self.coordinator.port,
-            self.coordinator.unit,
-            self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-            self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
-            self._entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT),
-            self.coordinator.transport_mode,
-            self.coordinator.transport_promotion_reason,
-            self.coordinator.snmp_availability,
-        )
+        async with self.coordinator._io_lock:
+            dump = await self.hass.async_add_executor_job(
+                collect_diagnostic_dump,
+                self.coordinator.host,
+                self.coordinator.snmp_community,
+                self.coordinator.port,
+                self.coordinator.unit,
+                self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
+                self._entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT),
+                self.coordinator.transport_mode,
+                self.coordinator.transport_promotion_reason,
+                self.coordinator.snmp_availability,
+            )
 
         dump_json = json.dumps(dump, indent=2, sort_keys=False)
         notification_id = f"{DOMAIN}_{self._entry.entry_id}_diagnostics"

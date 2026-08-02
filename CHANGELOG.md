@@ -2,6 +2,23 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.6] - 2026-08-02
+### Fixed
+- Completed Modbus block polling now falls back to individual reads when any
+  block is incomplete, preserving available telemetry on partially compatible
+  devices.
+- Diagnostic Modbus reads now handle fragmented TCP responses, reuse matching
+  block results, and serialize with normal polling.
+- Connection-mode changes are serialized with Modbus I/O; entries sharing one
+  Modbus TCP endpoint use per-cycle connections rather than competing retained
+  sockets.
+
+### Changed
+- Self-test SNMP telemetry is refreshed once per minute and cached between
+  updates, reducing device traffic at short polling intervals.
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.6`.
+
 ## [1.2.6-dev.5] - 2026-08-02
 ### Fixed
 - Replaced response-length device detection with definitive Modbus schema
