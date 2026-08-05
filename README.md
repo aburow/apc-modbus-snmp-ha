@@ -35,7 +35,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ### Smart-UPS Sensors
 - Input/output voltage and current
-- Battery charge percentage and runtime
+- Battery charge percentage and runtime; remaining runtime supports Home Assistant duration-unit display preferences while retaining statistics
 - Load percentage and transfer switch status
 - Temperature and firmware information
 - External temperature/humidity probes via SNMP (for supported environmental modules such as AP9335T/AP9335TH)
