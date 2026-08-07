@@ -146,5 +146,5 @@ def test_runtime_calibration_unknown_codes_use_sensor_fallback() -> None:
 
 def test_runtime_calibration_sensor_is_added_only_for_ups_families() -> None:
     sensor_source = MODULE_PATH.with_name("sensor.py").read_text()
-    assert "APCDeviceType.SMARTCONNECT_UPS" in sensor_source
+    assert "APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS" in sensor_source
     assert "*SNMP_SELF_TEST_SENSOR_DESCRIPTIONS" in sensor_source

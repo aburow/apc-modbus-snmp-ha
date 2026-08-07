@@ -894,7 +894,6 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.snmp_availability != "available" or self.device_type not in (
             APCDeviceType.SMART_UPS,
             APCDeviceType.SMT_UPS,
-            APCDeviceType.SMARTCONNECT_UPS,
         ):
             return
         now = time.monotonic()
