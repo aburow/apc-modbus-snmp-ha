@@ -144,7 +144,38 @@ def test_runtime_calibration_unknown_codes_use_sensor_fallback() -> None:
     assert 'value_map.get(code, f"Unknown ({code})")' in sensor_source
 
 
-def test_runtime_calibration_sensor_is_added_only_for_ups_families() -> None:
+def test_snmp_self_test_sensors_require_snmp_and_a_supported_ups_family() -> None:
     sensor_source = MODULE_PATH.with_name("sensor.py").read_text()
-    assert "APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS" in sensor_source
+    setup_source = MODULE_PATH.with_name("__init__.py").read_text()
+    assert 'coordinator.snmp_availability == "available"' in sensor_source
+    assert 'coordinator.snmp_availability == "available"' in setup_source
+    assert "APCDeviceType.SMART_UPS" in sensor_source
+    assert "APCDeviceType.SMT_UPS" in sensor_source
     assert "*SNMP_SELF_TEST_SENSOR_DESCRIPTIONS" in sensor_source
+
+
+def test_runtime_remaining_is_duration_measurement_for_both_ups_maps() -> None:
+    for filename in ("const.py", "registers_smart_ups.py", "registers_smt_ups.py"):
+        source = MODULE_PATH.with_name(filename).read_text()
+        runtime_descriptor = source.split('key="runtime_remaining"', 1)[1][:300]
+        assert "device_class=SensorDeviceClass.DURATION" in runtime_descriptor
+        assert "state_class=SensorStateClass.MEASUREMENT" in runtime_descriptor
+        assert "suggested_unit_of_measurement" in runtime_descriptor
+
+
+def test_legacy_runtime_remaining_normalizes_minutes_to_native_seconds() -> None:
+    source = MODULE_PATH.with_name("registers_smart_ups.py").read_text()
+    register = source.split('"key": "runtime_remaining"', 1)[1][:250]
+    sensor = source.split('key="runtime_remaining"', 1)[1][:300]
+    assert '"scale": 1 / 60' in register
+    assert 'native_unit_of_measurement="s"' in sensor
+    assert 'suggested_unit_of_measurement="min"' in sensor
+
+
+def test_smt_runtime_remaining_suggests_minutes_without_scaling_raw_seconds() -> None:
+    source = MODULE_PATH.with_name("registers_smt_ups.py").read_text()
+    register = source.split('"key": "runtime_remaining"', 1)[1][:200]
+    sensor = source.split('key="runtime_remaining"', 1)[1][:300]
+    assert '"scale": 1' in register
+    assert "native_unit_of_measurement=UnitOfTime.SECONDS" in sensor
+    assert "suggested_unit_of_measurement=UnitOfTime.MINUTES" in sensor

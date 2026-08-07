@@ -31,7 +31,7 @@ ALL_SENSORS_UNIFIED = {
                 "label": "Runtime Remaining",
                 "source": "modbus",
                 "register": 6,
-                "unit": "min",
+                "unit": "s",
                 "category": "core",
             },
             {

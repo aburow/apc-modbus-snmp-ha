@@ -75,7 +75,10 @@ async def async_setup_entry(
 
     # SNMP-backed external probe sensors are available across supported families.
     sensor_descriptions = [*sensor_descriptions, *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS]
-    if coordinator.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
+    if coordinator.snmp_availability == "available" and coordinator.device_type in (
+        APCDeviceType.SMART_UPS,
+        APCDeviceType.SMT_UPS,
+    ):
         sensor_descriptions = [
             *sensor_descriptions,
             *SNMP_SELF_TEST_SENSOR_DESCRIPTIONS,

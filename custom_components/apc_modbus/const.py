@@ -77,9 +77,10 @@ SENSOR_DESCRIPTIONS = [
     APCModbusSensorDescription(
         key="runtime_remaining",
         name="Runtime Remaining",
-        native_unit_of_measurement="min",
+        native_unit_of_measurement="s",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_unit_of_measurement="min",
         register_key="runtime_remaining",
     ),
     APCModbusSensorDescription(

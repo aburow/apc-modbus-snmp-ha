@@ -58,7 +58,8 @@ REGISTERS = [
         "address": 0x0006,
         "count": 1,
         "type": "uint16",
-        "scale": 1,
+        # The device reports minutes; normalize the entity's native value to seconds.
+        "scale": 1 / 60,
     },
     {
         "key": "battery_voltage",
@@ -373,7 +374,11 @@ def get_sensor_descriptions(capabilities: dict = None):
         List of sensor descriptions
     """
     # Import here to avoid circular imports
-    from .const import APCModbusSensorDescription, SensorStateClass
+    from .const import (
+        APCModbusSensorDescription,
+        SensorDeviceClass,
+        SensorStateClass,
+    )
 
     return [
         # Battery Sensors
@@ -394,8 +399,10 @@ def get_sensor_descriptions(capabilities: dict = None):
         APCModbusSensorDescription(
             key="runtime_remaining",
             name="Runtime Remaining",
-            native_unit_of_measurement="min",
+            native_unit_of_measurement="s",
+            device_class=SensorDeviceClass.DURATION,
             state_class=SensorStateClass.MEASUREMENT,
+            suggested_unit_of_measurement="min",
             register_key="runtime_remaining",
         ),
         APCModbusSensorDescription(

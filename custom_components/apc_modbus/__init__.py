@@ -132,6 +132,16 @@ def _get_expected_entity_unique_ids(
     else:
         return set()
 
+    if coordinator.snmp_availability == "available" and coordinator.device_type in (
+        APCDeviceType.SMART_UPS,
+        APCDeviceType.SMT_UPS,
+    ):
+        from .const import SNMP_SELF_TEST_SENSOR_DESCRIPTIONS
+
+        sensor_keys.update(
+            description.key for description in SNMP_SELF_TEST_SENSOR_DESCRIPTIONS
+        )
+
     sensor_keys = filter_available_external_probe_keys(
         sensor_keys,
         coordinator.data,

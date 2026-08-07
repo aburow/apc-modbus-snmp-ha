@@ -70,7 +70,7 @@ REGISTERS: list[dict] = [
         "scale": 1,
     },
     # --- Measurement registers ---
-    # RunTimeRemaining (0x0080): seconds until output off on battery; 2 registers = UINT32
+    # RunTimeRemaining (0x0080): seconds until output off on battery.
     {
         "key": "runtime_remaining",
         "address": 0x0080,
@@ -340,6 +340,7 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         native_unit_of_measurement=UnitOfTime.SECONDS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
         register_key="runtime_remaining",
     ),
     APCModbusSensorDescription(

@@ -339,9 +339,9 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.6-dev.10
-- ✅ Preserves the validated SMT block reads for SmartConnect while omitting its unsupported sentinel-backed entities.
-- ✅ Waits two seconds before reconnecting a SmartConnect device after every local TCP close, including a runtime Keep Connection Open toggle.
+### v1.2.6-dev.11
+- ✅ Normalizes legacy Smart-UPS runtime telemetry to Home Assistant's native seconds duration while keeping minutes as the suggested display unit.
+- ✅ Adds SNMP self-test entities only when SNMP enrichment is available for supported UPS families.
 
 ### v1.2.5 (Current Stable)
 - ✅ Normalizes the repository license for GitHub Licensee and HACS detection.

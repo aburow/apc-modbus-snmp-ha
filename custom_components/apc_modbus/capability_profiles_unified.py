@@ -66,7 +66,7 @@ PROFILES: tuple[dict[str, Any], ...] = (
                     "address": 0x0006,
                     "count": 1,
                     "type": "uint16",
-                    "scale": 1,
+                    "scale": 1 / 60,
                     "word_order": "big",
                     "poll_group": "fast",
                 },

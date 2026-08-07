@@ -2,6 +2,19 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.11] - 2026-08-08
+
+### Fixed
+- Normalized legacy Smart-UPS runtime-remaining values from Modbus minutes to
+  Home Assistant's native seconds duration, while retaining minutes as the
+  suggested display unit.
+
+### Changed
+- SNMP self-test entities are created only when SNMP enrichment is available
+  for Smart-UPS and SMT/SMX/SRT devices; stale entities are removed when it is
+  unavailable.
+- Synchronized authoritative integration/package version metadata to `1.2.6-dev.11`.
+
 ## [1.2.6-dev.10] - 2026-08-07
 
 ### Fixed
