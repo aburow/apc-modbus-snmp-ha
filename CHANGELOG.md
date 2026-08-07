@@ -2,6 +2,23 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.7] - 2026-08-07
+
+### Added
+- Added `smartconnect_ups` device type for the APC SmartConnect family. SmartConnect
+  devices share the SMT/SMX/SRT Modbus register map but return all-0xFFFF sentinels at
+  the legacy Smart-UPS address range instead of raising Exception 2. The classifier
+  requires `smt_measurements` and `smt_status` to return live data, `rack_pdu_capabilities`
+  to return Exception 2, and `legacy_ups_id` to return a register response with all
+  values equal to 0xFFFF. SmartConnect devices use SMT register definitions, sensor and
+  binary sensor descriptions, and are included in UPS availability profiles and SNMP
+  self-test polling.
+- Bumped `DETECTION_VERSION` to 4 to trigger re-classification of previously ambiguous
+  entries that may be SmartConnect devices.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.6-dev.7`.
+
 ## [1.2.6-dev.6] - 2026-08-02
 ### Fixed
 - Completed Modbus block polling now falls back to individual reads when any

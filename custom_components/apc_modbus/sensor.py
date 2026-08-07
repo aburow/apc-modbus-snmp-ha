@@ -47,8 +47,11 @@ async def async_setup_entry(
         from .const import SENSOR_DESCRIPTIONS
 
         sensor_descriptions = SENSOR_DESCRIPTIONS
-    elif coordinator.device_type == APCDeviceType.SMT_UPS:
-        # SMT/SMX/SRT uses static sensor descriptions from its register module
+    elif coordinator.device_type in (
+        APCDeviceType.SMT_UPS,
+        APCDeviceType.SMARTCONNECT_UPS,
+    ):
+        # SMT/SMX/SRT and SmartConnect use the same SMT register map
         from . import registers_smt_ups
 
         sensor_descriptions = registers_smt_ups.SENSOR_DESCRIPTIONS
@@ -72,7 +75,11 @@ async def async_setup_entry(
 
     # SNMP-backed external probe sensors are available across supported families.
     sensor_descriptions = [*sensor_descriptions, *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS]
-    if coordinator.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
+    if coordinator.device_type in (
+        APCDeviceType.SMART_UPS,
+        APCDeviceType.SMT_UPS,
+        APCDeviceType.SMARTCONNECT_UPS,
+    ):
         sensor_descriptions = [
             *sensor_descriptions,
             *SNMP_SELF_TEST_SENSOR_DESCRIPTIONS,

@@ -81,7 +81,10 @@ def _get_expected_entity_unique_ids(
             ]
         }
         binary_keys = {description.key for description in BINARY_SENSOR_DESCRIPTIONS}
-    elif coordinator.device_type == APCDeviceType.SMT_UPS:
+    elif coordinator.device_type in (
+        APCDeviceType.SMT_UPS,
+        APCDeviceType.SMARTCONNECT_UPS,
+    ):
         from . import registers_smt_ups
         from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
 

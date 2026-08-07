@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping
 
-DETECTION_VERSION = 3
+DETECTION_VERSION = 4
 
 
 class APCDeviceType(Enum):
@@ -13,6 +13,7 @@ class APCDeviceType(Enum):
     SMART_UPS = "smart_ups"
     SMT_UPS = "smt_ups"
     RACK_PDU = "rack_pdu"
+    SMARTCONNECT_UPS = "smartconnect_ups"
     UNKNOWN = "unknown"
 
 
@@ -45,6 +46,7 @@ def is_concrete_device_type(device_type: APCDeviceType | None) -> bool:
         APCDeviceType.SMART_UPS,
         APCDeviceType.SMT_UPS,
         APCDeviceType.RACK_PDU,
+        APCDeviceType.SMARTCONNECT_UPS,
     )
 
 
@@ -102,6 +104,7 @@ def classify_device_type(probes: Mapping[str, ProbeOutcome]) -> APCDeviceType | 
     capabilities = probes["rack_pdu_capabilities"]
     measurements = probes["rack_pdu_measurements"]
     legacy = probes["legacy_ups_id"]
+    smt_status = probes["smt_status"]
     smt = probes["smt_measurements"]
 
     if _coherent_rack_pdu(capabilities, measurements):
@@ -110,4 +113,18 @@ def classify_device_type(probes: Mapping[str, ProbeOutcome]) -> APCDeviceType | 
         return APCDeviceType.SMT_UPS
     if legacy.kind == ProbeKind.RESPONSE and smt.unsupported:
         return APCDeviceType.SMART_UPS
+    legacy_sentinel = (
+        legacy.kind == ProbeKind.RESPONSE
+        and len(legacy.registers) > 0
+        and all(r == 0xFFFF for r in legacy.registers)
+    )
+    if (
+        smt.kind == ProbeKind.RESPONSE
+        and any(r != 0xFFFF for r in smt.registers)
+        and smt_status.kind == ProbeKind.RESPONSE
+        and any(r != 0 for r in smt_status.registers)
+        and capabilities.unsupported
+        and legacy_sentinel
+    ):
+        return APCDeviceType.SMARTCONNECT_UPS
     return None

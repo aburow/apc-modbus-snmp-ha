@@ -251,6 +251,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "Rack PDU"
         if self.device_type in (APCDeviceType.SMART_UPS, APCDeviceType.SMT_UPS):
             return "Smart-UPS"
+        if self.device_type == APCDeviceType.SMARTCONNECT_UPS:
+            return "SmartConnect UPS"
         return "APC Device"
 
     def get_configuration_url_for_registry(self) -> str:
@@ -892,6 +894,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.snmp_availability != "available" or self.device_type not in (
             APCDeviceType.SMART_UPS,
             APCDeviceType.SMT_UPS,
+            APCDeviceType.SMARTCONNECT_UPS,
         ):
             return
         now = time.monotonic()

@@ -33,6 +33,15 @@ CORE_REGISTER_KEYS_BY_DEVICE: dict[APCDeviceType, set[str]] = {
         "output_frequency",
         "ups_status_bf",  # online/battery/bypass/overload bits
     },
+    APCDeviceType.SMARTCONNECT_UPS: {
+        "runtime_remaining",
+        "battery_state_of_charge",
+        "input_voltage",
+        "output_voltage",
+        "output_load_percent",
+        "output_frequency",
+        "ups_status_bf",  # online/battery/bypass/overload bits
+    },
 }
 
 
@@ -54,6 +63,24 @@ def get_registers_for_device(
             registers_smart_ups.REGISTER_MAP,
         )
     elif device_type == APCDeviceType.SMT_UPS:
+        try:
+            from . import registers_smt_ups
+
+            return (
+                registers_smt_ups.REGISTERS,
+                registers_smt_ups.REGISTER_BLOCKS,
+                registers_smt_ups.REGISTER_MAP,
+            )
+        except ImportError:
+            _LOGGER.warning(
+                "SMT UPS register module not available, falling back to Smart-UPS"
+            )
+            return (
+                registers_smart_ups.REGISTERS,
+                registers_smart_ups.REGISTER_BLOCKS,
+                registers_smart_ups.REGISTER_MAP,
+            )
+    elif device_type == APCDeviceType.SMARTCONNECT_UPS:
         try:
             from . import registers_smt_ups
 

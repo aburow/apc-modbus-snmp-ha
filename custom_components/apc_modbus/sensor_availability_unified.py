@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 
 
-UPS_DEVICE_FAMILIES = ("smart_ups", "smt_ups", "ups", "unknown")
+UPS_DEVICE_FAMILIES = ("smart_ups", "smt_ups", "smartconnect_ups", "ups", "unknown")
 RACK_PDU_DEVICE_FAMILIES = ("rack_pdu",)
 
 STANDARD_ENABLED_CANONICAL_KEYS: tuple[str, ...] = (

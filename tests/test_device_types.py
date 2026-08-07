@@ -24,12 +24,12 @@ def unsupported() -> ProbeOutcome:
     return ProbeOutcome(ProbeKind.MODBUS_EXCEPTION, exception_code=2)
 
 
-def probes(*, pdu_caps, pdu_measurements, legacy, smt):
+def probes(*, pdu_caps, pdu_measurements, legacy, smt, smt_status=None):
     return {
         "rack_pdu_capabilities": pdu_caps,
         "rack_pdu_measurements": pdu_measurements,
         "legacy_ups_id": legacy,
-        "smt_status": response(*([0] * 23)),
+        "smt_status": smt_status if smt_status is not None else response(*([0] * 23)),
         "smt_measurements": smt,
     }
 
@@ -67,6 +67,18 @@ def test_live_schema_signatures_are_definitive() -> None:
             )
         )
         == APCDeviceType.RACK_PDU
+    )
+    assert (
+        module.classify_device_type(
+            probes(
+                pdu_caps=unsupported(),
+                pdu_measurements=response(*([0xFFFF] * 6)),
+                legacy=response(*([0xFFFF] * 1)),
+                smt=response(0, 4845, *([0xFFFF] * 24)),
+                smt_status=response(0, 8194, *([0] * 21)),
+            )
+        )
+        == APCDeviceType.SMARTCONNECT_UPS
     )
 
 
