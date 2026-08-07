@@ -2,6 +2,17 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.10] - 2026-08-07
+
+### Fixed
+- SmartConnect polling now preserves the two-second reconnect gap after every
+  local TCP close, including when **Keep Connection Open** is disabled at runtime.
+- SmartConnect uses the validated SMT block reads while hiding measurements that
+  its single-phase implementation reports as unsupported sentinels.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.6-dev.10`.
+
 ## [1.2.6-dev.9] - 2026-08-07
 
 ### Added

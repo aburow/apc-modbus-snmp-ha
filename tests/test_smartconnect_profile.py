@@ -19,7 +19,18 @@ def test_smartconnect_excludes_unsupported_measurements() -> None:
     ):
         assert f'"{key}",' in registers
     assert "SMARTCONNECT_SENSOR_DESCRIPTIONS" in registers
-    assert "not in registers_smt_ups.SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS" in factory
+    assert "not in SMARTCONNECT_UNSUPPORTED_SENSOR_KEYS" in registers
+
+    # Unsupported measurements are excluded at the sensor-entity level only.
+    # Modbus reads must still use the two large, diagnosed SMT blocks rather
+    # than per-register requests: narrow reads around the gaps left by
+    # unsupported registers were never validated against SmartConnect
+    # firmware, and splitting the read multiplies request count/traffic.
+    smartconnect_branch = factory.split(
+        "elif device_type == APCDeviceType.SMARTCONNECT_UPS:", 1
+    )[1].split("elif device_type ==", 1)[0]
+    assert "registers_smt_ups.REGISTER_BLOCKS" in smartconnect_branch
+    assert "_build_blocks_from_registers" not in smartconnect_branch
 
 
 def test_modbus_identity_metadata_is_a_snmp_fallback() -> None:

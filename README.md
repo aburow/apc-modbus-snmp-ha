@@ -339,9 +339,9 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 For detailed release notes, see `CHANGELOG.md`.
 
-### v1.2.6-dev.9
-- ✅ Adds one-time Modbus identity fallback for model/SKU, serial number, and firmware on SMT/SMX/SRT and SmartConnect devices without SNMP.
-- ✅ Removes SmartConnect entities backed by its `0xFFFF` unsupported-register sentinel values.
+### v1.2.6-dev.10
+- ✅ Preserves the validated SMT block reads for SmartConnect while omitting its unsupported sentinel-backed entities.
+- ✅ Waits two seconds before reconnecting a SmartConnect device after every local TCP close, including a runtime Keep Connection Open toggle.
 
 ### v1.2.5 (Current Stable)
 - ✅ Normalizes the repository license for GitHub Licensee and HACS detection.

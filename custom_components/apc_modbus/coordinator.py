@@ -119,6 +119,13 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Defaults for Smart-UPS; Rack PDU overrides in set_device_type().
         self._post_connect_delay = 0.05
         self._inter_block_delay = 0.05
+        # Minimum gap between closing a TCP connection and opening the next one.
+        # Some devices (SmartConnect UPS) briefly refuse new connections right
+        # after a previous one closes, in both persistent-session reconnects
+        # and one-request-per-connection polling. 0 = no extra gap enforced.
+        # SmartConnect overrides this in set_device_type().
+        self._min_reconnect_delay = 0.0
+        self._last_close_monotonic = 0.0
         # Initialize data as empty dict to ensure it's always present
         self.data: dict[str, Any] = {}
         # Device metadata (populated via SNMP at startup)
@@ -242,6 +249,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.device_type == APCDeviceType.RACK_PDU:
             self._post_connect_delay = 0.10
             self._inter_block_delay = 0.10
+        # SmartConnect UPS firmware briefly refuses new TCP connections right
+        # after a previous connection closes; diagnosed at 2s (debug-tool
+        # POST_PACING_DELAY_SECONDS). Applies whether reconnecting a
+        # persistent session or opening a fresh connection per request.
+        elif self.device_type == APCDeviceType.SMARTCONNECT_UPS:
+            self._min_reconnect_delay = 2.0
 
     def get_device_model_for_registry(self) -> str:
         """Return the best available model string for Home Assistant device info."""
@@ -452,13 +465,27 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return functools.partial(self._read_holding_registers_compat, address, count)
 
     def _read_one_request(self, address: int, count: int):
-        """Read one block on a fresh socket for constrained APC TCP servers."""
+        """Read one block on a fresh socket for constrained APC TCP servers.
+
+        Runs in an executor thread, so pacing uses a blocking sleep rather
+        than asyncio.sleep.
+        """
+        remaining = self._reconnect_pacing_remaining()
+        if remaining > 0:
+            _LOGGER.debug(
+                "[%s] Waiting %.3fs before reconnect (min gap %.1fs since last close)",
+                self._log_ctx,
+                remaining,
+                self._min_reconnect_delay,
+            )
+            time.sleep(remaining)
         if not self.client.connect():
             raise ConnectionException("Unable to open Modbus connection")
         try:
             return self._read_holding_registers_compat(address, count)
         finally:
             self.client.close()
+            self._mark_closed()
 
     @property
     def effective_keep_connection_open(self) -> bool:
@@ -716,6 +743,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             self._log_ctx,
                             close_err,
                         )
+                    finally:
+                        self._mark_closed()
                 modbus_cycle_elapsed = time.monotonic() - cycle_start
 
         if not data:
@@ -989,6 +1018,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self.hass.async_add_executor_job(close_request)
                 except (ConnectionException, ModbusException, OSError, TimeoutError):
                     pass
+                finally:
+                    self._mark_closed()
                 self._last_io_monotonic = 0.0
 
         _LOGGER.info(
@@ -1029,6 +1060,29 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._metadata_needs_refresh = True
         return True
 
+    def _reconnect_pacing_remaining(self) -> float:
+        """Seconds still required before the next TCP connect, if any."""
+        if self._min_reconnect_delay <= 0 or self._last_close_monotonic <= 0:
+            return 0.0
+        elapsed = time.monotonic() - self._last_close_monotonic
+        return max(0.0, self._min_reconnect_delay - elapsed)
+
+    async def _await_reconnect_pacing(self) -> None:
+        """Wait out the minimum gap some devices need after closing a connection."""
+        remaining = self._reconnect_pacing_remaining()
+        if remaining > 0:
+            _LOGGER.debug(
+                "[%s] Waiting %.3fs before reconnect (min gap %.1fs since last close)",
+                self._log_ctx,
+                remaining,
+                self._min_reconnect_delay,
+            )
+            await asyncio.sleep(remaining)
+
+    def _mark_closed(self) -> None:
+        """Record when the TCP connection was closed, for reconnect pacing."""
+        self._last_close_monotonic = time.monotonic()
+
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""
         if self.transport_mode == "one_request_per_connection":
@@ -1053,6 +1107,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return reconnected
 
         try:
+            await self._await_reconnect_pacing()
             connect_start = time.monotonic()
             connect_request = functools.partial(self.client.connect)
             ok = await self.hass.async_add_executor_job(connect_request)
@@ -1118,7 +1173,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self.hass.async_add_executor_job(close_request)
             except (ConnectionException, ModbusException, OSError, TimeoutError):
                 pass
+            finally:
+                self._mark_closed()
 
+        await self._await_reconnect_pacing()
         reconnect_start = time.monotonic()
         connect_request = functools.partial(self.client.connect)
         ok = await self.hass.async_add_executor_job(connect_request)
@@ -1146,6 +1204,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self.hass.async_add_executor_job(close_request)
         except (ConnectionException, ModbusException, OSError, TimeoutError):
             pass
+        finally:
+            self._mark_closed()
         self.client = ModbusTcpClient(
             host=self.host, port=self.port, timeout=self.timeout
         )
