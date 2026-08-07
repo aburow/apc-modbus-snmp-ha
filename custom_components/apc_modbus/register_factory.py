@@ -84,10 +84,16 @@ def get_registers_for_device(
         try:
             from . import registers_smt_ups
 
+            registers = [
+                descriptor
+                for descriptor in registers_smt_ups.REGISTERS
+                if descriptor["key"]
+                not in registers_smt_ups.SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS
+            ]
             return (
-                registers_smt_ups.REGISTERS,
-                registers_smt_ups.REGISTER_BLOCKS,
-                registers_smt_ups.REGISTER_MAP,
+                registers,
+                _build_blocks_from_registers(registers),
+                {descriptor["address"]: descriptor for descriptor in registers},
             )
         except ImportError:
             _LOGGER.warning(

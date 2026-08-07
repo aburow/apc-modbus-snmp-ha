@@ -47,14 +47,14 @@ async def async_setup_entry(
         from .const import SENSOR_DESCRIPTIONS
 
         sensor_descriptions = SENSOR_DESCRIPTIONS
-    elif coordinator.device_type in (
-        APCDeviceType.SMT_UPS,
-        APCDeviceType.SMARTCONNECT_UPS,
-    ):
-        # SMT/SMX/SRT and SmartConnect use the same SMT register map
+    elif coordinator.device_type == APCDeviceType.SMT_UPS:
         from . import registers_smt_ups
 
         sensor_descriptions = registers_smt_ups.SENSOR_DESCRIPTIONS
+    elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
+        from . import registers_smt_ups
+
+        sensor_descriptions = registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS
     elif coordinator.device_type == APCDeviceType.RACK_PDU:
         # Rack PDU uses dynamic sensor descriptions based on capabilities
         from . import registers_rack_pdu

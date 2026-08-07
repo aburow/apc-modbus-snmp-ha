@@ -288,6 +288,56 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             len(register_blocks),
         )
 
+    async def async_read_modbus_metadata(self) -> bool:
+        """Populate UPS identity from Modbus when SNMP is unavailable."""
+        if self.snmp_availability != "unavailable" or self.device_type not in (
+            APCDeviceType.SMT_UPS,
+            APCDeviceType.SMARTCONNECT_UPS,
+        ):
+            return False
+
+        async with self._io_lock:
+            if not await self._ensure_connection():
+                return False
+            try:
+                result = await self.hass.async_add_executor_job(
+                    self._build_read_request(0x0204, 56)
+                )
+            except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
+                _LOGGER.debug(
+                    "[%s] Modbus metadata read failed: %s", self._log_ctx, err
+                )
+                return False
+
+        registers = getattr(result, "registers", []) or []
+        if self._is_error_response(result) or len(registers) != 56:
+            return False
+
+        def decode_ascii(offset: int, count: int) -> str:
+            return (
+                self._decode_register(
+                    registers[offset : offset + count], {"type": "ascii"}
+                )
+                or ""
+            )
+
+        # FW 0x0204, model 0x0214, SKU 0x0224, serial 0x0234.
+        firmware = decode_ascii(0, 8)
+        model = decode_ascii(16, 16)
+        sku = decode_ascii(32, 16)
+        serial_number = decode_ascii(48, 8)
+        if not any((firmware, model, serial_number)):
+            return False
+
+        self.set_device_metadata(
+            hw_model=f"{model} ({sku})" if model and sku else model or sku,
+            serial_number=serial_number,
+            fw_version=firmware,
+            fw_date=None,
+            mark_refresh_complete=False,
+        )
+        return True
+
     async def async_detect_device_type(self) -> APCDeviceType | None:
         """Probe distinguishing Modbus addresses to identify the device type."""
         async with self._io_lock:

@@ -311,6 +311,24 @@ REGISTER_BLOCKS: list[dict] = [
 
 REGISTER_MAP: dict[int, dict] = {r["address"]: r for r in REGISTERS}
 
+# SmartConnect SMT units return 0xFFFF for these unsupported measurements.
+SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS = frozenset(
+    {
+        "output_load_percent_l2",
+        "output_apparent_power_percent_l2",
+        "output_current_l2",
+        "output_voltage_l2",
+        "output_energy",
+        "bypass_voltage",
+        "bypass_frequency",
+        "input_voltage_l2",
+        "input_voltage_l3",
+    }
+)
+SMARTCONNECT_UNSUPPORTED_SENSOR_KEYS = SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS | {
+    "input_frequency"
+}
+
 # ---------------------------------------------------------------------------
 # Sensor entity descriptions
 # ---------------------------------------------------------------------------
@@ -480,6 +498,12 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         register_key="bypass_frequency",
     ),
+]
+
+SMARTCONNECT_SENSOR_DESCRIPTIONS = [
+    description
+    for description in SENSOR_DESCRIPTIONS
+    if description.key not in SMARTCONNECT_UNSUPPORTED_SENSOR_KEYS
 ]
 
 # ---------------------------------------------------------------------------

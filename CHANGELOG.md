@@ -2,6 +2,21 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.9] - 2026-08-07
+
+### Added
+- When SNMP metadata is unavailable, SMT/SMX/SRT and SmartConnect devices read their
+  documented Modbus identity block once at startup. Home Assistant Device Info now
+  receives the model/SKU, serial number, and firmware version without SNMP.
+
+### Fixed
+- SmartConnect now omits measurements its single-phase Modbus implementation returns
+  as `0xFFFF`: bypass voltage/frequency, phase 2/3 voltage, phase 2 output metrics,
+  and output energy. The unavailable input-frequency entity is also omitted.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to `1.2.6-dev.9`.
+
 ## [1.2.6-dev.8] - 2026-08-07
 
 ### Added

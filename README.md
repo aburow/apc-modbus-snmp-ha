@@ -4,7 +4,7 @@
 ![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hacs.yaml/badge.svg)
 ![Hassfest](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hassfest.yaml/badge.svg)
 
-A Home Assistant integration for monitoring APC power devices via Modbus/TCP with SNMP metadata.
+A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
 Supported device families include:
 - Legacy Smart-UPS
@@ -53,7 +53,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
-- **Optional SNMP Enrichment**: Without SNMP, the integration provides base Modbus monitoring only. SNMP adds model, serial, firmware, self-test, input-frequency fallback, and compatible external-probe data.
+- **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
@@ -151,7 +151,8 @@ SNMP is optional. It enriches Modbus monitoring with device metadata, input-freq
 **Fallback Behavior:**
 - If SNMP is unavailable at startup, the integration will still function and stops routine SNMP retry traffic
 - Base Modbus sensors will work normally
-- SNMP-backed metadata, self-test data, input-frequency fallback, and external-probe data remain unavailable until SNMP is accessible
+- SMT/SMX/SRT and SmartConnect devices populate Device Info from Modbus with model/SKU, serial number, and firmware version
+- Self-test data, input-frequency fallback, and external-probe data remain unavailable until SNMP is accessible
 - Run **Re-detect Device Type** after correcting SNMP connectivity to retry enrichment
 
 ## Supported Devices
@@ -275,7 +276,7 @@ The built-in diagnostics button also includes:
 For device-family correction without deleting and re-adding an entry, use the built-in `Re-detect Device Type` button from the device page.
 
 ### SNMP Connection Failed (Device Info Not Populated)
-- **Symptom**: Device model, serial number, and firmware info are not shown
+- **Symptom**: Device model, serial number, and firmware info are not shown for a device without the SMT/SmartConnect Modbus identity block
 - **Check logs for**: "Unable to retrieve SNMP metadata after 3 attempts"
 - **Impact**: Integration still works - all Modbus sensors function normally, but device info is empty
 - **Solution**:
@@ -337,6 +338,10 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 ## Version History
 
 For detailed release notes, see `CHANGELOG.md`.
+
+### v1.2.6-dev.9
+- ✅ Adds one-time Modbus identity fallback for model/SKU, serial number, and firmware on SMT/SMX/SRT and SmartConnect devices without SNMP.
+- ✅ Removes SmartConnect entities backed by its `0xFFFF` unsupported-register sentinel values.
 
 ### v1.2.5 (Current Stable)
 - ✅ Normalizes the repository license for GitHub Licensee and HACS detection.

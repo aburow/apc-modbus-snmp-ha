@@ -81,10 +81,7 @@ def _get_expected_entity_unique_ids(
             ]
         }
         binary_keys = {description.key for description in BINARY_SENSOR_DESCRIPTIONS}
-    elif coordinator.device_type in (
-        APCDeviceType.SMT_UPS,
-        APCDeviceType.SMARTCONNECT_UPS,
-    ):
+    elif coordinator.device_type == APCDeviceType.SMT_UPS:
         from . import registers_smt_ups
         from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
 
@@ -92,6 +89,21 @@ def _get_expected_entity_unique_ids(
             description.key
             for description in [
                 *registers_smt_ups.SENSOR_DESCRIPTIONS,
+                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
+            ]
+        }
+        binary_keys = {
+            description.key
+            for description in registers_smt_ups.BINARY_SENSOR_DESCRIPTIONS
+        }
+    elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
+        from . import registers_smt_ups
+        from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
+
+        sensor_keys = {
+            description.key
+            for description in [
+                *registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS,
                 *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
             ]
         }
@@ -348,6 +360,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Load full block polling register profile for detected device type.
     registers, blocks, reg_map = get_registers_for_device(coordinator.device_type)
     coordinator.set_registers(registers, blocks, reg_map)
+    await coordinator.async_read_modbus_metadata()
 
     # For Rack PDU, discover capabilities for dynamic entity generation
     if coordinator.device_type == APCDeviceType.RACK_PDU:
