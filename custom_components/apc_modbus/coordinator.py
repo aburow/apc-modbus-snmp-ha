@@ -56,6 +56,11 @@ SELF_TEST_REFRESH_INTERVAL_SECONDS = 60
 OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS = 60
 
 
+def create_modbus_client(host: str, port: int, timeout: int) -> ModbusTcpClient:
+    """Create a client with automatic request retries disabled."""
+    return ModbusTcpClient(host=host, port=port, timeout=timeout, retries=0)
+
+
 class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinator that polls Modbus registers for the UPS."""
 
@@ -144,6 +149,19 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Device type and capabilities (for multi-device support)
         self.device_type: APCDeviceType = APCDeviceType.SMART_UPS
         self.device_capabilities: dict[str, int] = {}
+        self.write_capabilities: set[str] = set()
+        self.write_capability_outcomes: dict[str, ProbeOutcome] = {}
+        self.write_capability_unresolved: set[str] = set()
+        from .write_support import RELEASE_SUPPORTED_MODELS
+
+        self.write_supported_models = RELEASE_SUPPORTED_MODELS
+        self.raw_modbus_model: str | None = None
+        self.raw_modbus_firmware: str | None = None
+        self.modbus_map_id: str | None = None
+        self._write_pending: set[str] = set()
+        self._write_outcomes_unknown: dict[str, tuple[str, str | None, int | None]] = {}
+        self._write_reconcile_attempts = 3
+        self._write_reconcile_delay = 0.5
         # Registers and blocks (loaded from factory based on device type)
         self.registers: list[dict[str, Any]] = registers_smart_ups.REGISTERS
         self.register_blocks: list[dict[str, Any]] = registers_smart_ups.REGISTER_BLOCKS
@@ -153,6 +171,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name for name in ("device_id", "slave", "unit") if name in read_params
         ]
         self._resolved_unit_param: str | None = None
+        self._resolved_write_call: dict[str, tuple[str, str | None]] = {}
         self._output_energy_completed_rollovers = output_energy_completed_rollovers
         self._output_energy_tracker = OutputEnergyTracker.from_storage(
             None, self._output_energy_completed_rollovers
@@ -320,7 +339,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_read_modbus_metadata(self) -> bool:
         """Populate UPS identity from Modbus when SNMP is unavailable."""
-        if self.snmp_availability != "unavailable" or self.device_type not in (
+        if self.device_type not in (
             APCDeviceType.SMT_UPS,
             APCDeviceType.SMARTCONNECT_UPS,
         ):
@@ -359,6 +378,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not any((firmware, model, serial_number)):
             return False
 
+        self.raw_modbus_firmware = self._clean_metadata_value(firmware)
+        self.raw_modbus_model = self._clean_metadata_value(model)
+
+        if self.snmp_availability != "unavailable":
+            return True
         self.set_device_metadata(
             hw_model=f"{model} ({sku})" if model and sku else model or sku,
             serial_number=serial_number,
@@ -367,6 +391,676 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             mark_refresh_complete=False,
         )
         return True
+
+    @property
+    def modbus_write_capable(self) -> bool:
+        """Return whether any independently discovered write feature is usable."""
+        return bool(self.write_capabilities)
+
+    async def _probe_write_evidence(
+        self, address: int, count: int, name: str
+    ) -> ProbeOutcome:
+        """Read capability evidence once, retrying only a transport failure."""
+        outcome = await self._probe_outcome(address, count, name)
+        if outcome.kind == ProbeKind.TRANSPORT_FAILURE:
+            if not await self._ensure_connection():
+                return outcome
+            outcome = await self._probe_outcome(address, count, name)
+        return outcome
+
+    async def _close_write_discovery_connection(self) -> None:
+        """Apply the normal close policy after the one-time discovery pass."""
+        if self.transport_mode != "session" or self.effective_keep_connection_open:
+            return
+        try:
+            await self.hass.async_add_executor_job(self.client.close)
+        except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
+            _LOGGER.debug("[%s] Write discovery close failed: %s", self._log_ctx, err)
+        finally:
+            self._last_io_monotonic = 0.0
+            self._mark_closed()
+
+    async def async_discover_write_capabilities(self) -> set[str]:
+        """Discover exact write features using read-only companion evidence."""
+        from .write_support import (
+            OUTLET_CAPABILITIES,
+            OUTLET_STATUS_ADDRESSES,
+            PROTOCOL_TESTS,
+            WriteCapability,
+            decode_alarm_status,
+            decode_battery_test_status,
+            decode_outlet_status,
+            decode_runtime_calibration_status,
+            parse_firmware,
+            protocol_constants_valid,
+            release_model_supported,
+        )
+
+        self.write_capabilities.clear()
+        self.write_capability_outcomes.clear()
+        self.write_capability_unresolved.clear()
+        self.modbus_map_id = None
+        all_capabilities = {capability.value for capability in WriteCapability}
+        if self.device_type != APCDeviceType.SMT_UPS:
+            return set()
+        if getattr(self.client, "retries", None) != 0:
+            return set()
+        if (
+            not self.raw_modbus_model
+            or parse_firmware(self.raw_modbus_firmware) is None
+        ):
+            self.write_capability_unresolved.update(all_capabilities)
+            return set()
+        if not release_model_supported(
+            self.raw_modbus_model,
+            self.raw_modbus_firmware,
+            self.write_supported_models,
+        ):
+            return set()
+
+        async with self._io_lock:
+            if not await self._ensure_connection():
+                self.write_capability_unresolved.update(all_capabilities)
+                return set()
+            map_outcome = await self._probe_write_evidence(0x0800, 2, "modbus_map_id")
+            if map_outcome.kind == ProbeKind.RESPONSE:
+                self.modbus_map_id = self._decode_register(
+                    list(map_outcome.registers), {"type": "ascii"}
+                )
+            protocol_outcomes = {
+                address: await self._probe_write_evidence(
+                    address, len(expected), f"write_protocol_{address:04x}"
+                )
+                for address, expected in PROTOCOL_TESTS.items()
+            }
+            protocol_values = {
+                address: outcome.registers
+                for address, outcome in protocol_outcomes.items()
+                if outcome.kind == ProbeKind.RESPONSE
+            }
+            identity_outcomes = [map_outcome, *protocol_outcomes.values()]
+            if any(
+                outcome.kind not in (ProbeKind.RESPONSE, ProbeKind.MODBUS_EXCEPTION)
+                or (
+                    outcome.kind == ProbeKind.MODBUS_EXCEPTION
+                    and not outcome.unsupported
+                )
+                for outcome in identity_outcomes
+            ):
+                self.write_capability_unresolved.update(all_capabilities)
+                await self._close_write_discovery_connection()
+                return set()
+            if not self.modbus_map_id:
+                self.write_capability_unresolved.update(all_capabilities)
+                await self._close_write_discovery_connection()
+                return set()
+            if not protocol_constants_valid(protocol_values):
+                await self._close_write_discovery_connection()
+                return set()
+
+            presence = await self._probe_write_evidence(
+                0x024E, 1, "write_outlet_presence"
+            )
+            presence_word = (
+                presence.registers[0]
+                if presence.kind == ProbeKind.RESPONSE and presence.registers
+                else None
+            )
+            presence_valid = presence_word is not None and not (presence_word & 0xFFE0)
+            presence_unresolved = presence.kind not in (
+                ProbeKind.RESPONSE,
+                ProbeKind.MODBUS_EXCEPTION,
+            ) or (
+                presence.kind == ProbeKind.MODBUS_EXCEPTION and not presence.unsupported
+            )
+            if presence.kind == ProbeKind.RESPONSE and not presence_valid:
+                presence_unresolved = True
+
+            for target, capability in OUTLET_CAPABILITIES.items():
+                outcome = await self._probe_write_evidence(
+                    OUTLET_STATUS_ADDRESSES[target],
+                    2,
+                    f"write_{capability.value}",
+                )
+                self.write_capability_outcomes[capability.value] = outcome
+                decoded_outlet = (
+                    decode_outlet_status(
+                        (outcome.registers[0] << 16) | outcome.registers[1]
+                    )
+                    if outcome.kind == ProbeKind.RESPONSE
+                    else None
+                )
+                if presence_unresolved or (
+                    outcome.kind not in (ProbeKind.RESPONSE, ProbeKind.MODBUS_EXCEPTION)
+                    or (
+                        outcome.kind == ProbeKind.MODBUS_EXCEPTION
+                        and not outcome.unsupported
+                    )
+                    or (decoded_outlet is not None and not decoded_outlet.valid)
+                ):
+                    self.write_capability_unresolved.add(capability.value)
+                target_bit = list(OUTLET_CAPABILITIES).index(target)
+                if (
+                    presence_valid
+                    and presence_word & (1 << target_bit)
+                    and decoded_outlet is not None
+                    and decoded_outlet.valid
+                ):
+                    self.write_capabilities.add(capability.value)
+
+            for capability, address, decoder in (
+                (WriteCapability.BATTERY_TEST, 0x0017, decode_battery_test_status),
+                (
+                    WriteCapability.RUNTIME_CALIBRATION,
+                    0x0018,
+                    decode_runtime_calibration_status,
+                ),
+                (WriteCapability.AUDIBLE_ALARM, 0x001A, decode_alarm_status),
+            ):
+                outcome = await self._probe_write_evidence(
+                    address, 1, f"write_{capability.value}"
+                )
+                self.write_capability_outcomes[capability.value] = outcome
+                decoded_status = (
+                    decoder(outcome.registers[0])
+                    if outcome.kind == ProbeKind.RESPONSE
+                    else None
+                )
+                if (
+                    outcome.kind
+                    not in (
+                        ProbeKind.RESPONSE,
+                        ProbeKind.MODBUS_EXCEPTION,
+                    )
+                    or (
+                        outcome.kind == ProbeKind.MODBUS_EXCEPTION
+                        and not outcome.unsupported
+                    )
+                    or (decoded_status is not None and not decoded_status.valid)
+                ):
+                    self.write_capability_unresolved.add(capability.value)
+                if (
+                    decoded_status is not None
+                    and outcome.registers[0] != 0xFFFF
+                    and decoded_status.valid
+                ):
+                    self.write_capabilities.add(capability.value)
+
+            setting_capabilities = (
+                WriteCapability.OUTLET_SETTINGS_MOG,
+                WriteCapability.OUTLET_SETTINGS_SOG_0,
+                WriteCapability.OUTLET_SETTINGS_SOG_1,
+                WriteCapability.OUTLET_SETTINGS_SOG_2,
+            )
+            for index, capability in enumerate(setting_capabilities):
+                outcome = await self._probe_write_evidence(
+                    0x0405 + index * 5, 5, f"write_{capability.value}"
+                )
+                self.write_capability_outcomes[capability.value] = outcome
+                invalid_setting_response = outcome.kind == ProbeKind.RESPONSE and any(
+                    (
+                        outcome.registers[0] == 0xFFFF,
+                        outcome.registers[1] == 0xFFFF,
+                        outcome.registers[2:4] == (0xFFFF, 0xFFFF),
+                        outcome.registers[4] == 0xFFFF,
+                    )
+                )
+                if presence_unresolved or (
+                    outcome.kind not in (ProbeKind.RESPONSE, ProbeKind.MODBUS_EXCEPTION)
+                    or (
+                        outcome.kind == ProbeKind.MODBUS_EXCEPTION
+                        and not outcome.unsupported
+                    )
+                    or invalid_setting_response
+                ):
+                    self.write_capability_unresolved.add(capability.value)
+                if (
+                    presence_valid
+                    and presence_word & (1 << index)
+                    and outcome.kind == ProbeKind.RESPONSE
+                    and not invalid_setting_response
+                ):
+                    self.write_capabilities.add(capability.value)
+
+            await self._close_write_discovery_connection()
+
+        return set(self.write_capabilities)
+
+    def _write_validation_error(self, translation_key: str, **placeholders: str):
+        from homeassistant.exceptions import ServiceValidationError
+
+        return ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key=translation_key,
+            translation_placeholders=placeholders or None,
+        )
+
+    def _write_error(self, translation_key: str, **placeholders: str):
+        from homeassistant.exceptions import HomeAssistantError
+
+        return HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key=translation_key,
+            translation_placeholders=placeholders or None,
+        )
+
+    def _write_call_form(self, method_name: str) -> tuple[str, str | None]:
+        """Resolve a write unit-ID signature before the no-replay boundary."""
+        cached = self._resolved_write_call.get(method_name)
+        if cached:
+            return cached
+        parameters = inspect.signature(getattr(self.client, method_name)).parameters
+        for candidate in ("device_id", "slave", "unit"):
+            if (
+                candidate in parameters
+                and parameters[candidate].kind != parameters[candidate].POSITIONAL_ONLY
+            ):
+                form = ("keyword", candidate)
+                break
+        else:
+            positional = [
+                parameter
+                for parameter in parameters.values()
+                if parameter.kind
+                in (parameter.POSITIONAL_ONLY, parameter.POSITIONAL_OR_KEYWORD)
+            ]
+            has_varargs = any(
+                parameter.kind == parameter.VAR_POSITIONAL
+                for parameter in parameters.values()
+            )
+            form = (
+                ("positional", None)
+                if has_varargs or len(positional) >= 3
+                else ("none", None)
+            )
+        self._resolved_write_call[method_name] = form
+        return form
+
+    def _write_registers_compat(
+        self, address: int, words: tuple[int, ...], invoked: list[bool]
+    ):
+        """Invoke exactly one compatible pymodbus write call."""
+        method_name = "write_register" if len(words) == 1 else "write_registers"
+        write_fn = getattr(self.client, method_name)
+        form, unit_name = self._write_call_form(method_name)
+        parameters = inspect.signature(write_fn).parameters
+        response_option = (
+            {"no_response_expected": False}
+            if "no_response_expected" in parameters
+            else {}
+        )
+        payload: int | list[int] = words[0] if len(words) == 1 else list(words)
+        invoked[0] = True
+        if form == "keyword":
+            return write_fn(
+                address,
+                payload,
+                **{str(unit_name): self.unit},
+                **response_option,
+            )
+        if form == "positional":
+            return write_fn(address, payload, self.unit, **response_option)
+        return write_fn(address, payload, **response_option)
+
+    def _write_one_request(
+        self, address: int, words: tuple[int, ...], invoked: list[bool]
+    ):
+        """Open, write once, and close for constrained APC TCP servers."""
+        remaining = self._reconnect_pacing_remaining()
+        if remaining > 0:
+            time.sleep(remaining)
+        if not self.client.connect():
+            raise ConnectionException("Unable to open Modbus connection")
+        try:
+            return self._write_registers_compat(address, words, invoked)
+        finally:
+            self.client.close()
+            self._mark_closed()
+
+    def _write_precondition(self, operation: str, target: str | None) -> str | None:
+        """Recheck capability and current state immediately before a write."""
+        from .write_support import (
+            OUTLET_CAPABILITIES,
+            OUTLET_STATUS_KEYS,
+            OutletAction,
+            OutletTarget,
+            WriteCapability,
+            WriteOperation,
+            alarm_precondition,
+            decode_alarm_status,
+            decode_battery_test_status,
+            decode_outlet_status,
+            decode_runtime_calibration_status,
+            operation_precondition,
+            outlet_precondition,
+        )
+
+        write_operation = WriteOperation(operation)
+        if write_operation == WriteOperation.OUTLET:
+            if target is None:
+                return "invalid_operation"
+            target_name, action_name = target.split(":", 1)
+            outlet_target = OutletTarget(target_name)
+            if OUTLET_CAPABILITIES[outlet_target].value not in self.write_capabilities:
+                return "write_not_supported"
+            statuses = {
+                candidate: decode_outlet_status(raw)
+                for candidate, key in OUTLET_STATUS_KEYS.items()
+                if OUTLET_CAPABILITIES[candidate].value in self.write_capabilities
+                and isinstance((raw := self.data.get(key)), int)
+            }
+            return outlet_precondition(
+                OutletAction(action_name), outlet_target, statuses
+            )
+        if write_operation in (
+            WriteOperation.BATTERY_TEST_START,
+            WriteOperation.BATTERY_TEST_ABORT,
+        ):
+            if WriteCapability.BATTERY_TEST.value not in self.write_capabilities:
+                return "write_not_supported"
+            raw = self.data.get("battery_test_status")
+            if not isinstance(raw, int):
+                return "write_state_unavailable"
+            return operation_precondition(
+                "start"
+                if write_operation == WriteOperation.BATTERY_TEST_START
+                else "abort",
+                decode_battery_test_status(raw),
+            )
+        if write_operation in (
+            WriteOperation.CALIBRATION_START,
+            WriteOperation.CALIBRATION_ABORT,
+        ):
+            if WriteCapability.RUNTIME_CALIBRATION.value not in self.write_capabilities:
+                return "write_not_supported"
+            raw = self.data.get("runtime_calibration_status")
+            if not isinstance(raw, int):
+                return "write_state_unavailable"
+            return operation_precondition(
+                "start"
+                if write_operation == WriteOperation.CALIBRATION_START
+                else "abort",
+                decode_runtime_calibration_status(raw),
+            )
+        if WriteCapability.AUDIBLE_ALARM.value not in self.write_capabilities:
+            return "write_not_supported"
+        raw = self.data.get("user_interface_status")
+        if not isinstance(raw, int):
+            return "write_state_unavailable"
+        return alarm_precondition(
+            write_operation == WriteOperation.ALARM_MUTE,
+            decode_alarm_status(raw),
+        )
+
+    @staticmethod
+    def _write_pending_key(operation: str, target: str | None) -> str:
+        """Return the conflict key shared by execution and entity availability."""
+        from .write_support import WriteOperation
+
+        write_operation = WriteOperation(operation)
+        if write_operation == WriteOperation.OUTLET:
+            if target is None:
+                raise ValueError("missing outlet target")
+            target_name, _ = target.split(":", 1)
+            return f"outlet:{target_name}"
+        if write_operation in (
+            WriteOperation.ALARM_MUTE,
+            WriteOperation.ALARM_CANCEL_MUTE,
+        ):
+            return "audible_alarm"
+        return write_operation.value.split("_start", 1)[0].split("_abort", 1)[0]
+
+    def write_operation_available(
+        self, operation: str, target: str | None = None
+    ) -> bool:
+        """Return whether current state and conflict markers allow an operation."""
+        try:
+            pending_key = self._write_pending_key(operation, target)
+            return bool(
+                self._write_precondition(operation, target) is None
+                and pending_key not in self._write_pending
+                and pending_key not in self._write_outcomes_unknown
+            )
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    @staticmethod
+    def _write_initial_status(
+        operation: str, target: str | None, data: dict[str, Any]
+    ) -> int | None:
+        """Capture the companion word used to prove a later state transition."""
+        from .write_support import OUTLET_STATUS_KEYS, OutletTarget, WriteOperation
+
+        write_operation = WriteOperation(operation)
+        if write_operation == WriteOperation.OUTLET and target:
+            target_name, _ = target.split(":", 1)
+            value = data.get(OUTLET_STATUS_KEYS[OutletTarget(target_name)])
+        elif write_operation in (
+            WriteOperation.BATTERY_TEST_START,
+            WriteOperation.BATTERY_TEST_ABORT,
+        ):
+            value = data.get("battery_test_status")
+        elif write_operation in (
+            WriteOperation.CALIBRATION_START,
+            WriteOperation.CALIBRATION_ABORT,
+        ):
+            value = data.get("runtime_calibration_status")
+        else:
+            value = data.get("user_interface_status")
+        return value if isinstance(value, int) else None
+
+    @staticmethod
+    def _write_status_reconciled(
+        operation: str,
+        target: str | None,
+        initial_raw: int | None,
+        data: dict[str, Any],
+    ) -> bool:
+        """Return true only when companion status proves command progress."""
+        from .write_support import (
+            OUTLET_STATUS_KEYS,
+            OutletAction,
+            OutletTarget,
+            WriteOperation,
+            decode_alarm_status,
+            decode_battery_test_status,
+            decode_outlet_status,
+            decode_runtime_calibration_status,
+        )
+
+        write_operation = WriteOperation(operation)
+        if write_operation == WriteOperation.OUTLET and target:
+            target_name, action_name = target.split(":", 1)
+            raw = data.get(OUTLET_STATUS_KEYS[OutletTarget(target_name)])
+            if not isinstance(raw, int):
+                return False
+            status = decode_outlet_status(raw)
+            if not status.valid:
+                return False
+            action = OutletAction(action_name)
+            if action == OutletAction.ON:
+                return status.is_on or status.pending
+            if action == OutletAction.OFF:
+                return status.is_off or status.pending
+            if action == OutletAction.CANCEL:
+                return not status.pending
+            if action == OutletAction.SHUTDOWN:
+                return status.is_off or status.pending
+            return status.is_off or status.pending
+
+        if write_operation in (
+            WriteOperation.BATTERY_TEST_START,
+            WriteOperation.BATTERY_TEST_ABORT,
+        ):
+            raw = data.get("battery_test_status")
+            status = decode_battery_test_status(raw) if isinstance(raw, int) else None
+            if not status or not status.valid:
+                return False
+            if write_operation == WriteOperation.BATTERY_TEST_START:
+                return status.active or (
+                    raw != initial_raw and status.state != "unknown"
+                )
+            return status.state == "aborted" or (
+                raw != initial_raw
+                and status.state not in ("pending", "in_progress", "unknown")
+            )
+
+        if write_operation in (
+            WriteOperation.CALIBRATION_START,
+            WriteOperation.CALIBRATION_ABORT,
+        ):
+            raw = data.get("runtime_calibration_status")
+            status = (
+                decode_runtime_calibration_status(raw) if isinstance(raw, int) else None
+            )
+            if not status or not status.valid:
+                return False
+            if write_operation == WriteOperation.CALIBRATION_START:
+                return status.active or (
+                    raw != initial_raw and status.state != "unknown"
+                )
+            return status.state == "aborted" or (
+                raw != initial_raw
+                and status.state not in ("pending", "in_progress", "unknown")
+            )
+
+        raw = data.get("user_interface_status")
+        status = decode_alarm_status(raw) if isinstance(raw, int) else None
+        if not status or not status.valid:
+            return False
+        return (
+            status.muted
+            if write_operation == WriteOperation.ALARM_MUTE
+            else not status.muted and raw != initial_raw
+        )
+
+    def _clear_reconciled_unknown_writes(self, data: dict[str, Any]) -> None:
+        """Let ordinary polling resolve a bounded unknown write outcome."""
+        for key, (operation, target, initial_raw) in list(
+            self._write_outcomes_unknown.items()
+        ):
+            if self._write_status_reconciled(operation, target, initial_raw, data):
+                self._write_outcomes_unknown.pop(key, None)
+
+    async def async_execute_write(
+        self, operation: str, target: str | None = None
+    ) -> None:
+        """Execute one allowlisted command with an observable no-replay boundary."""
+        from .write_support import (
+            COMMANDS,
+            OutletAction,
+            OutletTarget,
+            WriteOperation,
+            build_outlet_command,
+            validate_write_multiple_response,
+            validate_write_single_response,
+        )
+
+        try:
+            write_operation = WriteOperation(operation)
+            if write_operation == WriteOperation.OUTLET:
+                if target is None:
+                    raise ValueError
+                target_name, action_name = target.split(":", 1)
+                words = build_outlet_command(
+                    OutletAction(action_name), OutletTarget(target_name)
+                )
+                address = 0x0602
+            else:
+                address, words = COMMANDS[write_operation]
+            pending_key = self._write_pending_key(operation, target)
+        except (KeyError, TypeError, ValueError) as err:
+            raise self._write_validation_error("invalid_operation") from err
+
+        invoked = [False]
+        response = None
+        initial_raw: int | None = None
+        async with self._io_lock:
+            precondition = self._write_precondition(operation, target)
+            if precondition:
+                raise self._write_validation_error(precondition)
+            if pending_key in self._write_pending:
+                raise self._write_validation_error("operation_already_active")
+            if pending_key in self._write_outcomes_unknown:
+                raise self._write_validation_error("write_outcome_unresolved")
+            if getattr(self.client, "retries", None) != 0:
+                raise self._write_error("write_retry_policy_unverified")
+            self._write_pending.add(pending_key)
+            initial_raw = self._write_initial_status(operation, target, self.data)
+            try:
+                try:
+                    if self.transport_mode == "one_request_per_connection":
+                        request = functools.partial(
+                            self._write_one_request, address, words, invoked
+                        )
+                    else:
+                        if not await self._ensure_connection():
+                            raise ConnectionException(
+                                "Unable to open Modbus connection"
+                            )
+                        request = functools.partial(
+                            self._write_registers_compat, address, words, invoked
+                        )
+                    response = await self.hass.async_add_executor_job(request)
+                    valid = (
+                        validate_write_single_response(response, address, words[0])
+                        if len(words) == 1
+                        else validate_write_multiple_response(
+                            response, address, len(words)
+                        )
+                    )
+                    if valid:
+                        self._mark_io_activity()
+                finally:
+                    if (
+                        self.transport_mode == "session"
+                        and invoked[0]
+                        and not self.effective_keep_connection_open
+                    ):
+                        try:
+                            await self.hass.async_add_executor_job(self.client.close)
+                        finally:
+                            self._mark_closed()
+            except Exception as err:
+                if not invoked[0]:
+                    self._write_pending.discard(pending_key)
+                    raise self._write_error("write_not_sent") from err
+
+        if not invoked[0]:
+            raise self._write_error("write_not_sent")
+
+        reconciled = False
+        for attempt in range(self._write_reconcile_attempts):
+            try:
+                await self.async_request_refresh()
+            except Exception as err:
+                _LOGGER.debug(
+                    "[%s] Write reconciliation attempt failed: %s", self._log_ctx, err
+                )
+                if attempt + 1 == self._write_reconcile_attempts:
+                    self._write_pending.discard(pending_key)
+                    self._write_outcomes_unknown[pending_key] = (
+                        operation,
+                        target,
+                        initial_raw,
+                    )
+                    raise self._write_error("write_outcome_unknown") from err
+            if self._write_status_reconciled(operation, target, initial_raw, self.data):
+                reconciled = True
+                break
+            if attempt + 1 < self._write_reconcile_attempts:
+                await asyncio.sleep(self._write_reconcile_delay)
+        if reconciled:
+            self._write_pending.discard(pending_key)
+        else:
+            self._write_pending.discard(pending_key)
+            self._write_outcomes_unknown[pending_key] = (
+                operation,
+                target,
+                initial_raw,
+            )
+        if not reconciled:
+            raise self._write_error("write_outcome_unknown")
 
     async def async_detect_device_type(self) -> APCDeviceType | None:
         """Probe distinguishing Modbus addresses to identify the device type."""
@@ -803,6 +1497,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._merge_snmp_self_test_data(data)
         self._apply_device_compat_aliases(data)
         await self._async_track_output_energy(data)
+        self._clear_reconciled_unknown_writes(data)
 
         _LOGGER.debug(
             "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
@@ -838,6 +1533,32 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.debug(
                     "[%s] input_frequency sourced from output_frequency fallback",
                     self._log_ctx,
+                )
+            from .write_support import (
+                OUTLET_STATUS_KEYS,
+                decode_battery_test_status,
+                decode_outlet_status,
+                decode_runtime_calibration_status,
+            )
+
+            if isinstance(data.get("battery_test_status"), int):
+                data["battery_test_operation_state"] = decode_battery_test_status(
+                    data["battery_test_status"]
+                ).state
+            if isinstance(data.get("runtime_calibration_status"), int):
+                data["runtime_calibration_operation_state"] = (
+                    decode_runtime_calibration_status(
+                        data["runtime_calibration_status"]
+                    ).state
+                )
+            for target, key in OUTLET_STATUS_KEYS.items():
+                raw = data.get(key)
+                if not isinstance(raw, int):
+                    continue
+                status = decode_outlet_status(raw)
+                state = status.process or ("pending" if status.pending else None)
+                data[f"outlet_{target.value}_operation_state"] = state or (
+                    "on" if status.is_on else "off" if status.is_off else "unknown"
                 )
 
     async def _maybe_refresh_snmp_metadata(self) -> None:
@@ -1223,14 +1944,13 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pass
         finally:
             self._mark_closed()
-        self.client = ModbusTcpClient(
-            host=self.host, port=self.port, timeout=self.timeout
-        )
+        self.client = create_modbus_client(self.host, self.port, self.timeout)
         read_params = inspect.signature(self.client.read_holding_registers).parameters
         self._unit_param_candidates = [
             name for name in ("device_id", "slave", "unit") if name in read_params
         ]
         self._resolved_unit_param = None
+        self._resolved_write_call.clear()
         # Keep cached SNMP metadata/probe detection across Modbus client recreation.
 
     def _register_failure(self, reason: str) -> None:

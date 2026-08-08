@@ -312,6 +312,100 @@ REGISTER_BLOCKS: list[dict] = [
 
 REGISTER_MAP: dict[int, dict] = {r["address"]: r for r in REGISTERS}
 
+# Writable-family companion state. Keep this variant separate because
+# SmartConnect shares the base SMT polling profile but is not write-authorized.
+WRITE_STATUS_REGISTERS: list[dict] = [
+    {
+        "key": "outlet_status_mog",
+        "address": 0x0003,
+        "count": 2,
+        "type": "uint32",
+        "scale": 1,
+    },
+    {
+        "key": "outlet_status_sog_0",
+        "address": 0x0006,
+        "count": 2,
+        "type": "uint32",
+        "scale": 1,
+    },
+    {
+        "key": "outlet_status_sog_1",
+        "address": 0x0009,
+        "count": 2,
+        "type": "uint32",
+        "scale": 1,
+    },
+    {
+        "key": "outlet_status_sog_2",
+        "address": 0x000C,
+        "count": 2,
+        "type": "uint32",
+        "scale": 1,
+    },
+    {
+        "key": "battery_test_status",
+        "address": 0x0017,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
+    {
+        "key": "runtime_calibration_status",
+        "address": 0x0018,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
+    {
+        "key": "user_interface_status",
+        "address": 0x001A,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
+    {
+        "key": "outlet_group_presence",
+        "address": 0x024E,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
+]
+WRITABLE_REGISTERS = [*REGISTERS, *WRITE_STATUS_REGISTERS]
+WRITABLE_REGISTER_BLOCKS = [
+    {
+        **block,
+        "registers": [
+            *block["registers"],
+            *([0x0003, 0x0006, 0x0009, 0x000C] if block["name"] == "status" else []),
+        ],
+    }
+    for block in REGISTER_BLOCKS
+] + [
+    {
+        "name": "write_operation_status",
+        "start_address": 0x0017,
+        "count": 2,
+        "registers": [0x0017, 0x0018],
+    },
+    {
+        "name": "write_alarm_status",
+        "start_address": 0x001A,
+        "count": 1,
+        "registers": [0x001A],
+    },
+    {
+        "name": "write_outlet_presence",
+        "start_address": 0x024E,
+        "count": 1,
+        "registers": [0x024E],
+    },
+]
+WRITABLE_REGISTER_MAP: dict[int, dict] = {
+    descriptor["address"]: descriptor for descriptor in WRITABLE_REGISTERS
+}
+
 # SmartConnect SMT units return 0xFFFF for these unsupported measurements.
 SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS = frozenset(
     {
@@ -507,6 +601,55 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         register_key="bypass_frequency",
     ),
 ]
+
+WRITE_SENSOR_DESCRIPTIONS: dict[str, APCModbusSensorDescription] = {
+    "battery_test": APCModbusSensorDescription(
+        key="battery_test_operation_state",
+        translation_key="battery_test_operation_state",
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        options=[
+            "unknown",
+            "pending",
+            "in_progress",
+            "passed",
+            "failed",
+            "refused",
+            "aborted",
+        ],
+        register_key="battery_test_operation_state",
+    ),
+    "runtime_calibration": APCModbusSensorDescription(
+        key="runtime_calibration_operation_state",
+        translation_key="runtime_calibration_operation_state",
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        options=[
+            "unknown",
+            "pending",
+            "in_progress",
+            "passed",
+            "failed",
+            "refused",
+            "aborted",
+        ],
+        register_key="runtime_calibration_operation_state",
+    ),
+    **{
+        f"outlet_{target}": APCModbusSensorDescription(
+            key=f"outlet_{target}_operation_state",
+            translation_key=f"outlet_{target}_operation_state",
+            device_class=SensorDeviceClass.ENUM,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+            options=["unknown", "on", "off", "pending", "reboot", "shutdown", "sleep"],
+            register_key=f"outlet_{target}_operation_state",
+        )
+        for target in ("mog", "sog_0", "sog_1", "sog_2")
+    },
+}
 
 SMARTCONNECT_SENSOR_DESCRIPTIONS = [
     description

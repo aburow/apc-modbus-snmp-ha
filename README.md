@@ -67,6 +67,10 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
+- **Safety-Gated Write Development**: `2.0.0-dev` includes disabled-by-default,
+  exact-capability Modbus controls. `SMT750IC` firmware `18.0` is temporarily
+  allowlisted for controlled physical acceptance; it is not yet release-supported.
+  See [Modbus write support status](WRITE_SUPPORT.md).
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)

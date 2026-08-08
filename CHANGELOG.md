@@ -2,6 +2,29 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [2.0.0-dev.0] - 2026-08-09
+
+### Added
+- Added the safety-gated implementation for per-outlet actions, battery
+  self-test start/abort, runtime-calibration start/abort, and audible-alarm
+  mute/cancel. Native Home Assistant controls and operation-state sensors are
+  disabled by default and created only for an exact discovered capability.
+- Added per-feature read-only capability discovery, SMT-only companion status
+  polling, translated entity/error strings, fixed command builders, and
+  behavioral safety tests.
+
+### Safety
+- Disabled pymodbus client retries for initial and recreated clients. The write
+  coordinator invokes each command at most once, validates the exact response,
+  suppresses conflicts, and reconciles through readable status without replay.
+- `SMT750IC` firmware `18.0` is temporarily allowlisted for controlled physical
+  acceptance on a noncritical load; it is not yet release-supported.
+- Timing configuration remains blocked pending authoritative model-specific
+  ranges. APC application-note publication terms also remain a release gate.
+
+### Changed
+- Synchronized integration and package metadata to `2.0.0-dev.0`.
+
 ## [1.2.6-dev.13] - 2026-08-08
 
 ### Added

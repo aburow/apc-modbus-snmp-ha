@@ -33,6 +33,12 @@ from .coordinator import APCModbusCoordinator
 from .device_types import DETECTION_VERSION, choose_device_type
 from .diagnostic_collector import collect_diagnostic_dump
 from .entity_defaults import async_reset_entry_monitors_to_defaults
+from .write_support import (
+    OUTLET_CAPABILITIES,
+    OutletAction,
+    WriteCapability,
+    WriteOperation,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,13 +52,46 @@ async def async_setup_entry(
     coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][
         KEY_COORDINATOR
     ]
-    async_add_entities(
-        [
-            APCModbusDiagnosticButton(coordinator, entry),
-            APCModbusRedetectDeviceTypeButton(coordinator, entry),
-            APCModbusResetMonitorDefaultsButton(coordinator, entry.entry_id),
-        ]
-    )
+    entities = [
+        APCModbusDiagnosticButton(coordinator, entry),
+        APCModbusRedetectDeviceTypeButton(coordinator, entry),
+        APCModbusResetMonitorDefaultsButton(coordinator, entry.entry_id),
+    ]
+    for target, capability in OUTLET_CAPABILITIES.items():
+        if capability.value not in coordinator.write_capabilities:
+            continue
+        entities.extend(
+            APCModbusWriteButton(
+                coordinator,
+                entry,
+                WriteOperation.OUTLET,
+                f"{target.value}:{action.value}",
+                f"outlet_{target.value}_{action.value}",
+            )
+            for action in (
+                OutletAction.SHUTDOWN,
+                OutletAction.REBOOT,
+                OutletAction.CANCEL,
+            )
+        )
+    for capability, operations in (
+        (
+            WriteCapability.BATTERY_TEST,
+            (WriteOperation.BATTERY_TEST_START, WriteOperation.BATTERY_TEST_ABORT),
+        ),
+        (
+            WriteCapability.RUNTIME_CALIBRATION,
+            (WriteOperation.CALIBRATION_START, WriteOperation.CALIBRATION_ABORT),
+        ),
+    ):
+        if capability.value in coordinator.write_capabilities:
+            entities.extend(
+                APCModbusWriteButton(
+                    coordinator, entry, operation, None, operation.value
+                )
+                for operation in operations
+            )
+    async_add_entities(entities)
 
 
 class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
@@ -240,3 +279,44 @@ class APCModbusResetMonitorDefaultsButton(
             disabled_count,
             unchanged_count,
         )
+
+
+class APCModbusWriteButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
+    """One fixed, capability-gated APC command button."""
+
+    has_entity_name = True
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: APCModbusCoordinator,
+        entry: ConfigEntry,
+        operation: WriteOperation,
+        target: str | None,
+        translation_key: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._operation = operation
+        self._target = target
+        self._attr_translation_key = translation_key
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_write_{translation_key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=coordinator.device_name,
+            manufacturer="APC",
+            model=coordinator.get_device_model_for_registry(),
+            serial_number=coordinator.serial_number,
+            configuration_url=coordinator.get_configuration_url_for_registry(),
+        )
+
+    @property
+    def available(self) -> bool:
+        return bool(
+            self.coordinator.last_update_success
+            and self.coordinator.write_operation_available(
+                self._operation.value, self._target
+            )
+        )
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_execute_write(self._operation.value, self._target)

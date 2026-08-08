@@ -16,7 +16,6 @@ try:
 except (ImportError, AttributeError):
     PYMODBUS_VERSION = "unknown"
 
-from pymodbus.client import ModbusTcpClient
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
@@ -45,7 +44,7 @@ from .const import (
     KEY_COORDINATOR,
     SUPPORTED_PLATFORMS,
 )
-from .coordinator import APCModbusCoordinator
+from .coordinator import APCModbusCoordinator, create_modbus_client
 from .device_types import (
     DETECTION_VERSION,
     APCDeviceType,
@@ -149,7 +148,16 @@ def _get_expected_entity_unique_ids(
     )
 
     all_keys = sensor_keys | binary_keys
-    return {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}
+    expected = {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}
+    from .write_support import write_entity_unique_ids
+
+    expected.update(
+        write_entity_unique_ids(
+            entry_id,
+            coordinator.write_capabilities | coordinator.write_capability_unresolved,
+        )
+    )
+    return expected
 
 
 async def _async_cleanup_stale_entities(
@@ -165,7 +173,13 @@ async def _async_cleanup_stale_entities(
     removed_count = 0
 
     for entity_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        if entity_entry.domain not in {"sensor", "binary_sensor"}:
+        is_existing_monitor = entity_entry.domain in {"sensor", "binary_sensor"}
+        is_write_control = (
+            entity_entry.domain in {"button", "switch"}
+            and entity_entry.unique_id
+            and entity_entry.unique_id.startswith(f"{prefix}write_")
+        )
+        if not is_existing_monitor and not is_write_control:
             continue
         if not entity_entry.unique_id or not entity_entry.unique_id.startswith(prefix):
             continue
@@ -221,7 +235,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     # Create client with timeout to prevent hung connections
-    client = ModbusTcpClient(host=host, port=port, timeout=5)
+    client = create_modbus_client(host, port, 5)
     connected = await hass.async_add_executor_job(client.connect)
     if not connected:
         raise ConfigEntryNotReady("Unable to connect to APC UPS")
@@ -387,6 +401,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except Exception as err:
         _LOGGER.error("Failed to fetch initial data from APC device: %s", err)
         raise ConfigEntryNotReady(f"Failed to fetch initial data: {err}") from err
+
+    try:
+        await coordinator.async_discover_write_capabilities()
+    except (OSError, TimeoutError, RuntimeError, TypeError, ValueError) as err:
+        from .write_support import WriteCapability
+
+        coordinator.write_capabilities.clear()
+        coordinator.write_capability_unresolved.update(
+            capability.value for capability in WriteCapability
+        )
+        _LOGGER.warning("Write capability discovery remained unresolved: %s", err)
 
     await _async_cleanup_stale_entities(hass, entry, coordinator)
 

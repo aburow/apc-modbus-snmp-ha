@@ -50,7 +50,14 @@ async def async_setup_entry(
     elif coordinator.device_type == APCDeviceType.SMT_UPS:
         from . import registers_smt_ups
 
-        sensor_descriptions = registers_smt_ups.SENSOR_DESCRIPTIONS
+        sensor_descriptions = [
+            *registers_smt_ups.SENSOR_DESCRIPTIONS,
+            *(
+                description
+                for capability, description in registers_smt_ups.WRITE_SENSOR_DESCRIPTIONS.items()
+                if capability in coordinator.write_capabilities
+            ),
+        ]
     elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
         from . import registers_smt_ups
 
@@ -173,9 +180,13 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             else coordinator.fw_version,
         )
         self._attr_icon = resolve_sensor_icon(description.key)
-        self._attr_entity_registry_enabled_default = is_sensor_enabled_by_default(
-            description.key,
-            coordinator.device_type.value,
+        self._attr_entity_registry_enabled_default = (
+            description.entity_registry_enabled_default
+            if description.key.endswith("_operation_state")
+            else is_sensor_enabled_by_default(
+                description.key,
+                coordinator.device_type.value,
+            )
         )
         # Energy is stored as integer Wh and converted to kWh only for the entity.
         if description.device_class != SensorDeviceClass.ENUM:

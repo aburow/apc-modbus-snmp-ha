@@ -67,9 +67,9 @@ def get_registers_for_device(
             from . import registers_smt_ups
 
             return (
-                registers_smt_ups.REGISTERS,
-                registers_smt_ups.REGISTER_BLOCKS,
-                registers_smt_ups.REGISTER_MAP,
+                registers_smt_ups.WRITABLE_REGISTERS,
+                registers_smt_ups.WRITABLE_REGISTER_BLOCKS,
+                registers_smt_ups.WRITABLE_REGISTER_MAP,
             )
         except ImportError:
             _LOGGER.warning(
