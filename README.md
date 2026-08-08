@@ -54,6 +54,9 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - SMT-compatible counters retain continuity across confirmed hardware resets
   and uint32 rollovers. Isolated or inconsistent counter decreases are ignored
   to prevent false energy jumps.
+- Supported SMT/SmartConnect devices expose a default-enabled diagnostic
+  **Output Energy Rollover** count. It tracks confirmed hardware wraps only;
+  ordinary resets and rejected counter readings do not affect it.
 
 ### External Probe Behavior (AP9335T/AP9335TH)
 - External probe sensors are optional and are created when compatible probe OIDs are detected by SNMP.
@@ -349,6 +352,9 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 ## Version History
 
 For detailed release notes, see `CHANGELOG.md`.
+
+### v1.2.6-dev.13
+- ✅ Adds a diagnostic Output Energy Rollover count for confirmed SMT/SmartConnect uint32 counter wraps.
 
 ### v1.2.6-dev.12
 - ✅ Normalizes supported cumulative-energy counters to Wh internally while retaining kWh presentation and Energy Dashboard compatibility.

@@ -22,6 +22,7 @@ class OutputEnergyTracker:
     previous_raw_wh: int | None = None
     serial_number: str | None = None
     pending_reset_raw_wh: int | None = None
+    rollover_count: int = 0
 
     @classmethod
     def from_storage(
@@ -29,20 +30,33 @@ class OutputEnergyTracker:
     ) -> "OutputEnergyTracker":
         """Restore valid state, or seed the first observed counter value."""
         if not isinstance(state, dict):
-            return cls(offset_wh=initial_rollovers * OUTPUT_ENERGY_WRAP_WH)
+            return cls(
+                offset_wh=initial_rollovers * OUTPUT_ENERGY_WRAP_WH,
+                rollover_count=initial_rollovers,
+            )
         offset = state.get("offset_wh")
         previous = state.get("previous_raw_wh")
         if not isinstance(offset, int) or offset < 0:
-            return cls(offset_wh=initial_rollovers * OUTPUT_ENERGY_WRAP_WH)
+            return cls(
+                offset_wh=initial_rollovers * OUTPUT_ENERGY_WRAP_WH,
+                rollover_count=initial_rollovers,
+            )
         if previous is not None and (
             not isinstance(previous, int) or not 0 <= previous < OUTPUT_ENERGY_WRAP_WH
         ):
-            return cls(offset_wh=initial_rollovers * OUTPUT_ENERGY_WRAP_WH)
+            return cls(
+                offset_wh=initial_rollovers * OUTPUT_ENERGY_WRAP_WH,
+                rollover_count=initial_rollovers,
+            )
         serial = state.get("serial_number")
+        rollover_count = state.get("rollover_count", initial_rollovers)
+        if not isinstance(rollover_count, int) or rollover_count < 0:
+            rollover_count = initial_rollovers
         return cls(
             offset_wh=offset,
             previous_raw_wh=previous,
             serial_number=serial if isinstance(serial, str) and serial else None,
+            rollover_count=rollover_count,
         )
 
     def update(self, raw_wh: int, serial_number: str | None) -> tuple[int, str | None]:
@@ -51,6 +65,7 @@ class OutputEnergyTracker:
             self.offset_wh = 0
             self.previous_raw_wh = None
             self.pending_reset_raw_wh = None
+            self.rollover_count = 0
 
         if self.previous_raw_wh is not None and raw_wh < self.previous_raw_wh:
             if (
@@ -58,6 +73,7 @@ class OutputEnergyTracker:
                 and raw_wh <= _WRAP_LOW_WATERMARK
             ):
                 self.offset_wh += OUTPUT_ENERGY_WRAP_WH
+                self.rollover_count += 1
                 reason = "wrap"
             elif (
                 self.pending_reset_raw_wh is not None
@@ -85,4 +101,5 @@ class OutputEnergyTracker:
             "offset_wh": self.offset_wh,
             "previous_raw_wh": self.previous_raw_wh,
             "serial_number": self.serial_number,
+            "rollover_count": self.rollover_count,
         }

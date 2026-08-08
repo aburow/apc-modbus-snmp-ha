@@ -2,6 +2,17 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.13] - 2026-08-08
+
+### Added
+- Added the default-enabled diagnostic **Output Energy Rollover** sensor for
+  supported SMT/SmartConnect counters. It reports the persisted number of
+  confirmed uint32 hardware counter wraps independently of reset compensation.
+
+### Changed
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.13`.
+
 ## [1.2.6-dev.12] - 2026-08-08
 
 ### Fixed

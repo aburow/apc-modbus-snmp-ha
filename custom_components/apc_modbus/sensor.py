@@ -86,6 +86,14 @@ async def async_setup_entry(
     sensor_descriptions = [
         description
         for description in sensor_descriptions
+        if not (
+            description.key == "output_energy_rollover"
+            and not isinstance(coordinator.data.get("output_energy"), int)
+        )
+    ]
+    sensor_descriptions = [
+        description
+        for description in sensor_descriptions
         if is_external_probe_entity_available(
             description.key,
             coordinator.data,

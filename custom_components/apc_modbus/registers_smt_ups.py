@@ -19,6 +19,7 @@ from __future__ import annotations
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
+    EntityCategory,
     PERCENTAGE,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
@@ -458,6 +459,12 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         state_class=SensorStateClass.TOTAL_INCREASING,
         suggested_display_precision=3,
         register_key="output_energy",
+    ),
+    APCModbusSensorDescription(
+        key="output_energy_rollover",
+        name="Output Energy Rollover",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        register_key="output_energy_rollover",
     ),
     APCModbusSensorDescription(
         key="input_voltage",

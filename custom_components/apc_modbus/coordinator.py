@@ -153,8 +153,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name for name in ("device_id", "slave", "unit") if name in read_params
         ]
         self._resolved_unit_param: str | None = None
+        self._output_energy_completed_rollovers = output_energy_completed_rollovers
         self._output_energy_tracker = OutputEnergyTracker.from_storage(
-            None, output_energy_completed_rollovers
+            None, self._output_energy_completed_rollovers
         )
         self._output_energy_store = Store[dict[str, Any]](
             hass, 1, f"{DOMAIN}.{entry_id}_output_energy"
@@ -165,7 +166,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Restore the SMT output-energy tracker before its first update."""
         state = await self._output_energy_store.async_load()
         self._output_energy_tracker = OutputEnergyTracker.from_storage(
-            state, self._output_energy_tracker.offset_wh // (2**32)
+            state, self._output_energy_completed_rollovers
         )
         self._output_energy_tracker_restored = True
 
@@ -179,6 +180,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         if self.device_type == APCDeviceType.SMARTCONNECT_UPS and raw_wh == 2**32 - 1:
             data.pop("output_energy", None)
+            data.pop("output_energy_rollover", None)
             return
         if not self._output_energy_tracker_restored:
             await self.async_restore_output_energy_tracker()
@@ -199,6 +201,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raw_wh,
             )
         data["output_energy"] = total_wh
+        data["output_energy_rollover"] = self._output_energy_tracker.rollover_count
         if reason != "pending_reset":
             self._output_energy_store.async_delay_save(
                 self._output_energy_tracker.as_dict,

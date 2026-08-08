@@ -608,6 +608,12 @@ ALL_SENSORS_UNIFIED = {
                 "category": "core",
             },
             {
+                "key": "output_energy_rollover",
+                "label": "Output Energy Rollover",
+                "source": "tracker",
+                "category": "diagnostic",
+            },
+            {
                 "key": "bypass_input_status_bf",
                 "label": "Bypass Input Status Bitfield",
                 "source": "modbus",

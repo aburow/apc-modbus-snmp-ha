@@ -32,6 +32,7 @@ def test_output_energy_tracker_continuity() -> None:
     tracker = TRACKER.OutputEnergyTracker.from_storage(None, 0)
     tracker.update(2**32 - 2, "serial")
     assert tracker.update(3, "serial") == (2**32 + 3, "wrap")
+    assert tracker.rollover_count == 1
 
     tracker = TRACKER.OutputEnergyTracker.from_storage(None, 0)
     tracker.update(100, "serial")
@@ -47,6 +48,7 @@ def test_output_energy_tracker_ignores_an_isolated_lower_reading() -> None:
     assert tracker.update(3, "serial") == (100, "pending_reset")
     assert tracker.as_dict() == state
     assert tracker.update(101, "serial") == (101, None)
+    assert tracker.rollover_count == 0
 
 
 def test_output_energy_tracker_confirms_a_repeated_reset_reading() -> None:
@@ -55,6 +57,7 @@ def test_output_energy_tracker_confirms_a_repeated_reset_reading() -> None:
 
     assert tracker.update(3, "serial") == (100, "pending_reset")
     assert tracker.update(3, "serial") == (103, "reset")
+    assert tracker.rollover_count == 0
 
 
 def test_output_energy_tracker_rejects_inconsistent_reset_confirmation() -> None:
@@ -69,11 +72,28 @@ def test_output_energy_tracker_restores_seed_and_changes_serial() -> None:
     tracker = TRACKER.OutputEnergyTracker.from_storage(
         {"offset_wh": 2**32, "previous_raw_wh": 3, "serial_number": "old"}, 0
     )
-    assert tracker.update(4, "old")[0] == 2**32 + 4
+    tracker.update(2**32 - 2, "old")
+    assert tracker.update(4, "old")[1] == "wrap"
+    assert tracker.rollover_count == 1
     assert tracker.update(4, "new")[0] == 4
+    assert tracker.rollover_count == 0
 
     seeded = TRACKER.OutputEnergyTracker.from_storage(None, 1)
     assert seeded.update(3, "serial")[0] == 2**32 + 3
+    assert seeded.rollover_count == 1
+
+
+def test_output_energy_tracker_rollover_persistence_and_legacy_migration() -> None:
+    tracker = TRACKER.OutputEnergyTracker.from_storage(None, 0)
+    tracker.update(2**32 - 2, "serial")
+    tracker.update(3, "serial")
+    restored = TRACKER.OutputEnergyTracker.from_storage(tracker.as_dict(), 0)
+    assert restored.rollover_count == 1
+
+    legacy = TRACKER.OutputEnergyTracker.from_storage(
+        {"offset_wh": 2**32, "previous_raw_wh": 3, "serial_number": "serial"}, 2
+    )
+    assert legacy.rollover_count == 2
 
 
 def test_issue_14_sensor_contract() -> None:
@@ -83,19 +103,39 @@ def test_issue_14_sensor_contract() -> None:
         root / "custom_components/apc_modbus/sensor_catalog_unified.py"
     ).read_text()
     config_flow = (root / "custom_components/apc_modbus/config_flow.py").read_text()
+    sensor = (root / "custom_components/apc_modbus/sensor.py").read_text()
 
     assert '"key": "output_energy"' in registers
     assert '"address": 0x0091' in registers
     assert '"scale": 1' in registers
     assert 'key="output_energy_kwh"' in registers
+    assert 'key="output_energy_rollover"' in registers
+    assert 'name="Output Energy Rollover"' in registers
+    assert "EntityCategory.DIAGNOSTIC" in registers
     assert 'register_key="output_energy"' in registers
     assert "suggested_display_precision=3" in registers
     assert "UnitOfEnergy.KILO_WATT_HOUR" in registers
     assert '"key": "output_energy_kwh"' in catalog
+    assert '"key": "output_energy_rollover"' in catalog
     assert '"unit": "kWh"' in catalog
+    assert 'description.key == "output_energy_rollover"' in sensor
+    assert 'coordinator.data.get("output_energy")' in sensor
     assert "CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS" in config_flow
     assert "vol.All(" in config_flow
     assert "vol.Range(min=0)" in config_flow
+
+
+def test_output_energy_rollover_is_enabled_by_default() -> None:
+    root = Path(__file__).resolve().parents[1]
+    availability = root / "custom_components/apc_modbus/sensor_availability_unified.py"
+    module_spec = importlib.util.spec_from_file_location("availability", availability)
+    assert module_spec and module_spec.loader
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    assert module.is_sensor_enabled_by_default("output_energy_rollover", "smt_ups")
+    assert module.is_sensor_enabled_by_default(
+        "output_energy_rollover", "smartconnect_ups"
+    )
 
 
 def _load_energy_runtime(monkeypatch: pytest.MonkeyPatch):

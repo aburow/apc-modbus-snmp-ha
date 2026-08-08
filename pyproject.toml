@@ -1,6 +1,6 @@
 [project]
 name = "apc-modbus-ha"
-version = "1.2.6-dev.12"
+version = "1.2.6-dev.13"
 requires-python = ">=3.13"
 
 [dependency-groups]
