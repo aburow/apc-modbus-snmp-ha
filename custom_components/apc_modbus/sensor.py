@@ -169,12 +169,17 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             description.key,
             coordinator.device_type.value,
         )
-        # Keep numeric UI rendering concise across all device families.
+        # Energy is stored as integer Wh and converted to kWh only for the entity.
         if description.device_class != SensorDeviceClass.ENUM:
             precision = description.suggested_display_precision
-            self._attr_suggested_display_precision = (
-                1 if precision is None else min(precision, 1)
-            )
+            if description.device_class == SensorDeviceClass.ENERGY:
+                self._attr_suggested_display_precision = (
+                    3 if precision is None else precision
+                )
+            else:
+                self._attr_suggested_display_precision = (
+                    1 if precision is None else min(precision, 1)
+                )
 
     @property
     def native_value(self):
@@ -189,5 +194,8 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             except (TypeError, ValueError):
                 return None
             return self.entity_description.value_map.get(code, f"Unknown ({code})")
+
+        if self.entity_description.device_class == SensorDeviceClass.ENERGY:
+            return value / 1000
 
         return value

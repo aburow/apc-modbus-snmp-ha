@@ -160,7 +160,6 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass, 1, f"{DOMAIN}.{entry_id}_output_energy"
         )
         self._output_energy_tracker_restored = False
-        self._output_energy_reset_logged = False
 
     async def async_restore_output_energy_tracker(self) -> None:
         """Restore the SMT output-energy tracker before its first update."""
@@ -171,25 +170,40 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._output_energy_tracker_restored = True
 
     async def _async_track_output_energy(self, data: dict[str, Any]) -> None:
-        """Publish and persist the compensated SMT output-energy counter."""
+        """Keep the SMT-compatible output-energy counter in canonical Wh."""
         raw_wh = data.get("output_energy")
-        if self.device_type != APCDeviceType.SMT_UPS or not isinstance(raw_wh, int):
+        if self.device_type not in (
+            APCDeviceType.SMT_UPS,
+            APCDeviceType.SMARTCONNECT_UPS,
+        ) or not isinstance(raw_wh, int):
+            return
+        if self.device_type == APCDeviceType.SMARTCONNECT_UPS and raw_wh == 2**32 - 1:
+            data.pop("output_energy", None)
             return
         if not self._output_energy_tracker_restored:
             await self.async_restore_output_energy_tracker()
         total_wh, reason = self._output_energy_tracker.update(
             raw_wh, self.serial_number
         )
-        if reason == "reset" and not self._output_energy_reset_logged:
+        if reason == "pending_reset":
             _LOGGER.warning(
-                "[%s] Output Energy counter decreased; preserving continuity as a meter reset",
+                "[%s] Rejected Output Energy counter decrease to %d Wh; "
+                "awaiting reset confirmation",
                 self._log_ctx,
+                raw_wh,
             )
-            self._output_energy_reset_logged = True
-        data["output_energy_kwh"] = total_wh / 1000
-        self._output_energy_store.async_delay_save(
-            self._output_energy_tracker.as_dict, OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS
-        )
+        elif reason == "reset":
+            _LOGGER.warning(
+                "[%s] Confirmed Output Energy meter reset at %d Wh; preserving continuity",
+                self._log_ctx,
+                raw_wh,
+            )
+        data["output_energy"] = total_wh
+        if reason != "pending_reset":
+            self._output_energy_store.async_delay_save(
+                self._output_energy_tracker.as_dict,
+                OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS,
+            )
 
     def set_device_metadata(
         self,
@@ -1628,6 +1642,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             return None
 
+        energy_wh_multiplier = descriptor.get("energy_wh_multiplier")
+        if energy_wh_multiplier is not None:
+            return raw * energy_wh_multiplier
         if scale and scale != 1:
             return raw / scale
 

@@ -11,6 +11,7 @@ from typing import Any
 OUTPUT_ENERGY_WRAP_WH = 2**32
 _WRAP_HIGH_WATERMARK = OUTPUT_ENERGY_WRAP_WH * 99 // 100
 _WRAP_LOW_WATERMARK = OUTPUT_ENERGY_WRAP_WH // 100
+_RESET_CONFIRMATION_MAX_ADVANCE_WH = 50
 
 
 @dataclass
@@ -20,6 +21,7 @@ class OutputEnergyTracker:
     offset_wh: int = 0
     previous_raw_wh: int | None = None
     serial_number: str | None = None
+    pending_reset_raw_wh: int | None = None
 
     @classmethod
     def from_storage(
@@ -48,6 +50,7 @@ class OutputEnergyTracker:
         if self.serial_number and serial_number and self.serial_number != serial_number:
             self.offset_wh = 0
             self.previous_raw_wh = None
+            self.pending_reset_raw_wh = None
 
         if self.previous_raw_wh is not None and raw_wh < self.previous_raw_wh:
             if (
@@ -56,13 +59,22 @@ class OutputEnergyTracker:
             ):
                 self.offset_wh += OUTPUT_ENERGY_WRAP_WH
                 reason = "wrap"
-            else:
+            elif (
+                self.pending_reset_raw_wh is not None
+                and self.pending_reset_raw_wh
+                <= raw_wh
+                <= self.pending_reset_raw_wh + _RESET_CONFIRMATION_MAX_ADVANCE_WH
+            ):
                 self.offset_wh += self.previous_raw_wh
                 reason = "reset"
+            else:
+                self.pending_reset_raw_wh = raw_wh
+                return self.offset_wh + self.previous_raw_wh, "pending_reset"
         else:
             reason = None
 
         self.previous_raw_wh = raw_wh
+        self.pending_reset_raw_wh = None
         if serial_number:
             self.serial_number = serial_number
         return self.offset_wh + raw_wh, reason

@@ -8,7 +8,7 @@ A Home Assistant integration for monitoring APC power devices via Modbus/TCP wit
 
 Supported device families include:
 - Legacy Smart-UPS
-- Smart-UPS SMT/SMX/SRT
+- Smart-UPS SMT/SMX/SRT and SmartConnect
 - NetShelter Rack PDU
 
 This custom-component runs standalone and DOES NOT require additional components such as NUT or APCUPSD.
@@ -43,6 +43,17 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - Real-time power measurements
 - Status bits and fault indicators
 - And more...
+
+### Energy Counters
+
+- Supported SMT/SMX/SRT, SmartConnect, and Rack PDU energy counters are
+  normalized internally to whole Wh.
+- Home Assistant exposes cumulative energy in kWh with a three-decimal display
+  suggestion; the stored value remains unrounded for recorder statistics and
+  Energy Dashboard use.
+- SMT-compatible counters retain continuity across confirmed hardware resets
+  and uint32 rollovers. Isolated or inconsistent counter decreases are ignored
+  to prevent false energy jumps.
 
 ### External Probe Behavior (AP9335T/AP9335TH)
 - External probe sensors are optional and are created when compatible probe OIDs are detected by SNMP.
@@ -338,6 +349,10 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 ## Version History
 
 For detailed release notes, see `CHANGELOG.md`.
+
+### v1.2.6-dev.12
+- ✅ Normalizes supported cumulative-energy counters to Wh internally while retaining kWh presentation and Energy Dashboard compatibility.
+- ✅ Rejects transient Output Energy counter decreases and supports valid SmartConnect energy readings.
 
 ### v1.2.6-dev.11
 - ✅ Normalizes legacy Smart-UPS runtime telemetry to Home Assistant's native seconds duration while keeping minutes as the suggested display unit.

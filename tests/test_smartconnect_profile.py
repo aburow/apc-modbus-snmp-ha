@@ -7,7 +7,6 @@ def test_smartconnect_excludes_unsupported_measurements() -> None:
     factory = (root / "custom_components/apc_modbus/register_factory.py").read_text()
 
     for key in (
-        "output_energy",
         "bypass_voltage",
         "bypass_frequency",
         "input_voltage_l2",
@@ -20,6 +19,7 @@ def test_smartconnect_excludes_unsupported_measurements() -> None:
         assert f'"{key}",' in registers
     assert "SMARTCONNECT_SENSOR_DESCRIPTIONS" in registers
     assert "not in SMARTCONNECT_UNSUPPORTED_SENSOR_KEYS" in registers
+    assert 'key="output_energy_kwh"' in registers
 
     # Unsupported measurements are excluded at the sensor-entity level only.
     # Modbus reads must still use the two large, diagnosed SMT blocks rather

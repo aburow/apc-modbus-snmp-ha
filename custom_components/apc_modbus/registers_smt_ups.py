@@ -318,7 +318,6 @@ SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS = frozenset(
         "output_apparent_power_percent_l2",
         "output_current_l2",
         "output_voltage_l2",
-        "output_energy",
         "bypass_voltage",
         "bypass_frequency",
         "input_voltage_l2",
@@ -457,7 +456,8 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        register_key="output_energy_kwh",
+        suggested_display_precision=3,
+        register_key="output_energy",
     ),
     APCModbusSensorDescription(
         key="input_voltage",

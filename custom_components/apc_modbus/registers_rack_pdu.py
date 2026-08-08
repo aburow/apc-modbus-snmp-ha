@@ -14,6 +14,7 @@ import logging
 from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import UnitOfEnergy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,13 +101,14 @@ DEVICE_REGISTERS = [
         "type": "int16",
         "scale": 100,
     },
-    # Energy (kWh) - 2 registers
+    # Energy: raw tenths of kWh, normalized directly to integer Wh.
     {
         "key": "device_energy",
         "address": 0x00D2,
         "count": 2,
         "type": "uint32",
-        "scale": 10,
+        "scale": 1,
+        "energy_wh_multiplier": 100,
     },
     # Load state (enum: 1=Low, 2=Normal, 3=Near Overload, 4=Overload)
     {
@@ -283,14 +285,15 @@ def generate_outlet_registers(num_outlets: int) -> list[dict[str, Any]]:
                 }
             )
 
-            # Outlet energy (kWh, 2 registers, scale /10)
+            # Outlet energy: raw tenths of kWh, normalized to integer Wh.
             registers.append(
                 {
                     "key": f"outlet_{outlet_num}_energy",
                     "address": base_energy + offset * 2,
                     "count": 2,
                     "type": "uint32",
-                    "scale": 10,
+                    "scale": 1,
+                    "energy_wh_multiplier": 100,
                 }
             )
 
@@ -463,8 +466,10 @@ def get_sensor_descriptions(capabilities: dict = None):
             APCModbusSensorDescription(
                 key="device_energy",
                 name="Energy",
-                native_unit_of_measurement="kWh",
+                native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                device_class=SensorDeviceClass.ENERGY,
                 state_class=SensorStateClass.TOTAL_INCREASING,
+                suggested_display_precision=3,
                 register_key="device_energy",
             ),
             APCModbusSensorDescription(
@@ -552,8 +557,10 @@ def get_sensor_descriptions(capabilities: dict = None):
                 APCModbusSensorDescription(
                     key=f"outlet_{outlet_num}_energy",
                     name=f"Outlet {outlet_num} Energy",
-                    native_unit_of_measurement="kWh",
+                    native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+                    device_class=SensorDeviceClass.ENERGY,
                     state_class=SensorStateClass.TOTAL_INCREASING,
+                    suggested_display_precision=3,
                     register_key=f"outlet_{outlet_num}_energy",
                 ),
                 APCModbusSensorDescription(

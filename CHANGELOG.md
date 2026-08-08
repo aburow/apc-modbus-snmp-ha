@@ -2,6 +2,23 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.12] - 2026-08-08
+
+### Fixed
+- Output Energy now rejects isolated or inconsistent raw-counter decreases before
+  applying a reset offset, preventing impossible cumulative-energy jumps while
+  retaining confirmed reset and uint32 rollover handling.
+- SmartConnect exposes Output Energy when its SMT-compatible register is valid;
+  unsupported `0xFFFFFFFF` values remain unavailable.
+
+### Changed
+- Cumulative energy is normalized internally to integer Wh for SMT/SmartConnect
+  UPSs and Rack PDU device/outlet meters. Public energy sensors continue to
+  publish kWh for Home Assistant statistics and Energy Dashboard use, with a
+  three-decimal display suggestion.
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.12`.
+
 ## [1.2.6-dev.11] - 2026-08-08
 
 ### Fixed
