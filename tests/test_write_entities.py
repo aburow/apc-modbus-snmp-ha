@@ -213,6 +213,7 @@ class Coordinator:
     def __init__(self, support):
         self.hass = SimpleNamespace(config_entries=SimpleNamespace())
         self.device_name = "UPS"
+        self._log_ctx = "UPS ups:502 (unit 1)"
         self.serial_number = "serial"
         self.last_update_success = True
         self.keep_connection_open_enabled = False
@@ -394,6 +395,35 @@ def test_native_write_entities_are_capability_filtered_and_disabled(monkeypatch)
         "Run Diagnostics",
         "Control restored to available; this is not another press.",
     )
+    notifications = []
+    monkeypatch.setattr(
+        button,
+        "async_create",
+        lambda _hass, message, **kwargs: notifications.append((message, kwargs)),
+    )
+
+    async def snmp_retry():
+        return False
+
+    async def detect_type():
+        return None
+
+    async def refresh():
+        return None
+
+    coordinator.async_retry_snmp_metadata = snmp_retry
+    coordinator.async_detect_device_type = detect_type
+    coordinator.async_request_refresh = refresh
+    redetect = next(
+        entity
+        for entity in buttons
+        if isinstance(entity, button.APCModbusRedetectDeviceTypeButton)
+    )
+    redetect._entry.data = {"device_type": "smt_ups", "detection_version": 4}
+    asyncio.run(redetect.async_press())
+    assert "Modbus detection remains" in notifications[0][0]
+    assert "Optional SNMP enrichment was unavailable" in notifications[0][0]
+    assert "no user action is required" in notifications[0][0]
     coordinator.data["battery_test_operation_state"] = "refused"
 
     translations = json.loads(
