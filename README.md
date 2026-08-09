@@ -385,6 +385,9 @@ This project is licensed under the GNU Affero General Public License v3.0 or lat
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 
+The author is not affiliated with APC or Schneider Electric. Use of this
+software is at the user's or installer's own risk.
+
 ## Credits
 
 Developed for Home Assistant integration with APC UPS and Rack PDU devices via Modbus/TCP protocol.
