@@ -4,6 +4,10 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+### Fixed
+- Added the Logbook clarification when an APC control recovers after a press;
+  the retained native button timestamp is not another command.
+
 ## [2.0.0-dev.3] - 2026-08-09
 
 ### Security

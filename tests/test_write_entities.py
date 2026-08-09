@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 import importlib
 import importlib.util
 import json
@@ -245,6 +246,14 @@ class Coordinator:
         self.calls = []
         self._write_pending = set()
         self._write_outcomes_unknown = {}
+        self.write_hook = None
+        self._io_lock = _unlocked()
+        self.host = "192.0.2.1"
+        self.snmp_community = "public"
+        self.port = 502
+        self.unit = 1
+        self.transport_mode = "session"
+        self.transport_promotion_reason = None
 
     def get_device_model_for_registry(self):
         return "SMT1500"
@@ -274,6 +283,8 @@ class Coordinator:
 
     async def async_execute_write(self, operation, target=None):
         self.calls.append((operation, target))
+        if self.write_hook:
+            await self.write_hook()
 
     def async_add_listener(self, callback):
         return callback
@@ -282,6 +293,17 @@ class Coordinator:
 class Hass:
     def __init__(self, coordinator):
         self.data = {"apc_modbus": {"entry": {"coordinator": coordinator}}}
+        self.executor_hook = None
+
+    async def async_add_executor_job(self, target, *args):
+        if self.executor_hook:
+            self.executor_hook()
+        return target(*args)
+
+
+@asynccontextmanager
+async def _unlocked():
+    yield
 
 
 def _collect_setup(module, hass, entry):
@@ -545,3 +567,177 @@ def test_no_capabilities_means_no_write_entities(monkeypatch):
     ].APCDeviceType.SMT_UPS
     entry.async_on_unload = lambda callback: callback
     assert _collect_setup(sensor, hass, entry) == []
+
+
+def _set_logbook_identity(entity, name):
+    entity.name = name
+    entity.entity_id = f"button.ups_{name.lower().replace(' ', '_')}"
+    entity._context = object()
+
+
+def test_write_restoration_is_armed_before_reconciliation(monkeypatch):
+    _, button, _, support = _load_entities(monkeypatch)
+    coordinator = Coordinator(support)
+    hass = Hass(coordinator)
+    coordinator.hass = hass
+    entry = SimpleNamespace(entry_id="entry", data={})
+    start = button.APCModbusWriteButton(
+        coordinator,
+        entry,
+        support.WriteOperation.BATTERY_TEST_START,
+        None,
+        "battery_test_start",
+    )
+    _set_logbook_identity(start, "Start Battery Self Test")
+
+    async def reconciliation_update():
+        assert start._report_restoration
+        coordinator._write_pending.add("battery_test")
+        start._handle_coordinator_update()
+
+    coordinator.write_hook = reconciliation_update
+    asyncio.run(start.async_press())
+    coordinator._write_pending.clear()
+    coordinator.data["battery_test_operation_state"] = "pending"
+    original_context = start._context
+    start._context = object()
+    start._handle_coordinator_update()
+
+    entries = sys.modules["homeassistant.components.logbook"].entries
+    assert len(entries) == 1
+    assert entries[0][0][2] == (
+        "Control restored to available; this is not another press. "
+        "Current device status: Pending."
+    )
+    assert entries[0][1]["entity_id"] == start.entity_id
+    assert entries[0][1]["context"] is original_context
+    start._handle_coordinator_update()
+    assert len(entries) == 1
+
+
+def test_refused_write_restoration_and_rejected_write_do_not_misreport(monkeypatch):
+    _, button, _, support = _load_entities(monkeypatch)
+    coordinator = Coordinator(support)
+    hass = Hass(coordinator)
+    coordinator.hass = hass
+    entry = SimpleNamespace(entry_id="entry", data={})
+    calibration = button.APCModbusWriteButton(
+        coordinator,
+        entry,
+        support.WriteOperation.CALIBRATION_START,
+        None,
+        "calibration_start",
+    )
+    _set_logbook_identity(calibration, "Start Runtime Calibration")
+
+    async def reconciliation_update():
+        coordinator._write_pending.add("calibration")
+        calibration._handle_coordinator_update()
+
+    coordinator.write_hook = reconciliation_update
+    asyncio.run(calibration.async_press())
+    coordinator._write_pending.clear()
+    coordinator.data["runtime_calibration_operation_state"] = "refused"
+    calibration._handle_coordinator_update()
+    entries = sys.modules["homeassistant.components.logbook"].entries
+    assert len(entries) == 1
+    assert entries[0][0][2].endswith("Terminal status: Refused.")
+
+    async def reject(*args):
+        raise RuntimeError("not sent")
+
+    coordinator.async_execute_write = reject
+    with pytest.raises(RuntimeError, match="not sent"):
+        asyncio.run(calibration.async_press())
+    coordinator.last_update_success = False
+    calibration._handle_coordinator_update()
+    coordinator.last_update_success = True
+    calibration._handle_coordinator_update()
+    assert len(entries) == 1
+
+
+def test_utility_buttons_log_one_event_after_genuine_recovery(monkeypatch):
+    _, button, _, support = _load_entities(monkeypatch)
+    coordinator = Coordinator(support)
+    hass = Hass(coordinator)
+    coordinator.hass = hass
+    entry = SimpleNamespace(
+        entry_id="entry", data={"device_type": "smt_ups", "detection_version": 4}
+    )
+    utilities = [
+        button.APCModbusDiagnosticButton(coordinator, entry),
+        button.APCModbusRedetectDeviceTypeButton(coordinator, entry),
+        button.APCModbusResetMonitorDefaultsButton(coordinator, entry.entry_id),
+    ]
+    for entity in utilities:
+        _set_logbook_identity(entity, entity._attr_name)
+
+    def make_unavailable(entity):
+        def update():
+            assert entity._report_restoration
+            coordinator.last_update_success = False
+            entity._handle_coordinator_update()
+
+        return update
+
+    coordinator.hass.executor_hook = make_unavailable(utilities[0])
+    asyncio.run(utilities[0].async_press())
+
+    async def retry_metadata():
+        make_unavailable(utilities[1])()
+        return False
+
+    async def detect_type():
+        return coordinator.device_type
+
+    async def refresh():
+        return None
+
+    coordinator.async_retry_snmp_metadata = retry_metadata
+    coordinator.async_detect_device_type = detect_type
+    coordinator.async_request_refresh = refresh
+    coordinator.last_update_success = True
+    asyncio.run(utilities[1].async_press())
+
+    async def reset_defaults(*args, **kwargs):
+        make_unavailable(utilities[2])()
+        return (0, 0, 0)
+
+    monkeypatch.setattr(
+        button, "async_reset_entry_monitors_to_defaults", reset_defaults
+    )
+    coordinator.last_update_success = True
+    asyncio.run(utilities[2].async_press())
+
+    for entity in utilities:
+        coordinator.last_update_success = True
+        entity._handle_coordinator_update()
+    entries = sys.modules["homeassistant.components.logbook"].entries
+    assert len(entries) == 3
+    assert all(
+        entry[0][2] == "Control restored to available; this is not another press."
+        for entry in entries
+    )
+
+
+def test_restoration_requires_an_unavailable_transition(monkeypatch):
+    _, button, _, support = _load_entities(monkeypatch)
+    coordinator = Coordinator(support)
+    hass = Hass(coordinator)
+    coordinator.hass = hass
+    entry = SimpleNamespace(entry_id="entry", data={})
+    start = button.APCModbusWriteButton(
+        coordinator,
+        entry,
+        support.WriteOperation.BATTERY_TEST_START,
+        None,
+        "battery_test_start",
+    )
+    _set_logbook_identity(start, "Start Battery Self Test")
+    asyncio.run(start.async_press())
+    start._handle_coordinator_update()
+    coordinator.last_update_success = False
+    start._handle_coordinator_update()
+    coordinator.last_update_success = True
+    start._handle_coordinator_update()
+    assert sys.modules["homeassistant.components.logbook"].entries == []

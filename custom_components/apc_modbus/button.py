@@ -49,16 +49,25 @@ class _APCModbusRestorationButton:
 
     _report_restoration = False
     _restoration_was_unavailable = False
+    _restoration_context = None
 
     def _mark_restoration_candidate(self) -> None:
         self._report_restoration = True
         self._restoration_was_unavailable = False
+        self._restoration_context = getattr(self, "_context", None)
+
+    def _clear_restoration_candidate(self) -> None:
+        self._report_restoration = False
+        self._restoration_was_unavailable = False
+        self._restoration_context = None
+
+    def _complete_restoration_candidate(self) -> None:
+        """Discard an arm that did not observe the press-related outage."""
+        if not self._restoration_was_unavailable:
+            self._clear_restoration_candidate()
 
     def _restoration_message(self) -> str:
         return "Control restored to available; this is not another press."
-
-    def _restoration_expired(self) -> bool:
-        return False
 
     def _handle_coordinator_update(self) -> None:
         super()._handle_coordinator_update()
@@ -66,21 +75,18 @@ class _APCModbusRestorationButton:
             return
         if not self.available:
             self._restoration_was_unavailable = True
-            if self._restoration_expired():
-                self._report_restoration = False
-                self._restoration_was_unavailable = False
             return
         if not self._restoration_was_unavailable:
             return
-        self._report_restoration = False
-        self._restoration_was_unavailable = False
+        context = self._restoration_context
+        self._clear_restoration_candidate()
         async_log_entry(
             self.hass,
             self.name or "APC control",
             self._restoration_message(),
             domain=DOMAIN,
             entity_id=self.entity_id,
-            context=self._context,
+            context=context,
         )
 
 
@@ -160,20 +166,25 @@ class APCModbusDiagnosticButton(
 
     async def async_press(self) -> None:
         """Run diagnostics and show the dump in a persistent-notification modal."""
-        async with self.coordinator._io_lock:
-            dump = await self.hass.async_add_executor_job(
-                collect_diagnostic_dump,
-                self.coordinator.host,
-                self.coordinator.snmp_community,
-                self.coordinator.port,
-                self.coordinator.unit,
-                self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
-                self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
-                self._entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT),
-                self.coordinator.transport_mode,
-                self.coordinator.transport_promotion_reason,
-                self.coordinator.snmp_availability,
-            )
+        self._mark_restoration_candidate()
+        try:
+            async with self.coordinator._io_lock:
+                dump = await self.hass.async_add_executor_job(
+                    collect_diagnostic_dump,
+                    self.coordinator.host,
+                    self.coordinator.snmp_community,
+                    self.coordinator.port,
+                    self.coordinator.unit,
+                    self._entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL),
+                    self._entry.data.get(CONF_KEEP_CONNECTION_OPEN, False),
+                    self._entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT),
+                    self.coordinator.transport_mode,
+                    self.coordinator.transport_promotion_reason,
+                    self.coordinator.snmp_availability,
+                )
+        except Exception:
+            self._clear_restoration_candidate()
+            raise
 
         dump_json = json.dumps(dump, indent=2, sort_keys=False)
         notification_id = f"{DOMAIN}_{self._entry.entry_id}_diagnostics"
@@ -184,7 +195,7 @@ class APCModbusDiagnosticButton(
             notification_id=notification_id,
         )
         _LOGGER.info("[%s] Diagnostics dump generated.", self.coordinator._log_ctx)
-        self._mark_restoration_candidate()
+        self._complete_restoration_candidate()
 
 
 class APCModbusRedetectDeviceTypeButton(
@@ -212,8 +223,13 @@ class APCModbusRedetectDeviceTypeButton(
 
     async def async_press(self) -> None:
         """Run Modbus device detection again and reload if the result changed."""
-        snmp_retry_succeeded = await self.coordinator.async_retry_snmp_metadata()
-        detected_device_type = await self.coordinator.async_detect_device_type()
+        self._mark_restoration_candidate()
+        try:
+            snmp_retry_succeeded = await self.coordinator.async_retry_snmp_metadata()
+            detected_device_type = await self.coordinator.async_detect_device_type()
+        except Exception:
+            self._clear_restoration_candidate()
+            raise
         selected_device_type = choose_device_type(
             stored_device_type=self.coordinator.device_type,
             detected_device_type=detected_device_type,
@@ -263,7 +279,7 @@ class APCModbusRedetectDeviceTypeButton(
             self.coordinator._log_ctx,
             device_type_label(selected_device_type),
         )
-        self._mark_restoration_candidate()
+        self._complete_restoration_candidate()
 
 
 class APCModbusResetMonitorDefaultsButton(
@@ -291,17 +307,22 @@ class APCModbusResetMonitorDefaultsButton(
 
     async def async_press(self) -> None:
         """Reset enabled/disabled entities to integration defaults."""
-        device_type = self.coordinator.device_type
-        device_family = device_type.value if device_type is not None else "unknown"
-        (
-            enabled_count,
-            disabled_count,
-            unchanged_count,
-        ) = await async_reset_entry_monitors_to_defaults(
-            self.hass,
-            entry_id=self._entry_id,
-            device_family=device_family,
-        )
+        self._mark_restoration_candidate()
+        try:
+            device_type = self.coordinator.device_type
+            device_family = device_type.value if device_type is not None else "unknown"
+            (
+                enabled_count,
+                disabled_count,
+                unchanged_count,
+            ) = await async_reset_entry_monitors_to_defaults(
+                self.hass,
+                entry_id=self._entry_id,
+                device_family=device_family,
+            )
+        except Exception:
+            self._clear_restoration_candidate()
+            raise
 
         notification_id = f"{DOMAIN}_{self._entry_id}_reset_monitor_defaults"
         message = (
@@ -323,7 +344,7 @@ class APCModbusResetMonitorDefaultsButton(
             disabled_count,
             unchanged_count,
         )
-        self._mark_restoration_candidate()
+        self._complete_restoration_candidate()
 
 
 class APCModbusWriteButton(
@@ -366,8 +387,15 @@ class APCModbusWriteButton(
         )
 
     async def async_press(self) -> None:
-        await self.coordinator.async_execute_write(self._operation.value, self._target)
         self._mark_restoration_candidate()
+        try:
+            await self.coordinator.async_execute_write(
+                self._operation.value, self._target
+            )
+        except Exception:
+            self._clear_restoration_candidate()
+            raise
+        self._complete_restoration_candidate()
 
     def _restoration_message(self) -> str:
         """Describe the existing companion state without claiming completion."""
@@ -393,14 +421,3 @@ class APCModbusWriteButton(
         else:
             state_key = "runtime_calibration_operation_state"
         return str(self.coordinator.data.get(state_key, "unknown")).replace("_", " ")
-
-    def _restoration_expired(self) -> bool:
-        """Avoid carrying an abort/cancel press into a later operation."""
-        return self._operation_status() in {
-            "passed",
-            "failed",
-            "refused",
-            "aborted",
-            "on",
-            "off",
-        }
