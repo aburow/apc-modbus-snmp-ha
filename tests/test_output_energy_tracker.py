@@ -99,9 +99,6 @@ def test_output_energy_tracker_rollover_persistence_and_legacy_migration() -> No
 def test_issue_14_sensor_contract() -> None:
     root = Path(__file__).resolve().parents[1]
     registers = (root / "custom_components/apc_modbus/registers_smt_ups.py").read_text()
-    catalog = (
-        root / "custom_components/apc_modbus/sensor_catalog_unified.py"
-    ).read_text()
     config_flow = (root / "custom_components/apc_modbus/config_flow.py").read_text()
     sensor = (root / "custom_components/apc_modbus/sensor.py").read_text()
 
@@ -115,9 +112,6 @@ def test_issue_14_sensor_contract() -> None:
     assert 'register_key="output_energy"' in registers
     assert "suggested_display_precision=3" in registers
     assert "UnitOfEnergy.KILO_WATT_HOUR" in registers
-    assert '"key": "output_energy_kwh"' in catalog
-    assert '"key": "output_energy_rollover"' in catalog
-    assert '"unit": "kWh"' in catalog
     assert 'description.key == "output_energy_rollover"' in sensor
     assert 'coordinator.data.get("output_energy")' in sensor
     assert "CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS" in config_flow

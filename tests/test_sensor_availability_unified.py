@@ -89,14 +89,6 @@ def test_rack_pdu_core_enabled_and_non_core_disabled_by_default() -> None:
     )
 
 
-def test_entity_enabled_default_contract_api() -> None:
-    assert AVAILABILITY.entity_enabled_default("output_voltage") is True
-    assert AVAILABILITY.entity_enabled_default("ups_on_battery") is True
-    assert AVAILABILITY.entity_enabled_default("battery_temperature") is False
-    assert AVAILABILITY.entity_enabled_default("unknown_metric_key") is False
-    assert AVAILABILITY.entity_enabled_default(None) is True
-
-
 def test_runtime_calibration_sensor_has_human_readable_enum_states() -> None:
     const_path = MODULE_PATH.with_name("const.py")
     tree = ast.parse(const_path.read_text())

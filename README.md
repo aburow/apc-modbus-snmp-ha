@@ -6,6 +6,10 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
+> **Development preview:** `2.0.0-dev.4` includes safety-gated write controls
+> for a small allowlisted set of SMT/SmartConnect devices. See
+> [Modbus write support status](WRITE_SUPPORT.md) before enabling them.
+
 Supported device families include:
 - Legacy Smart-UPS
 - Smart-UPS SMT/SMX/SRT and SmartConnect
@@ -22,8 +26,6 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ### Multi-Device Support
 - **Smart-UPS**: Traditional APC Smart-UPS devices
-  - 39 comprehensive sensors
-  - 12 binary sensors for status monitoring
   - Full battery and load monitoring
 
 - **NetShelter Rack PDU**: APC power distribution units
@@ -67,11 +69,9 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
-- **Safety-Gated Write Development**: `2.0.0-dev` includes disabled-by-default,
-  exact-capability Modbus controls for SMT/SMX and SmartConnect SMT devices.
-  SmartConnect SKU `SMT750IC` with firmware `18.0` is temporarily allowlisted
-  for controlled physical acceptance; it is not yet release-supported.
-  See [Modbus write support status](WRITE_SUPPORT.md).
+- **Safety-Gated Write Controls**: Disabled by default and created only after
+  exact SKU/firmware and per-feature capability checks. They remain a
+  development-preview feature; see [Modbus write support status](WRITE_SUPPORT.md).
 - **Clearer Activity Log**: Device-specific logs summarize Modbus outages and
   recovery, write outcomes, SNMP capability changes, and restored controls.
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
@@ -89,13 +89,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
-- **Consistent Icons**: Sensors and binary sensors now resolve icons via shared `icons_unified.py` (canonical cross-project mapping) for consistent UI behavior across integrations
+- **Consistent Icons**: Sensors and binary sensors use a shared local icon mapping.
 - **Core-First Availability**: UPS integrations default-enable a core sensor set; Rack PDU defaults now enable core device + L1 metrics while non-core/dynamic extras remain opt-in in Entity Registry
-- **Bridge Device Info Contract**: Exposes dependency-free `device_info_unified.py` with canonical `resolve_device_info(values, source)` output for ups-docker-ha MQTT discovery device metadata
-- **Bridge Availability Contract**: `entity_enabled_default()` now enables Rack PDU core operational metrics by default for bridge callers without device-family runtime context; metadata remains mapped via device-info
-- **Bridge Metadata in Poll Data**: Coordinator now merges canonical device metadata fields into per-cycle data for Smart-UPS, SMT/SMX/SRT, and Rack PDU profiles
-- **Unified Interop Capability Profiles (v2)**: Exposes dependency-free `capability_profiles_unified.py` with `profile_id`, protocol, poll-groups, and hybrid key-precedence contract data for UPS Unified runtime loading
-- **Unified Profile Mapping Parity**: Smart-UPS and SMT unified profile register mappings are now validated against the integration’s canonical APC register tables
 - **Full Block Polling Preserved**: Block-read polling remains intact; disabled-by-default UPS extras affect default visibility/opt-in behavior, not register block strategy
 
 ## Architecture
@@ -182,7 +177,6 @@ unavailable and later restored, the Logbook clarification `this is not another
 press` explains that a displayed `Pressed` entry was not a second command.
 Before sharing debug logs or diagnostics, redact SNMP communities, serial
 numbers, host addresses, and all credential values.
-- The integration relies on Home Assistant's bundled SNMP support and does not add a separate `pysnmp` dependency
 - Current SNMP implementation uses SNMP v2c reads in this integration path
 
 **Recommended Setup:**
@@ -227,7 +221,7 @@ numbers, host addresses, and all credential values.
 
 ## Requirements
 
-- Home Assistant 2024.1 or later
+- A current Home Assistant release compatible with Python 3.13
 - APC UPS or Rack PDU with:
   - **Modbus/TCP** enabled (port 502, configurable)
   - **SNMP** enabled (port 161, optional; required only for SNMP enrichment)
@@ -243,7 +237,8 @@ numbers, host addresses, and all credential values.
 
 ## Compatibility
 
-- Uses Home Assistant runtime dependencies (no bundled `pymodbus` or `pysnmp` libraries are installed by this integration).
+- Requires `pymodbus>=3.1.1`; Home Assistant installs it from the integration manifest.
+- SNMP enrichment uses Home Assistant's available SNMP support and does not add a separate `pysnmp` requirement.
 - Supports common `pymodbus` unit-id calling variants (`device_id`, `slave`, `unit`, positional fallback) to tolerate runtime version differences.
 - Designed to remain stable even when other custom integrations alter the Home Assistant Python package set.
 
@@ -295,16 +290,14 @@ After updating the logger configuration:
 - Reproduce the issue
 - Collect the relevant log lines from Home Assistant
 
-At `debug` log level, the coordinator emits per-cycle boundary timing lines
-(`Starting update cycle` and `Update cycle complete in ...s`) and a timing
-breakdown:
+At `debug` log level, the coordinator emits a timing breakdown:
 - `Poll timing breakdown: total=..., lock_wait=..., modbus=..., connect=..., block_reads=..., individual_reads=..., close=..., snmp_metadata=..., snmp_external=...`
 - Use this to identify whether latency is dominated by socket lock contention, Modbus reads, reconnects, or SNMP merges.
 
 Notes:
 - `snmp_metadata` is normally near-zero and only increases when the hourly SNMP metadata refresh runs.
 - `snmp_external` includes SNMP input-frequency (used when Modbus does not provide `input_frequency`, especially on SMT devices) and any detected external temp/humidity probes.
-- External temp/humidity probes are only polled if a compatible probe was detected during the hourly SNMP metadata refresh (look for the `SNMP probe detection (hourly)` info log line).
+- External temp/humidity probes are only polled after detection during the hourly SNMP metadata refresh.
 
 For deeper data collection outside Home Assistant, use the standalone debug tools here:
 - https://github.com/aburow/apc_modbus_debug
@@ -378,58 +371,9 @@ Type** to retry SNMP enrichment without deleting the integration entry.
   - Confirm the device responds on Modbus/TCP port 502
   - Use the external dump/debug tooling to capture SNMP and Modbus responses for analysis
 
-## Version History
+## Version
 
-For detailed release notes, see `CHANGELOG.md`.
-
-### v1.2.6-dev.13
-- ✅ Adds a diagnostic Output Energy Rollover count for confirmed SMT/SmartConnect uint32 counter wraps.
-
-### v1.2.6-dev.12
-- ✅ Normalizes supported cumulative-energy counters to Wh internally while retaining kWh presentation and Energy Dashboard compatibility.
-- ✅ Rejects transient Output Energy counter decreases and supports valid SmartConnect energy readings.
-
-### v1.2.6-dev.11
-- ✅ Normalizes legacy Smart-UPS runtime telemetry to Home Assistant's native seconds duration while keeping minutes as the suggested display unit.
-- ✅ Adds SNMP self-test entities only when SNMP enrichment is available for supported UPS families.
-
-### v1.2.5 (Current Stable)
-- ✅ Normalizes the repository license for GitHub Licensee and HACS detection.
-- ✅ Declares `AGPL-3.0-or-later` consistently in project documentation and existing source SPDX headers.
-
-### v1.2.4
-- ✅ Adds configurable SNMP UDP port (`SNMP Port`) while retaining configurable Modbus TCP port (`Port`).
-- ✅ Restores startup SNMP probe-detection polling on first post-restart cycle.
-- ✅ `Re-detect Device Type` now forces an immediate SNMP metadata/probe detection refresh when device family is unchanged.
-- ✅ Improves external probe SNMP value parsing (`25.0`, `25 C`, `45 %`, tenths-style values), so valid probe OIDs are retained and polled regularly.
-- ✅ Diagnostics now include `integration_version`, `snmp_port`, and `external_probe_tests`.
-- ✅ Diagnostics preserve external probe detection OID fields (`*_oid`) without redacting them as IP-like strings.
-
-### v1.2.3
-- ✅ Includes all `1.2.3-dev.*` improvements (interop profiles, bridge metadata contract updates, poll instrumentation/guards, and SNMP probe gating refinements).
-- ✅ SNMP probe/fallback helper paths now pre-collect candidate OIDs, deduplicate requests, and resolve fallback selection locally from fetched values.
-- ✅ Added test guardrails for SNMP fallback candidate order, duplicate OID fetch deduplication, and request-count stability.
-
-### v1.1.0
-- ✅ Automatic device-type detection (legacy Smart-UPS, SMT/SMX/SRT, Rack PDU)
-- ✅ Improved Rack PDU detection and stale-entity cleanup
-- ✅ Broader `pymodbus` runtime compatibility for Home Assistant environments
-- ✅ Updated polling/decode behavior and display precision cleanup
-- ✅ Documentation refresh for current Home Assistant/Python expectations
-
-### v0.4.2
-- 🐛 Fix startup crash when device_type not yet set
-
-### v0.4.1
-- 🔧 Added pacing delays between block reads (longer for Rack PDU)
-
-### v0.4.0
-- 🔧 Improved Modbus stability with per-endpoint serialization and per-cycle connect/close
-- 🔧 Added reconnect/backoff logic and richer debug timing logs
-- 🔧 SNMP metadata queries moved to executor to avoid loop blocking
-
-### v0.3.4
-- 🧰 Rack PDU SNMP OIDs and phase sensor block reads
+Current version: `2.0.0-dev.4`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 
