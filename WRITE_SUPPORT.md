@@ -41,6 +41,17 @@ model name at `0x0214` is not used as an allowlist key.
 - Battery self-test and runtime calibration are asynchronous. Calibration
   intentionally discharges the battery and is not an instantaneous self-test.
 
+## Write audit messages
+
+The coordinator records one concise lifecycle trail for every allowlisted
+write. A rejected command is reported as **not sent**. Once Modbus invocation
+has occurred, it is reported as **sent once**; a validated Modbus response does
+not itself prove the physical operation completed. Reconciliation reports the
+existing operation status. If the outcome is ambiguous, the message states
+that it **may have been applied**, was **not retried**, and requires device
+state verification. The integration never automatically replays a write after
+invocation.
+
 ## Open release gates
 
 1. Run and archive the contract's noncritical-load physical acceptance record

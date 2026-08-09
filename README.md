@@ -158,6 +158,28 @@ SNMP is optional. It enriches Modbus monitoring with device metadata, input-freq
 - During setup, the integration attempts SNMP metadata retrieval without blocking Modbus detection
 - If SNMP is unavailable, setup and Modbus monitoring continue; routine SNMP calls are disabled for that entry to avoid repeated failures
 - SNMP-backed metadata and entities remain unavailable until you run **Re-detect Device Type**, which explicitly retries SNMP enrichment
+
+### Logs and activity history
+
+Operational messages identify the configured device and explain meaningful
+state changes. During a communication outage the integration records one
+warning such as `Modbus communication is unavailable; affected entities may be
+unavailable. Home Assistant will retry automatically`, followed by one
+`Modbus communication recovered` message when polling succeeds again. Detailed
+register, block, OID, and reconnect diagnostics are available only with debug
+logging.
+
+When a device needs one Modbus connection per request, the integration reports
+that compatibility mode in plain language. Write controls record whether a
+command was **not sent**, **sent once** with a validated protocol response, or
+may have been applied with an unknown outcome. Unknown writes are never
+replayed automatically; verify the device state instead.
+
+Home Assistant buttons retain their last press timestamp. After a control is
+unavailable and later restored, the Logbook clarification `this is not another
+press` explains that a displayed `Pressed` entry was not a second command.
+Before sharing debug logs or diagnostics, redact SNMP communities, serial
+numbers, host addresses, and all credential values.
 - The integration relies on Home Assistant's bundled SNMP support and does not add a separate `pysnmp` dependency
 - Current SNMP implementation uses SNMP v2c reads in this integration path
 

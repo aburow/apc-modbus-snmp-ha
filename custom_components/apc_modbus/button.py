@@ -10,6 +10,7 @@ import json
 import logging
 
 from homeassistant.components.button import ButtonEntity
+from homeassistant.components.logbook import async_log_entry
 from homeassistant.components.persistent_notification import async_create
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -30,7 +31,7 @@ from .const import (
     KEY_COORDINATOR,
 )
 from .coordinator import APCModbusCoordinator
-from .device_types import DETECTION_VERSION, choose_device_type
+from .device_types import DETECTION_VERSION, choose_device_type, device_type_label
 from .diagnostic_collector import collect_diagnostic_dump
 from .entity_defaults import async_reset_entry_monitors_to_defaults
 from .write_support import (
@@ -41,6 +42,46 @@ from .write_support import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _APCModbusRestorationButton:
+    """Clarify a retained native button timestamp after availability recovery."""
+
+    _report_restoration = False
+    _restoration_was_unavailable = False
+
+    def _mark_restoration_candidate(self) -> None:
+        self._report_restoration = True
+        self._restoration_was_unavailable = False
+
+    def _restoration_message(self) -> str:
+        return "Control restored to available; this is not another press."
+
+    def _restoration_expired(self) -> bool:
+        return False
+
+    def _handle_coordinator_update(self) -> None:
+        super()._handle_coordinator_update()
+        if not self._report_restoration:
+            return
+        if not self.available:
+            self._restoration_was_unavailable = True
+            if self._restoration_expired():
+                self._report_restoration = False
+                self._restoration_was_unavailable = False
+            return
+        if not self._restoration_was_unavailable:
+            return
+        self._report_restoration = False
+        self._restoration_was_unavailable = False
+        async_log_entry(
+            self.hass,
+            self.name or "APC control",
+            self._restoration_message(),
+            domain=DOMAIN,
+            entity_id=self.entity_id,
+            context=self._context,
+        )
 
 
 async def async_setup_entry(
@@ -94,7 +135,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
+class APCModbusDiagnosticButton(
+    _APCModbusRestorationButton, CoordinatorEntity[APCModbusCoordinator], ButtonEntity
+):
     """Manual button to run a detailed diagnostic collector dump."""
 
     has_entity_name = True
@@ -140,14 +183,12 @@ class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonE
             title=f"{self.coordinator.device_name} Diagnostics",
             notification_id=notification_id,
         )
-        _LOGGER.info(
-            "Diagnostics dump generated (notification_id=%s)",
-            notification_id,
-        )
+        _LOGGER.info("[%s] Diagnostics dump generated.", self.coordinator._log_ctx)
+        self._mark_restoration_candidate()
 
 
 class APCModbusRedetectDeviceTypeButton(
-    CoordinatorEntity[APCModbusCoordinator], ButtonEntity
+    _APCModbusRestorationButton, CoordinatorEntity[APCModbusCoordinator], ButtonEntity
 ):
     """Manual button to re-run device-type detection and reload the entry."""
 
@@ -196,16 +237,18 @@ class APCModbusRedetectDeviceTypeButton(
             )
             await self.hass.config_entries.async_reload(self._entry.entry_id)
             message = (
-                f"Device type resolved as `{selected_device_type.value}` and the "
-                "integration entry was reloaded. "
-                f"SNMP retry {'succeeded' if snmp_retry_succeeded else 'failed'}."
+                f"Modbus detection resolved {device_type_label(selected_device_type)}. "
+                "The integration entry was reloaded. "
+                f"Optional SNMP enrichment {'succeeded' if snmp_retry_succeeded else 'was unavailable'}; "
+                "no user action is required."
             )
         else:
             await self.coordinator.async_request_refresh()
             message = (
-                f"Device type remains `{selected_device_type.value}`. "
+                f"Modbus detection remains {device_type_label(selected_device_type)}. "
                 "No reload was required. "
-                f"Explicit SNMP retry {'succeeded' if snmp_retry_succeeded else 'failed'}."
+                f"Optional SNMP enrichment {'succeeded' if snmp_retry_succeeded else 'was unavailable'}; "
+                "no user action is required."
             )
 
         notification_id = f"{DOMAIN}_{self._entry.entry_id}_redetect_device_type"
@@ -216,14 +259,15 @@ class APCModbusRedetectDeviceTypeButton(
             notification_id=notification_id,
         )
         _LOGGER.info(
-            "Manual device re-detect completed for entry %s: %s",
-            self._entry.entry_id,
-            selected_device_type.value,
+            "[%s] Manual device re-detect completed: %s.",
+            self.coordinator._log_ctx,
+            device_type_label(selected_device_type),
         )
+        self._mark_restoration_candidate()
 
 
 class APCModbusResetMonitorDefaultsButton(
-    CoordinatorEntity[APCModbusCoordinator], ButtonEntity
+    _APCModbusRestorationButton, CoordinatorEntity[APCModbusCoordinator], ButtonEntity
 ):
     """Manual button to reset monitor enablement to integration defaults."""
 
@@ -273,15 +317,18 @@ class APCModbusResetMonitorDefaultsButton(
             notification_id=notification_id,
         )
         _LOGGER.info(
-            "Monitor defaults reset for entry %s (enabled=%d disabled=%d unchanged=%d)",
-            self._entry_id,
+            "[%s] Monitor defaults reset (enabled=%d disabled=%d unchanged=%d).",
+            self.coordinator._log_ctx,
             enabled_count,
             disabled_count,
             unchanged_count,
         )
+        self._mark_restoration_candidate()
 
 
-class APCModbusWriteButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
+class APCModbusWriteButton(
+    _APCModbusRestorationButton, CoordinatorEntity[APCModbusCoordinator], ButtonEntity
+):
     """One fixed, capability-gated APC command button."""
 
     has_entity_name = True
@@ -320,3 +367,40 @@ class APCModbusWriteButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity
 
     async def async_press(self) -> None:
         await self.coordinator.async_execute_write(self._operation.value, self._target)
+        self._mark_restoration_candidate()
+
+    def _restoration_message(self) -> str:
+        """Describe the existing companion state without claiming completion."""
+        status = self._operation_status()
+        terminal = {"passed", "failed", "refused", "aborted", "on", "off"}
+        descriptor = (
+            "Terminal status" if status in terminal else "Current device status"
+        )
+        return (
+            "Control restored to available; this is not another press. "
+            f"{descriptor}: {status.capitalize()}."
+        )
+
+    def _operation_status(self) -> str:
+        """Return the existing companion status without another device read."""
+        if self._target:
+            state_key = f"outlet_{self._target.partition(':')[0]}_operation_state"
+        elif self._operation in (
+            WriteOperation.BATTERY_TEST_START,
+            WriteOperation.BATTERY_TEST_ABORT,
+        ):
+            state_key = "battery_test_operation_state"
+        else:
+            state_key = "runtime_calibration_operation_state"
+        return str(self.coordinator.data.get(state_key, "unknown")).replace("_", " ")
+
+    def _restoration_expired(self) -> bool:
+        """Avoid carrying an abort/cancel press into a later operation."""
+        return self._operation_status() in {
+            "passed",
+            "failed",
+            "refused",
+            "aborted",
+            "on",
+            "off",
+        }

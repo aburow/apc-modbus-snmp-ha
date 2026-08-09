@@ -6,6 +6,7 @@ import asyncio
 from enum import StrEnum
 import importlib
 import importlib.util
+import logging
 from pathlib import Path
 import sys
 import time
@@ -611,6 +612,150 @@ def test_write_serialization_one_request_and_response_mismatch(monkeypatch):
     asyncio.run(_write_serialization_one_request_and_response_mismatch(monkeypatch))
 
 
+def test_write_audit_uses_fixed_action_and_status_labels(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    runtime, device_types, _, _ = _load_runtime(monkeypatch)
+    support = importlib.import_module("write_runtime.write_support")
+    client = FakeClient()
+    coordinator = _coordinator(runtime, device_types, client)
+    coordinator.write_capabilities = {support.WriteCapability.BATTERY_TEST.value}
+    coordinator.data = {"battery_test_status": 0}
+
+    async def refresh() -> None:
+        coordinator.data["battery_test_status"] = 1
+        coordinator.data["battery_test_operation_state"] = "pending"
+
+    coordinator.async_request_refresh = refresh
+    with caplog.at_level(logging.INFO):
+        asyncio.run(
+            coordinator.async_execute_write(
+                support.WriteOperation.BATTERY_TEST_START.value
+            )
+        )
+
+    assert client.calls == 1
+    assert "Start battery self-test: requested." in caplog.text
+    assert "sent once; device completion is not yet proven." in caplog.text
+    assert "the Modbus response was structurally validated." in caplog.text
+    assert "reconciled with current device status Pending." in caplog.text
+
+    mismatched = _coordinator(
+        runtime,
+        device_types,
+        FakeClient(response=SimpleNamespace(address=0x0605, registers=[2], retries=0)),
+    )
+    mismatched.write_capabilities = {support.WriteCapability.BATTERY_TEST.value}
+    mismatched.data = {"battery_test_status": 0}
+
+    async def reconciled_after_mismatch() -> None:
+        mismatched.data["battery_test_status"] = 1
+
+    mismatched.async_request_refresh = reconciled_after_mismatch
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        asyncio.run(
+            mismatched.async_execute_write(
+                support.WriteOperation.BATTERY_TEST_START.value
+            )
+        )
+    assert "sent once; device completion is not yet proven." in caplog.text
+    assert "structurally validated" not in caplog.text
+
+
+def test_write_audit_rejection_ambiguity_and_resolution(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    runtime, device_types, errors, _ = _load_runtime(monkeypatch)
+    support = importlib.import_module("write_runtime.write_support")
+    operation = support.WriteOperation.BATTERY_TEST_START.value
+    coordinator = _coordinator(runtime, device_types, FakeClient())
+    coordinator.write_capabilities = {support.WriteCapability.BATTERY_TEST.value}
+    coordinator.data = {"battery_test_status": 0}
+    coordinator._write_pending.add("battery_test")
+    with caplog.at_level(logging.INFO), pytest.raises(errors.ServiceValidationError):
+        asyncio.run(coordinator.async_execute_write(operation))
+    assert "requested." in caplog.text
+    assert "not sent; another conflicting action is already active." in caplog.text
+
+    coordinator = _coordinator(
+        runtime, device_types, FakeClient(failure=TimeoutError("lost response"))
+    )
+    coordinator.write_capabilities = {support.WriteCapability.BATTERY_TEST.value}
+    coordinator.data = {"battery_test_status": 0}
+    coordinator.async_request_refresh = lambda: asyncio.sleep(0)
+    with caplog.at_level(logging.INFO), pytest.raises(errors.HomeAssistantError):
+        asyncio.run(coordinator.async_execute_write(operation))
+    assert coordinator.client.calls == 1
+    assert "sent once; device completion is not yet proven." in caplog.text
+    assert "may have been applied; it was not retried" in caplog.text
+
+    with caplog.at_level(logging.INFO):
+        coordinator._clear_reconciled_unknown_writes({"battery_test_status": 1})
+    assert (
+        "previously unknown outcome is now resolved by normal polling." in caplog.text
+    )
+
+
+def test_modbus_failure_episode_logs_once_then_recovers(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    runtime, device_types, _, _ = _load_runtime(monkeypatch)
+    coordinator = _coordinator(runtime, device_types, FakeClient())
+    with caplog.at_level(logging.INFO):
+        for _ in range(5):
+            coordinator._record_modbus_failure("test outage")
+        coordinator._record_modbus_recovery()
+        coordinator._record_modbus_recovery()
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert (
+        sum("Modbus communication is unavailable" in message for message in messages)
+        == 1
+    )
+    assert sum("Modbus communication recovered" in message for message in messages) == 1
+
+
+def test_snmp_capability_logging_only_reports_changes(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    runtime, device_types, _, _ = _load_runtime(monkeypatch)
+    coordinator = _coordinator(runtime, device_types, FakeClient())
+
+    class Hass(FakeHass):
+        async def async_add_executor_job(self, func, *args):
+            return func(*args)
+
+    coordinator.hass = Hass()
+    coordinator.set_snmp_availability(True)
+    detections = iter(
+        [
+            {"temp_1_oid": "1", "humidity_1_oid": None},
+            {"temp_1_oid": "1", "humidity_1_oid": None},
+            {"temp_1_oid": "1", "humidity_1_oid": "2"},
+        ]
+    )
+    monkeypatch.setattr(
+        runtime, "get_device_metadata_sync", lambda *_: {"model": "UPS"}
+    )
+    monkeypatch.setattr(
+        runtime, "detect_external_probe_oids_sync", lambda *_: next(detections)
+    )
+    monkeypatch.setattr(runtime, "has_usable_metadata", lambda _: True)
+
+    with caplog.at_level(logging.INFO):
+        for _ in range(3):
+            coordinator._metadata_needs_refresh = True
+            asyncio.run(coordinator._maybe_refresh_snmp_metadata())
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert sum("SNMP capabilities changed" in message for message in messages) == 2
+    assert any(
+        "External temperature probe 1 detected" in message for message in messages
+    )
+    assert any("External humidity probe 1 detected" in message for message in messages)
+
+
 def test_discovery_is_per_feature_and_never_reads_command_region(monkeypatch):
     asyncio.run(_discovery_is_per_feature_and_never_reads_command_region(monkeypatch))
 
@@ -926,6 +1071,7 @@ def test_scoped_stale_cleanup_preserves_unresolved_write_entities(monkeypatch):
     device_types.APCDeviceType = DeviceType
     device_types.DETECTION_VERSION = 4
     device_types.choose_device_type = lambda **kwargs: None
+    device_types.device_type_label = lambda value: str(value)
     device_types.is_concrete_device_type = lambda value: True
     device_types.should_probe_device_type = lambda *args: False
     monkeypatch.setitem(sys.modules, f"{package_name}.device_types", device_types)

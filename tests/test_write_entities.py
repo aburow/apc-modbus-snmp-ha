@@ -27,6 +27,7 @@ def _load_entities(monkeypatch: pytest.MonkeyPatch):
     components = ModuleType("homeassistant.components")
     switch = ModuleType("homeassistant.components.switch")
     button = ModuleType("homeassistant.components.button")
+    logbook = ModuleType("homeassistant.components.logbook")
     sensor = ModuleType("homeassistant.components.sensor")
     notification = ModuleType("homeassistant.components.persistent_notification")
 
@@ -42,6 +43,12 @@ def _load_entities(monkeypatch: pytest.MonkeyPatch):
     switch.SwitchEntity = SwitchEntity
     switch.SwitchDeviceClass = SimpleNamespace(OUTLET="outlet")
     button.ButtonEntity = ButtonEntity
+    logbook.entries = []
+
+    def async_log_entry(*args, **kwargs):
+        logbook.entries.append((args, kwargs))
+
+    logbook.async_log_entry = async_log_entry
     sensor.SensorEntity = SensorEntity
     sensor.SensorDeviceClass = SimpleNamespace(ENUM="enum", ENERGY="energy")
     notification.async_create = lambda *args, **kwargs: None
@@ -67,12 +74,20 @@ def _load_entities(monkeypatch: pytest.MonkeyPatch):
             self.coordinator = coordinator
             self.hass = coordinator.hass
 
+        def _handle_coordinator_update(self):
+            pass
+
+        @property
+        def available(self):
+            return self.coordinator.last_update_success
+
     coordinator_module.CoordinatorEntity = CoordinatorEntity
     for name, module in (
         ("homeassistant", homeassistant),
         ("homeassistant.components", components),
         ("homeassistant.components.switch", switch),
         ("homeassistant.components.button", button),
+        ("homeassistant.components.logbook", logbook),
         ("homeassistant.components.sensor", sensor),
         ("homeassistant.components.persistent_notification", notification),
         ("homeassistant.config_entries", config_entries),
@@ -107,6 +122,7 @@ def _load_entities(monkeypatch: pytest.MonkeyPatch):
     device_types = ModuleType("entity_runtime.device_types")
     device_types.DETECTION_VERSION = 4
     device_types.choose_device_type = lambda **kwargs: kwargs.get("stored_device_type")
+    device_types.device_type_label = lambda value: str(value)
 
     class APCDeviceType(StrEnum):
         SMART_UPS = "smart_ups"
@@ -341,6 +357,44 @@ def test_native_write_entities_are_capability_filtered_and_disabled(monkeypatch)
         support.WriteOperation.BATTERY_TEST_START.value,
         None,
     )
+    start.name = "Start battery self-test"
+    start.entity_id = "button.ups_start_battery_self_test"
+    start._context = object()
+    start._mark_restoration_candidate()
+    coordinator.data["battery_test_operation_state"] = "pending"
+    coordinator._write_pending.add("battery_test")
+    start._handle_coordinator_update()
+    assert sys.modules["homeassistant.components.logbook"].entries == []
+    coordinator._write_pending.clear()
+    coordinator.data["battery_test_operation_state"] = "passed"
+    start._handle_coordinator_update()
+    log_entry = sys.modules["homeassistant.components.logbook"].entries[0]
+    assert log_entry[0][1:3] == (
+        "Start battery self-test",
+        "Control restored to available; this is not another press. "
+        "Terminal status: Passed.",
+    )
+    start._handle_coordinator_update()
+    assert len(sys.modules["homeassistant.components.logbook"].entries) == 1
+    diagnostics = next(
+        entity
+        for entity in buttons
+        if isinstance(entity, button.APCModbusDiagnosticButton)
+    )
+    diagnostics.name = "Run Diagnostics"
+    diagnostics.entity_id = "button.ups_run_diagnostics"
+    diagnostics._context = object()
+    diagnostics._mark_restoration_candidate()
+    coordinator.last_update_success = False
+    diagnostics._handle_coordinator_update()
+    coordinator.last_update_success = True
+    diagnostics._handle_coordinator_update()
+    utility_entry = sys.modules["homeassistant.components.logbook"].entries[1]
+    assert utility_entry[0][1:3] == (
+        "Run Diagnostics",
+        "Control restored to available; this is not another press.",
+    )
+    coordinator.data["battery_test_operation_state"] = "refused"
 
     translations = json.loads(
         (PACKAGE_PATH / "translations/en.json").read_text(encoding="utf-8")

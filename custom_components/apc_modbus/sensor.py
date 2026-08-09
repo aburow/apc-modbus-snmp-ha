@@ -147,9 +147,13 @@ async def async_setup_entry(
             return
 
         _LOGGER.info(
-            "Adding %d newly detected SNMP external probe sensor(s): %s",
+            "[%s] Adding %d newly detected SNMP external probe sensor(s): %s",
+            coordinator._log_ctx,
             len(new_descriptions),
-            ", ".join(description.key for description in new_descriptions),
+            ", ".join(
+                getattr(description, "name", description.key)
+                for description in new_descriptions
+            ),
         )
         async_add_entities(
             APCModbusSensor(coordinator, description, entry.entry_id)

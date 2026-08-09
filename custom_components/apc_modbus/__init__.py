@@ -49,6 +49,7 @@ from .device_types import (
     DETECTION_VERSION,
     APCDeviceType,
     choose_device_type,
+    device_type_label,
     is_concrete_device_type,
     should_probe_device_type,
 )
@@ -198,13 +199,16 @@ async def _async_cleanup_stale_entities(
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up APC Modbus from a config entry."""
-    _LOGGER.info("APC UPS Modbus integration starting (pymodbus %s)", PYMODBUS_VERSION)
     hass.data.setdefault(DOMAIN, {})
 
     host = entry.data[CONF_HOST]
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     unit = entry.data.get(CONF_UNIT, DEFAULT_UNIT)
     device_name = entry.data.get(CONF_DEVICE_NAME, DEFAULT_NAME)
+    log_ctx = f"{device_name} {host}:{port} (unit {unit})"
+    _LOGGER.info(
+        "[%s] APC Modbus integration starting (pymodbus %s).", log_ctx, PYMODBUS_VERSION
+    )
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
     snmp_port = entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT)
     keep_connection_open = entry.data.get(
@@ -225,10 +229,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     if scan_interval != configured_scan_interval:
         _LOGGER.warning(
-            "Fleet-aware polling guard raised scan interval for %s from %ss to %ss "
+            "[%s] Fleet-aware polling guard raised scan interval from %ss to %ss "
             "(%d APC entries configured). Increase this entry's scan interval in "
             "UI settings to match if you want this persisted.",
-            entry.entry_id,
+            log_ctx,
             configured_scan_interval,
             scan_interval,
             len(entry_ids),
@@ -273,9 +277,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     if startup_stagger_delay > 0:
         _LOGGER.info(
-            "Applying startup stagger of %.1fs for entry %s across %d APC devices",
+            "[%s] Applying startup stagger of %.1fs across %d APC devices",
+            log_ctx,
             startup_stagger_delay,
-            entry.entry_id,
             len(entry_ids),
         )
         await asyncio.sleep(startup_stagger_delay)
@@ -288,9 +292,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Query SNMP for device metadata (async, non-blocking)
     try:
-        _LOGGER.debug(
-            "Querying SNMP metadata from %s (entry_id=%s)", host, entry.entry_id
-        )
+        _LOGGER.debug("[%s] Querying optional SNMP metadata.", log_ctx)
         metadata = await hass.async_add_executor_job(
             get_device_metadata_sync,
             host,
@@ -306,9 +308,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ]
         ):
             _LOGGER.info(
-                "SNMP metadata retrieved: model=%s, serial=%s",
+                "[%s] Optional SNMP metadata retrieved for model %s.",
+                log_ctx,
                 metadata.get("model"),
-                metadata.get("serial_number"),
             )
             coordinator.set_device_metadata(
                 hw_model=metadata.get("model"),
@@ -321,7 +323,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 snmp_hint_device_type = detect_device_type(metadata.get("model"))
             if snmp_hint_device_type == APCDeviceType.RACK_PDU:
                 _LOGGER.info(
-                    "SNMP metadata strongly suggests a Rack PDU model: %s",
+                    "[%s] SNMP metadata suggests a Rack PDU model: %s",
+                    log_ctx,
                     metadata.get("model"),
                 )
             coordinator.set_snmp_availability(True)
@@ -329,7 +332,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.debug("SNMP query returned empty metadata")
             coordinator.set_snmp_availability(False, "no_metadata")
     except (OSError, TimeoutError, RuntimeError, ValueError) as err:
-        _LOGGER.warning("Failed to query SNMP metadata from %s: %s", host, err)
+        _LOGGER.warning(
+            "[%s] Optional SNMP metadata was unavailable; Modbus monitoring continues.",
+            log_ctx,
+        )
+        _LOGGER.debug("[%s] SNMP metadata failure: %s", log_ctx, err)
         coordinator.set_snmp_availability(False, type(err).__name__)
         # Continue without metadata - Modbus sensors still work
 
@@ -341,18 +348,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         try:
             detected_device_type = await coordinator.async_detect_device_type()
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
-            _LOGGER.warning("Failed to auto-detect device type via Modbus: %s", err)
+            _LOGGER.warning("[%s] Automatic Modbus device detection failed.", log_ctx)
+            _LOGGER.debug("[%s] Modbus detection failure: %s", log_ctx, err)
         else:
             if detected_device_type:
                 _LOGGER.info(
-                    "Auto-detected device type as %s based on Modbus probe",
-                    detected_device_type.value,
+                    "[%s] Automatically detected %s from Modbus probes.",
+                    log_ctx,
+                    device_type_label(detected_device_type),
                 )
                 selected_device_type = detected_device_type
             elif is_concrete_device_type(original_device_type):
                 _LOGGER.warning(
-                    "Device type re-detection was ambiguous; keeping stored type %s",
-                    original_device_type.value,
+                    "[%s] Modbus device detection was ambiguous; continuing with stored %s. "
+                    "Write controls remain gated until capability discovery completes.",
+                    log_ctx,
+                    device_type_label(original_device_type),
                 )
 
     selected_device_type = choose_device_type(
@@ -393,13 +404,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             if capabilities:
                 coordinator.set_capabilities(capabilities)
         except (OSError, TimeoutError, RuntimeError, ValueError) as err:
-            _LOGGER.warning("Failed to discover Rack PDU capabilities: %s", err)
+            _LOGGER.warning(
+                "[%s] Rack PDU capability discovery failed; using defaults.", log_ctx
+            )
+            _LOGGER.debug("[%s] Rack PDU capability failure: %s", log_ctx, err)
             # Continue - will create entities with default capabilities
 
     try:
         await coordinator.async_config_entry_first_refresh()
     except Exception as err:
-        _LOGGER.error("Failed to fetch initial data from APC device: %s", err)
+        _LOGGER.error(
+            "[%s] Failed to fetch initial APC device data; Home Assistant will retry.",
+            log_ctx,
+        )
+        _LOGGER.debug("[%s] Initial refresh failure: %s", log_ctx, err)
         raise ConfigEntryNotReady(f"Failed to fetch initial data: {err}") from err
 
     try:
@@ -411,7 +429,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator.write_capability_unresolved.update(
             capability.value for capability in WriteCapability
         )
-        _LOGGER.warning("Write capability discovery remained unresolved: %s", err)
+        _LOGGER.warning(
+            "[%s] Write capability discovery remains unresolved; write controls stay unavailable.",
+            log_ctx,
+        )
+        _LOGGER.debug("[%s] Write capability discovery failure: %s", log_ctx, err)
 
     if (
         coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS

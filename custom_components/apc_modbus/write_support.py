@@ -50,6 +50,37 @@ class WriteOperation(StrEnum):
     ALARM_CANCEL_MUTE = "alarm_cancel_mute"
 
 
+WRITE_OPERATION_LABELS = {
+    WriteOperation.BATTERY_TEST_START: "Start battery self-test",
+    WriteOperation.BATTERY_TEST_ABORT: "Abort battery self-test",
+    WriteOperation.CALIBRATION_START: "Start runtime calibration",
+    WriteOperation.CALIBRATION_ABORT: "Abort runtime calibration",
+    WriteOperation.ALARM_MUTE: "Mute alarms",
+    WriteOperation.ALARM_CANCEL_MUTE: "Cancel alarm mute",
+}
+OUTLET_TARGET_LABELS = {
+    OutletTarget.MOG: "Main Outlet Group",
+    OutletTarget.SOG_0: "Switched Outlet Group 1",
+    OutletTarget.SOG_1: "Switched Outlet Group 2",
+    OutletTarget.SOG_2: "Switched Outlet Group 3",
+}
+OUTLET_ACTION_LABELS = {
+    OutletAction.CANCEL: "Cancel outlet action",
+    OutletAction.ON: "Turn outlet on",
+    OutletAction.OFF: "Turn outlet off",
+    OutletAction.SHUTDOWN: "Shut down outlet",
+    OutletAction.REBOOT: "Reboot outlet",
+}
+
+
+def write_action_label(operation: WriteOperation, target: str | None = None) -> str:
+    """Return a fixed human-readable label for an allowlisted operation."""
+    if operation != WriteOperation.OUTLET:
+        return WRITE_OPERATION_LABELS[operation]
+    target_name, action_name = (target or ":").split(":", 1)
+    return f"{OUTLET_ACTION_LABELS[OutletAction(action_name)]}: {OUTLET_TARGET_LABELS[OutletTarget(target_name)]}"
+
+
 OUTLET_CAPABILITIES = {
     OutletTarget.MOG: WriteCapability.OUTLET_MOG,
     OutletTarget.SOG_0: WriteCapability.OUTLET_SOG_0,

@@ -2,6 +2,17 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [Unreleased]
+
+### Security
+- Removed SNMP community values from integration debug logging.
+
+### Changed
+- Made integration operational logs device-specific and human-readable,
+  aggregated communication-failure episodes, and added recovery messages.
+- Added allowlisted write lifecycle audit messages and clarified restored native
+  button timestamps in the Home Assistant Logbook.
+
 ## [2.0.0-dev.2] - 2026-08-09
 
 ### Fixed

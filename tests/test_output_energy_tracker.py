@@ -227,6 +227,7 @@ def _load_energy_runtime(monkeypatch: pytest.MonkeyPatch):
         SMT_UPS="smt", SMARTCONNECT_UPS="smartconnect"
     )
     device_types.classify_device_type = lambda *_: None
+    device_types.device_type_label = lambda value: str(value)
     device_types.ProbeKind = object
     device_types.ProbeOutcome = object
     monkeypatch.setitem(sys.modules, "energy_runtime.device_types", device_types)

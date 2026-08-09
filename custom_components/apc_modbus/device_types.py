@@ -17,6 +17,23 @@ class APCDeviceType(Enum):
     UNKNOWN = "unknown"
 
 
+DEVICE_TYPE_LABELS = {
+    APCDeviceType.UPS: "UPS",
+    APCDeviceType.SMART_UPS: "Smart-UPS",
+    APCDeviceType.SMT_UPS: "SMT/SMX UPS",
+    APCDeviceType.RACK_PDU: "Rack PDU",
+    APCDeviceType.SMARTCONNECT_UPS: "SmartConnect UPS",
+    APCDeviceType.UNKNOWN: "Unknown APC device",
+}
+
+
+def device_type_label(device_type: APCDeviceType | None) -> str:
+    """Return the stable user-facing label for a device family."""
+    return DEVICE_TYPE_LABELS.get(
+        device_type, DEVICE_TYPE_LABELS[APCDeviceType.UNKNOWN]
+    )
+
+
 class ProbeKind(Enum):
     RESPONSE = "response"
     MODBUS_EXCEPTION = "modbus_exception"

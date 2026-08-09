@@ -175,7 +175,7 @@ async def async_get_snmp_value(
         return None
 
     except asyncio.TimeoutError:
-        _LOGGER.warning(
+        _LOGGER.debug(
             "SNMP query to %s timed out after %ds for OID %s", host, timeout, oid
         )
         return None

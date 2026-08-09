@@ -37,6 +37,7 @@ from .const import (
 from .device_types import (
     APCDeviceType,
     classify_device_type,
+    device_type_label,
     ProbeKind,
     ProbeOutcome,
 )
@@ -117,6 +118,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._backoff_until: float | None = None
         self._backoff_base = 2.0
         self._backoff_max = 60.0
+        self._modbus_failure_started: float | None = None
+        self._modbus_failure_warning_emitted = False
         self._last_io_monotonic = 0.0
         self._reconnect_count = 0
         self._recreate_count = 0
@@ -280,8 +283,14 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def set_device_type(self, device_type: APCDeviceType) -> None:
         """Store device type and tune pacing for slower models."""
+        changed = self.device_type != device_type
         self.device_type = device_type
-        _LOGGER.info("Device type set to: %s", device_type.value)
+        if changed:
+            _LOGGER.info(
+                "[%s] Device classification set to %s.",
+                self._log_ctx,
+                device_type_label(device_type),
+            )
         # Rack PDU is typically slower to respond, so use longer delays.
         if self.device_type == APCDeviceType.RACK_PDU:
             self._post_connect_delay = 0.10
@@ -943,6 +952,35 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ):
             if self._write_status_reconciled(operation, target, initial_raw, data):
                 self._write_outcomes_unknown.pop(key, None)
+                self._log_write(
+                    logging.INFO,
+                    operation,
+                    target,
+                    "previously unknown outcome is now resolved by normal polling",
+                )
+
+    def _log_write(
+        self, level: int, operation: str, target: str | None, message: str
+    ) -> None:
+        """Log one user-facing allowlisted write lifecycle transition."""
+        from .write_support import WriteOperation, write_action_label
+
+        _LOGGER.log(
+            level,
+            "[%s] %s: %s.",
+            self._log_ctx,
+            write_action_label(WriteOperation(operation), target),
+            message,
+        )
+
+    @staticmethod
+    def _write_rejection_reason(reason: str) -> str:
+        """Translate fixed validation keys without exposing protocol details."""
+        return {
+            "operation_already_active": "another conflicting action is already active",
+            "write_outcome_unresolved": "a previous outcome is still unknown",
+            "write_retry_policy_unverified": "the transport retry policy is unsafe",
+        }.get(reason, reason.replace("_", " "))
 
     async def async_execute_write(
         self, operation: str, target: str | None = None
@@ -972,20 +1010,49 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 address, words = COMMANDS[write_operation]
             pending_key = self._write_pending_key(operation, target)
         except (KeyError, TypeError, ValueError) as err:
+            _LOGGER.warning(
+                "[%s] Write command was not sent: invalid operation.", self._log_ctx
+            )
             raise self._write_validation_error("invalid_operation") from err
 
         invoked = [False]
         response = None
+        valid = False
         initial_raw: int | None = None
+        self._log_write(logging.INFO, operation, target, "requested")
         async with self._io_lock:
             precondition = self._write_precondition(operation, target)
             if precondition:
+                self._log_write(
+                    logging.INFO,
+                    operation,
+                    target,
+                    f"not sent; {self._write_rejection_reason(precondition)}",
+                )
                 raise self._write_validation_error(precondition)
             if pending_key in self._write_pending:
+                self._log_write(
+                    logging.INFO,
+                    operation,
+                    target,
+                    "not sent; another conflicting action is already active",
+                )
                 raise self._write_validation_error("operation_already_active")
             if pending_key in self._write_outcomes_unknown:
+                self._log_write(
+                    logging.WARNING,
+                    operation,
+                    target,
+                    "not sent; a previous outcome is still unknown",
+                )
                 raise self._write_validation_error("write_outcome_unresolved")
             if getattr(self.client, "retries", None) != 0:
+                self._log_write(
+                    logging.WARNING,
+                    operation,
+                    target,
+                    "not sent; the transport retry policy is unsafe",
+                )
                 raise self._write_error("write_retry_policy_unverified")
             self._write_pending.add(pending_key)
             initial_raw = self._write_initial_status(operation, target, self.data)
@@ -1026,10 +1093,36 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except Exception as err:
                 if not invoked[0]:
                     self._write_pending.discard(pending_key)
+                    self._log_write(
+                        logging.WARNING,
+                        operation,
+                        target,
+                        "not sent; Modbus communication failed before transmission",
+                    )
                     raise self._write_error("write_not_sent") from err
 
         if not invoked[0]:
+            self._log_write(
+                logging.WARNING,
+                operation,
+                target,
+                "not sent; the write executor did not invoke Modbus",
+            )
             raise self._write_error("write_not_sent")
+
+        self._log_write(
+            logging.INFO,
+            operation,
+            target,
+            "sent once; device completion is not yet proven",
+        )
+        if valid:
+            self._log_write(
+                logging.INFO,
+                operation,
+                target,
+                "the Modbus response was structurally validated",
+            )
 
         reconciled = False
         for attempt in range(self._write_reconcile_attempts):
@@ -1046,6 +1139,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         target,
                         initial_raw,
                     )
+                    self._log_write(
+                        logging.WARNING,
+                        operation,
+                        target,
+                        "may have been applied; it was not retried and device state must be verified",
+                    )
                     raise self._write_error("write_outcome_unknown") from err
             if self._write_status_reconciled(operation, target, initial_raw, self.data):
                 reconciled = True
@@ -1054,6 +1153,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await asyncio.sleep(self._write_reconcile_delay)
         if reconciled:
             self._write_pending.discard(pending_key)
+            self._log_write(
+                logging.INFO,
+                operation,
+                target,
+                f"reconciled with current device status {self._write_status_label(operation, target)}",
+            )
         else:
             self._write_pending.discard(pending_key)
             self._write_outcomes_unknown[pending_key] = (
@@ -1062,7 +1167,25 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 initial_raw,
             )
         if not reconciled:
+            self._log_write(
+                logging.WARNING,
+                operation,
+                target,
+                "may have been applied; it was not retried and device state must be verified",
+            )
             raise self._write_error("write_outcome_unknown")
+
+    def _write_status_label(self, operation: str, target: str | None) -> str:
+        """Return the existing decoded operation status in display form."""
+        if target:
+            key = f"outlet_{target.partition(':')[0]}_operation_state"
+        elif operation.startswith("battery_test"):
+            key = "battery_test_operation_state"
+        elif operation.startswith("calibration"):
+            key = "runtime_calibration_operation_state"
+        else:
+            return "Unknown"
+        return str(self.data.get(key, "unknown")).replace("_", " ").title()
 
     async def async_detect_device_type(self) -> APCDeviceType | None:
         """Probe distinguishing Modbus addresses to identify the device type."""
@@ -1168,8 +1291,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._transport_mode_persist:
             self._transport_mode_persist(self.transport_mode)
         _LOGGER.warning(
-            "[%s] Promoted Modbus transport mode: %s", self._log_ctx, reason
+            "[%s] Switched to one Modbus connection per request after the persistent "
+            "connection failed.",
+            self._log_ctx,
         )
+        _LOGGER.debug("[%s] Transport promotion reason: %s", self._log_ctx, reason)
 
     def _build_read_request(self, address: int, count: int):
         """Build a compatible read request for old and new pymodbus APIs."""
@@ -1281,7 +1407,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             capabilities[cap_name] = result.registers[0]
                         else:
                             _LOGGER.debug(
-                                "Failed to read capability register %s at 0x%04X",
+                                "[%s] Failed to read capability register %s at 0x%04X",
+                                self._log_ctx,
                                 cap_name,
                                 addr,
                             )
@@ -1293,19 +1420,24 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         TypeError,
                     ) as err:
                         _LOGGER.debug(
-                            "Error reading capability register %s: %s", cap_name, err
+                            "[%s] Error reading capability register %s: %s",
+                            self._log_ctx,
+                            cap_name,
+                            err,
                         )
 
             if capabilities:
                 _LOGGER.info(
-                    "Rack PDU capabilities discovered: %d phases, %d outlets, %d banks",
+                    "[%s] Rack PDU capabilities discovered: %d phases, %d outlets, %d banks.",
+                    self._log_ctx,
                     capabilities.get("num_phases", 0),
                     capabilities.get("num_metered_outlets", 0),
                     capabilities.get("num_banks", 0),
                 )
             else:
                 _LOGGER.warning(
-                    "Failed to discover any capability registers for Rack PDU"
+                    "[%s] Rack PDU capability discovery returned no usable registers; using defaults.",
+                    self._log_ctx,
                 )
 
         except (
@@ -1315,7 +1447,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             TimeoutError,
             TypeError,
         ) as err:
-            _LOGGER.error("Error discovering capabilities: %s", err)
+            _LOGGER.error(
+                "[%s] Rack PDU capability discovery failed; using defaults.",
+                self._log_ctx,
+            )
+            _LOGGER.debug("[%s] Rack PDU capability failure: %s", self._log_ctx, err)
 
         return capabilities
 
@@ -1365,7 +1501,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("[%s] Acquired I/O lock", self._log_ctx)
             try:
                 if not self._should_run_now():
-                    raise UpdateFailed("Backoff active; skipping update cycle")
+                    remaining = max(0.0, (self._backoff_until or 0) - time.monotonic())
+                    raise UpdateFailed(
+                        f"Modbus retry backoff active; next attempt in about {remaining:.0f}s"
+                    )
                 ensure_connection_start = time.monotonic()
                 connected = await self._ensure_connection()
                 ensure_connection_elapsed = time.monotonic() - ensure_connection_start
@@ -1386,7 +1525,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # A promoted mode invalidates any values read on the failed session.
                 if self.transport_mode != mode_before_reads:
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "[%s] Retrying update with fresh connections after transport promotion",
                         self._log_ctx,
                     )
@@ -1396,8 +1535,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # If block reads failed, fall back to individual reads with reconnection.
                 if not block_read_ok:
-                    _LOGGER.info(
-                        "[%s] Block reads failed or incomplete, falling back to individual register reads",
+                    _LOGGER.debug(
+                        "[%s] Retrying the same reads using individual Modbus registers",
                         self._log_ctx,
                     )
                     individual_reads_start = time.monotonic()
@@ -1406,7 +1545,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self._try_individual_reads(data, errors)
                     individual_reads_elapsed = time.monotonic() - individual_reads_start
                     if self.transport_mode != mode_before_individual_reads:
-                        _LOGGER.info(
+                        _LOGGER.debug(
                             "[%s] Retrying update with fresh connections after individual-read transport promotion",
                             self._log_ctx,
                         )
@@ -1422,9 +1561,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
             except UpdateFailed as err:
                 self._register_failure(str(err))
+                self._record_modbus_failure(str(err))
                 raise
             except Exception as err:
                 self._register_failure(str(err))
+                self._record_modbus_failure(str(err))
                 raise
             finally:
                 if self.effective_keep_connection_open:
@@ -1462,6 +1603,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if not data:
             self._register_failure("No data read")
+            self._record_modbus_failure("no usable register data was returned")
             raise UpdateFailed(f"Unable to read any registers: {', '.join(errors)}")
 
         if errors:
@@ -1485,6 +1627,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             modbus_cycle_elapsed,
         )
         self._reset_backoff()
+        self._record_modbus_recovery()
 
         snmp_metadata_start = time.monotonic()
         await self._maybe_refresh_snmp_metadata()
@@ -1520,6 +1663,31 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         return data
+
+    def _record_modbus_failure(self, reason: str) -> None:
+        """Emit one actionable warning for a bounded communication episode."""
+        if self._modbus_failure_started is None:
+            self._modbus_failure_started = time.monotonic()
+        if self._modbus_failure_warning_emitted:
+            return
+        self._modbus_failure_warning_emitted = True
+        _LOGGER.warning(
+            "[%s] Modbus communication is unavailable; affected entities may be unavailable. "
+            "Home Assistant will retry automatically (%s).",
+            self._log_ctx,
+            reason,
+        )
+
+    def _record_modbus_recovery(self) -> None:
+        """Report the first usable poll after a communication episode."""
+        if self._modbus_failure_started is None:
+            return
+        duration = time.monotonic() - self._modbus_failure_started
+        _LOGGER.info(
+            "[%s] Modbus communication recovered after %.1fs.", self._log_ctx, duration
+        )
+        self._modbus_failure_started = None
+        self._modbus_failure_warning_emitted = False
 
     def _apply_device_compat_aliases(self, data: dict[str, Any]) -> None:
         """Populate compatibility aliases for device families with sparse maps."""
@@ -1628,19 +1796,39 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         if isinstance(detection, dict):
-            self._snmp_probe_detection = {
+            new_detection = {
                 str(k): (v if isinstance(v, str) or v is None else str(v))
                 for k, v in detection.items()
             }
-            _LOGGER.info(
-                "[%s] SNMP probe detection (hourly): temp1=%s hum1=%s temp2=%s hum2=%s freq=%s",
-                self._log_ctx,
-                bool(self._snmp_probe_detection.get("temp_1_oid")),
-                bool(self._snmp_probe_detection.get("humidity_1_oid")),
-                bool(self._snmp_probe_detection.get("temp_2_oid")),
-                bool(self._snmp_probe_detection.get("humidity_2_oid")),
-                bool(self._snmp_probe_detection.get("frequency_oid")),
-            )
+            old_features = self._snmp_features(self._snmp_probe_detection)
+            new_features = self._snmp_features(new_detection)
+            self._snmp_probe_detection = new_detection
+            added = sorted(new_features - old_features)
+            removed = sorted(old_features - new_features)
+            if added or removed:
+                changes = [
+                    *(f"{feature} detected" for feature in added),
+                    *(f"{feature} no longer detected" for feature in removed),
+                ]
+                _LOGGER.info(
+                    "[%s] SNMP capabilities changed: %s.",
+                    self._log_ctx,
+                    "; ".join(changes),
+                )
+            else:
+                _LOGGER.debug("[%s] SNMP capabilities unchanged.", self._log_ctx)
+
+    @staticmethod
+    def _snmp_features(detection: dict[str, str | None]) -> set[str]:
+        """Map cached OID availability to user-facing capability labels."""
+        labels = {
+            "temp_1_oid": "External temperature probe 1",
+            "humidity_1_oid": "External humidity probe 1",
+            "temp_2_oid": "External temperature probe 2",
+            "humidity_2_oid": "External humidity probe 2",
+            "frequency_oid": "SNMP input-frequency fallback",
+        }
+        return {label for key, label in labels.items() if detection.get(key)}
 
     def _merge_device_metadata(self, data: dict[str, Any]) -> None:
         """Inject canonical metadata keys into coordinator data for bridge consumers."""
@@ -1767,9 +1955,9 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._last_io_monotonic = 0.0
 
         _LOGGER.info(
-            "[%s] keep_connection_open set to %s",
+            "[%s] Persistent Modbus connection %s.",
             self._log_ctx,
-            self._keep_connection_open,
+            "enabled" if self._keep_connection_open else "disabled",
         )
 
     def mark_snmp_metadata_refresh_needed(self) -> None:
@@ -2007,7 +2195,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # Check if result is an error
                 if self._is_error_response(result):
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "[%s] Block read returned error %s (0x%04X, %d registers): %s",
                         self._log_ctx,
                         block["name"],
@@ -2070,7 +2258,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 TypeError,
             ) as err:
                 self._record_transport_failure(err)
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "[%s] Exception in block read %s: %s (type: %s)",
                     self._log_ctx,
                     block["name"],
@@ -2192,7 +2380,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                     # If too many consecutive failures, abort
                     if consecutive_failures >= 5:
-                        _LOGGER.warning(
+                        _LOGGER.debug(
                             "[%s] Too many consecutive read failures, aborting update cycle",
                             self._log_ctx,
                         )
@@ -2238,7 +2426,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
                 if consecutive_failures >= 5:
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "[%s] Too many consecutive read failures, aborting update cycle",
                         self._log_ctx,
                     )
