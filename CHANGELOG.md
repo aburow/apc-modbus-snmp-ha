@@ -2,6 +2,13 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [2.0.0-dev.1] - 2026-08-09
+
+### Fixed
+- Allowed the exact `SMT750IC` firmware `18.0` SmartConnect development
+  candidate to run per-feature write discovery and poll companion status.
+- Kept every other SmartConnect model and firmware on the read-only profile.
+
 ## [2.0.0-dev.0] - 2026-08-09
 
 ### Added

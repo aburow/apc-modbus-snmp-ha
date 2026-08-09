@@ -47,6 +47,8 @@ CORE_REGISTER_KEYS_BY_DEVICE: dict[APCDeviceType, set[str]] = {
 
 def get_registers_for_device(
     device_type: APCDeviceType,
+    *,
+    write_companions: bool = False,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[int, dict[str, Any]]]:
     """Get registers, blocks, and map for the specified device type.
 
@@ -84,13 +86,14 @@ def get_registers_for_device(
         try:
             from . import registers_smt_ups
 
-            # Read with the same two large SMT blocks as SMT_UPS rather than
-            # splitting into per-register requests: block reads are diagnosed
-            # and validated as a single unit, and narrower reads around the
-            # gaps left by unsupported registers were never confirmed to work
-            # on SmartConnect firmware. Registers this family doesn't support
-            # are simply excluded from SMARTCONNECT_SENSOR_DESCRIPTIONS, so
-            # decoding their sentinel values here is harmless.
+            # SmartConnect stays on its established read profile unless an
+            # exact allowlisted candidate passes write discovery.
+            if write_companions:
+                return (
+                    registers_smt_ups.WRITABLE_REGISTERS,
+                    registers_smt_ups.WRITABLE_REGISTER_BLOCKS,
+                    registers_smt_ups.WRITABLE_REGISTER_MAP,
+                )
             return (
                 registers_smt_ups.REGISTERS,
                 registers_smt_ups.REGISTER_BLOCKS,

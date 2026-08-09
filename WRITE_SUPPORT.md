@@ -14,11 +14,12 @@ status evidence.
 | Resolved device | Outlet actions | Battery self-test | Runtime calibration | Alarm mute | Timing configuration |
 | --- | --- | --- | --- | --- | --- |
 | Eligible `SMT_UPS` SMT 9.0+ | Conditional | Conditional | Conditional | Conditional | Blocked |
+| SmartConnect `SMT750IC` firmware `18.0` candidate | Conditional | Conditional | Conditional | Conditional | Blocked |
 | Eligible `SMT_UPS` SMX 10.0+ | Conditional | Conditional | Conditional | Conditional | Blocked |
 | Eligible `SMT_UPS` SRT | Conditional | Conditional | Conditional | Conditional | Blocked |
 | `SRC2KUXI`, `SRC3KUXI`, `SRC3KUXIX709` | Conditional | Conditional | Conditional | Conditional | Blocked |
 | SURTD or SMT Rack Mount 1U | No | No | No | No | No |
-| SmartConnect, legacy Smart-UPS, Rack PDU, unknown | No | No | No | No | No |
+| Other SmartConnect, legacy Smart-UPS, Rack PDU, unknown | No | No | No | No | No |
 
 `Conditional` is not a support claim. At present, only the exact `SMT750IC`
 with UPS firmware `18.0` pair may proceed to per-feature discovery for manual

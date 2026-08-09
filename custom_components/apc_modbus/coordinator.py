@@ -441,7 +441,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.write_capability_unresolved.clear()
         self.modbus_map_id = None
         all_capabilities = {capability.value for capability in WriteCapability}
-        if self.device_type != APCDeviceType.SMT_UPS:
+        if self.device_type not in (
+            APCDeviceType.SMT_UPS,
+            APCDeviceType.SMARTCONNECT_UPS,
+        ):
             return set()
         if getattr(self.client, "retries", None) != 0:
             return set()
@@ -1521,12 +1524,16 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _apply_device_compat_aliases(self, data: dict[str, Any]) -> None:
         """Populate compatibility aliases for device families with sparse maps."""
-        if self.device_type == APCDeviceType.SMT_UPS:
+        if self.device_type in (
+            APCDeviceType.SMT_UPS,
+            APCDeviceType.SMARTCONNECT_UPS,
+        ):
             # APC 990-9840B SMT/SMX/SRT map exposes a measured output frequency
             # register but no dedicated numeric input-frequency register.
             # Keep this as a last-resort fallback after SNMP merge.
             if (
-                data.get("input_frequency") is None
+                self.device_type == APCDeviceType.SMT_UPS
+                and data.get("input_frequency") is None
                 and data.get("output_frequency") is not None
             ):
                 data["input_frequency"] = data["output_frequency"]

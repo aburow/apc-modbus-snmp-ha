@@ -413,6 +413,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         _LOGGER.warning("Write capability discovery remained unresolved: %s", err)
 
+    if (
+        coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS
+        and coordinator.write_capabilities
+    ):
+        registers, blocks, reg_map = get_registers_for_device(
+            coordinator.device_type, write_companions=True
+        )
+        coordinator.set_registers(registers, blocks, reg_map)
+
     await _async_cleanup_stale_entities(hass, entry, coordinator)
 
     hass.data[DOMAIN][entry.entry_id] = {

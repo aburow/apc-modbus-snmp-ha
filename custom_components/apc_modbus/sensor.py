@@ -61,7 +61,14 @@ async def async_setup_entry(
     elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
         from . import registers_smt_ups
 
-        sensor_descriptions = registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS
+        sensor_descriptions = [
+            *registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS,
+            *(
+                description
+                for capability, description in registers_smt_ups.WRITE_SENSOR_DESCRIPTIONS.items()
+                if capability in coordinator.write_capabilities
+            ),
+        ]
     elif coordinator.device_type == APCDeviceType.RACK_PDU:
         # Rack PDU uses dynamic sensor descriptions based on capabilities
         from . import registers_rack_pdu

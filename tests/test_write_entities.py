@@ -438,6 +438,14 @@ def test_native_write_entities_are_capability_filtered_and_disabled(monkeypatch)
         entity.entity_description.device_class == "enum" for entity in operation_sensors
     )
 
+    coordinator.device_type = sensor.APCDeviceType.SMARTCONNECT_UPS
+    smartconnect_sensors = _collect_setup(sensor, hass, entry)
+    assert {
+        entity.entity_description.key
+        for entity in smartconnect_sensors
+        if entity.entity_description.key.endswith("_operation_state")
+    } == {entity.entity_description.key for entity in operation_sensors}
+
 
 def test_no_capabilities_means_no_write_entities(monkeypatch):
     switch, button, sensor, support = _load_entities(monkeypatch)

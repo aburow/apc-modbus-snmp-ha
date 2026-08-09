@@ -522,6 +522,9 @@ async def _discovery_is_per_feature_and_never_reads_command_region(monkeypatch):
     assert not (set(seen) & support.COMMAND_ADDRESSES)
     assert coordinator.modbus_map_id == "MAP1"
 
+    coordinator.set_device_type(device_types.APCDeviceType.SMARTCONNECT_UPS)
+    assert await coordinator.async_discover_write_capabilities() == capabilities
+
     async def mixed_probe(address, count, name):
         seen.append(address)
         if address == 0x0017:
@@ -687,7 +690,7 @@ def test_write_unit_id_signatures_are_resolved_independently(monkeypatch):
     )
 
 
-def test_register_factory_keeps_smartconnect_on_read_only_profile(monkeypatch):
+def test_register_factory_gates_smartconnect_write_companions(monkeypatch):
     package = ModuleType("factory_runtime")
     package.__path__ = [str(PACKAGE_PATH)]
     monkeypatch.setitem(sys.modules, "factory_runtime", package)
@@ -728,6 +731,9 @@ def test_register_factory_keeps_smartconnect_on_read_only_profile(monkeypatch):
     assert factory.get_registers_for_device(
         device_types.APCDeviceType.SMARTCONNECT_UPS
     )[0] == ["read"]
+    assert factory.get_registers_for_device(
+        device_types.APCDeviceType.SMARTCONNECT_UPS, write_companions=True
+    )[0] == ["write"]
     assert factory.get_registers_for_device(device_types.APCDeviceType.SMART_UPS)[
         0
     ] == ["legacy"]
