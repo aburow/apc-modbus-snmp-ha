@@ -72,6 +72,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
   SmartConnect SKU `SMT750IC` with firmware `18.0` is temporarily allowlisted
   for controlled physical acceptance; it is not yet release-supported.
   See [Modbus write support status](WRITE_SUPPORT.md).
+- **Clearer Activity Log**: Device-specific logs summarize Modbus outages and
+  recovery, write outcomes, SNMP capability changes, and restored controls.
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
