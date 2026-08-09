@@ -697,6 +697,24 @@ def test_write_audit_rejection_ambiguity_and_resolution(
     )
 
 
+def test_refused_runtime_calibration_explains_device_prerequisites(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime, device_types, _, _ = _load_runtime(monkeypatch)
+    coordinator = _coordinator(runtime, device_types, FakeClient())
+    coordinator.data = {
+        "runtime_calibration_operation_state": "refused",
+        "battery_state_of_charge": 98.759765625,
+        "output_load_percent": 9.41796875,
+    }
+
+    feedback = coordinator._write_status_label("calibration_start", None)
+
+    assert "requires 100% battery charge" in feedback
+    assert "above 10% without external battery packs" in feedback
+    assert "98.8% charge, 9.4% load" in feedback
+
+
 def test_modbus_failure_episode_logs_once_then_recovers(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

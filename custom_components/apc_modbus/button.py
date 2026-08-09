@@ -400,13 +400,18 @@ class APCModbusWriteButton(
     def _restoration_message(self) -> str:
         """Describe the existing companion state without claiming completion."""
         status = self._operation_status()
+        display_status = status.capitalize()
+        if self._operation == WriteOperation.CALIBRATION_START and status == "refused":
+            status_label = getattr(self.coordinator, "_write_status_label", None)
+            if status_label is not None:
+                display_status = status_label(self._operation.value, None)
         terminal = {"passed", "failed", "refused", "aborted", "on", "off"}
         descriptor = (
             "Terminal status" if status in terminal else "Current device status"
         )
         return (
             "Control restored to available; this is not another press. "
-            f"{descriptor}: {status.capitalize()}."
+            f"{descriptor}: {display_status}."
         )
 
     def _operation_status(self) -> str:

@@ -638,10 +638,15 @@ def test_refused_write_restoration_and_rejected_write_do_not_misreport(monkeypat
     asyncio.run(calibration.async_press())
     coordinator._write_pending.clear()
     coordinator.data["runtime_calibration_operation_state"] = "refused"
+    coordinator._write_status_label = lambda *_: (
+        "Refused: runtime calibration requires 100% battery charge"
+    )
     calibration._handle_coordinator_update()
     entries = sys.modules["homeassistant.components.logbook"].entries
     assert len(entries) == 1
-    assert entries[0][0][2].endswith("Terminal status: Refused.")
+    assert entries[0][0][2].endswith(
+        "Terminal status: Refused: runtime calibration requires 100% battery charge."
+    )
 
     async def reject(*args):
         raise RuntimeError("not sent")

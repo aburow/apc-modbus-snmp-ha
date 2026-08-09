@@ -1185,7 +1185,23 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             key = "runtime_calibration_operation_state"
         else:
             return "Unknown"
-        return str(self.data.get(key, "unknown")).replace("_", " ").title()
+        status = str(self.data.get(key, "unknown")).replace("_", " ").title()
+        if operation == "calibration_start" and status == "Refused":
+            charge = self._feedback_percentage("battery_state_of_charge")
+            load = self._feedback_percentage("output_load_percent")
+            return (
+                "Refused: runtime calibration requires 100% battery charge and "
+                "output load above its applicable threshold (above 10% without "
+                f"external battery packs); current: {charge} charge, {load} load"
+            )
+        return status
+
+    def _feedback_percentage(self, key: str) -> str:
+        """Format an already-polled percentage for user-facing write feedback."""
+        try:
+            return f"{float(self.data[key]):.1f}%"
+        except (KeyError, TypeError, ValueError):
+            return "unavailable"
 
     async def async_detect_device_type(self) -> APCDeviceType | None:
         """Probe distinguishing Modbus addresses to identify the device type."""

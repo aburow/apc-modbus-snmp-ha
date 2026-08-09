@@ -9,6 +9,8 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 ### Fixed
 - Added the Logbook clarification when an APC control recovers after a press;
   the retained native button timestamp is not another command.
+- Explain a refused runtime calibration with its charge/load prerequisites and
+  the already-polled current values.
 
 ### Changed
 - Synchronized integration and package metadata to `2.0.0-dev.4`.
