@@ -4,9 +4,18 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.0.0-dev.5] - 2026-08-09
+
+### Fixed
+- Declared the built-in Home Assistant `logbook` integration as a dependency
+  for the control-restoration Logbook entry, resolving Hassfest validation.
+
 ### Changed
 - Renamed the manual control to **Run plugin diagnostics** to distinguish
   integration diagnostics from appliance diagnostics.
+- Removed unused external bridge contracts and their tests.
+- Added a project affiliation and use-at-your-own-risk disclaimer.
+- Synchronized integration and package metadata to `2.0.0-dev.5`.
 
 ## [2.0.0-dev.4] - 2026-08-09
 
