@@ -4,6 +4,10 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+### Changed
+- Renamed the manual control to **Run plugin diagnostics** to distinguish
+  integration diagnostics from appliance diagnostics.
+
 ## [2.0.0-dev.4] - 2026-08-09
 
 ### Fixed

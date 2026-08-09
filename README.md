@@ -78,7 +78,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
 - **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
-- **Manual Diagnostics Button**: Per-device `Run Diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
+- **Manual Diagnostics Button**: Per-device `Run plugin diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
 - **Schema-Based Detection**: Modbus probes distinguish legacy Smart-UPS, SMT/SMX/SRT (including SmartConnect-compatible SMT schema), and Rack PDU register families without SNMP
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes

@@ -404,7 +404,8 @@ def test_native_write_entities_are_capability_filtered_and_disabled(monkeypatch)
         for entity in buttons
         if isinstance(entity, button.APCModbusDiagnosticButton)
     )
-    diagnostics.name = "Run Diagnostics"
+    assert diagnostics._attr_name == "Run plugin diagnostics"
+    diagnostics.name = "Run plugin diagnostics"
     diagnostics.entity_id = "button.ups_run_diagnostics"
     diagnostics._context = object()
     diagnostics._mark_restoration_candidate()
@@ -414,7 +415,7 @@ def test_native_write_entities_are_capability_filtered_and_disabled(monkeypatch)
     diagnostics._handle_coordinator_update()
     utility_entry = sys.modules["homeassistant.components.logbook"].entries[1]
     assert utility_entry[0][1:3] == (
-        "Run Diagnostics",
+        "Run plugin diagnostics",
         "Control restored to available; this is not another press.",
     )
     notifications = []

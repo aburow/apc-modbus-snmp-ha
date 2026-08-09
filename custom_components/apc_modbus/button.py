@@ -147,7 +147,7 @@ class APCModbusDiagnosticButton(
     """Manual button to run a detailed diagnostic collector dump."""
 
     has_entity_name = True
-    _attr_name = "Run Diagnostics"
+    _attr_name = "Run plugin diagnostics"
     _attr_icon = "mdi:stethoscope"
 
     def __init__(self, coordinator: APCModbusCoordinator, entry: ConfigEntry) -> None:
