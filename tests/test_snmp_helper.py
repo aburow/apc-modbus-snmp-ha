@@ -1,9 +1,12 @@
 import importlib.util
 import asyncio
+import logging
 import sys
 import types
 from datetime import date
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "custom_components" / "apc_modbus"
@@ -61,6 +64,28 @@ SNMP_HELPER = _load_module(
     "custom_components.apc_modbus.snmp_helper",
     PACKAGE_ROOT / "snmp_helper.py",
 )
+
+
+def test_metadata_logging_does_not_disclose_community(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """SNMP must receive the configured community without logging it."""
+    sentinel = "do-not-log-this-community"
+    calls: list[str] = []
+
+    async def _fake_get(_host, _oid, community, **_kwargs):
+        calls.append(community)
+        return None
+
+    monkeypatch.setattr(SNMP_HELPER, "async_get_snmp_value", _fake_get)
+    with caplog.at_level(logging.DEBUG):
+        metadata = asyncio.run(
+            SNMP_HELPER.async_get_device_metadata("127.0.0.1", sentinel)
+        )
+
+    assert calls and set(calls) == {sentinel}
+    assert sentinel not in caplog.text
+    assert sentinel not in str(metadata)
 
 
 def test_parse_frequency_hz_handles_hz_and_tenths() -> None:

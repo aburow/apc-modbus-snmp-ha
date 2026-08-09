@@ -208,9 +208,8 @@ async def async_get_device_metadata(
     All values are None if SNMP fails.
     """
     _LOGGER.debug(
-        "Querying SNMP metadata from %s (community: %s, device_type: %s)",
+        "Querying SNMP metadata from %s (device type: %s)",
         host,
-        community,
         device_type.value if device_type else "auto",
     )
 
