@@ -95,10 +95,8 @@ PROTOCOL_TESTS = {
     0x0806: (0x1234, 0x5678),
     0x080A: (0x1234,),
 }
-SRC_MODELS = frozenset({"SRC2KUXI", "SRC3KUXI", "SRC3KUXIX709"})
-
 # Development candidate for controlled physical acceptance on a noncritical load.
-RELEASE_SUPPORTED_MODELS: frozenset[tuple[str, tuple[int, ...]]] = frozenset(
+RELEASE_SUPPORTED_SKUS: frozenset[tuple[str, tuple[int, ...]]] = frozenset(
     {("SMT750IC", (18, 0))}
 )
 
@@ -144,11 +142,11 @@ def parse_firmware(value: str | None) -> tuple[int, ...] | None:
     return tuple(int(part) for part in match.group(1).split(".")) if match else None
 
 
-def vendor_family_eligible(model: str | None, firmware: str | None) -> bool:
-    """Apply vendor family floors before the hardware-accepted allowlist."""
-    normalized = (model or "").strip().upper()
+def vendor_family_eligible(sku: str | None, firmware: str | None) -> bool:
+    """Apply SMT/SMX firmware floors before the hardware-accepted allowlist."""
+    normalized = (sku or "").strip().upper()
     version = parse_firmware(firmware)
-    if not normalized or version is None or normalized.startswith("SURTD"):
+    if not normalized or version is None:
         return False
     if re.match(r"^SMT\d+RM1U(?:\b|$)", normalized):
         return False
@@ -156,18 +154,16 @@ def vendor_family_eligible(model: str | None, firmware: str | None) -> bool:
         return version >= (9, 0)
     if normalized.startswith("SMX"):
         return version >= (10, 0)
-    if normalized.startswith("SRT"):
-        return True
-    return normalized in SRC_MODELS
+    return False
 
 
-def release_model_supported(
-    model: str | None,
+def release_sku_supported(
+    sku: str | None,
     firmware: str | None,
-    allowlist: Collection[tuple[str, tuple[int, ...]]] = RELEASE_SUPPORTED_MODELS,
+    allowlist: Collection[tuple[str, tuple[int, ...]]] = RELEASE_SUPPORTED_SKUS,
 ) -> bool:
-    """Require exact hardware-accepted identity in addition to family eligibility."""
-    normalized = (model or "").strip().upper()
+    """Require an exact hardware-accepted SKU and firmware pair."""
+    normalized = (sku or "").strip().upper()
     version = parse_firmware(firmware)
     return bool(
         version is not None

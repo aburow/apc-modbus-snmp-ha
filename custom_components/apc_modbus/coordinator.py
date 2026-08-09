@@ -152,10 +152,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.write_capabilities: set[str] = set()
         self.write_capability_outcomes: dict[str, ProbeOutcome] = {}
         self.write_capability_unresolved: set[str] = set()
-        from .write_support import RELEASE_SUPPORTED_MODELS
+        from .write_support import RELEASE_SUPPORTED_SKUS
 
-        self.write_supported_models = RELEASE_SUPPORTED_MODELS
+        self.write_supported_skus = RELEASE_SUPPORTED_SKUS
         self.raw_modbus_model: str | None = None
+        self.raw_modbus_sku: str | None = None
         self.raw_modbus_firmware: str | None = None
         self.modbus_map_id: str | None = None
         self._write_pending: set[str] = set()
@@ -380,6 +381,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.raw_modbus_firmware = self._clean_metadata_value(firmware)
         self.raw_modbus_model = self._clean_metadata_value(model)
+        self.raw_modbus_sku = self._clean_metadata_value(sku)
 
         if self.snmp_availability != "unavailable":
             return True
@@ -433,7 +435,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             decode_runtime_calibration_status,
             parse_firmware,
             protocol_constants_valid,
-            release_model_supported,
+            release_sku_supported,
         )
 
         self.write_capabilities.clear()
@@ -448,16 +450,13 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return set()
         if getattr(self.client, "retries", None) != 0:
             return set()
-        if (
-            not self.raw_modbus_model
-            or parse_firmware(self.raw_modbus_firmware) is None
-        ):
+        if not self.raw_modbus_sku or parse_firmware(self.raw_modbus_firmware) is None:
             self.write_capability_unresolved.update(all_capabilities)
             return set()
-        if not release_model_supported(
-            self.raw_modbus_model,
+        if not release_sku_supported(
+            self.raw_modbus_sku,
             self.raw_modbus_firmware,
-            self.write_supported_models,
+            self.write_supported_skus,
         ):
             return set()
 

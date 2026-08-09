@@ -475,8 +475,15 @@ async def _discovery_is_per_feature_and_never_reads_command_region(monkeypatch):
     runtime, device_types, _, _ = _load_runtime(monkeypatch)
     support = importlib.import_module("write_runtime.write_support")
     device = sys.modules["write_runtime.device_types"]
+    identity = _coordinator(runtime, device_types, FakeClient())
+    decoded_identity = iter(("UPS 18.0", "Smart-UPS 750", "SMT750IC", "serial"))
+    identity._decode_register = lambda *_: next(decoded_identity)
+    assert await identity.async_read_modbus_metadata()
+    assert identity.raw_modbus_model == "Smart-UPS 750"
+    assert identity.raw_modbus_sku == "SMT750IC"
+
     coordinator = _coordinator(runtime, device_types, FakeClient())
-    coordinator.write_supported_models = frozenset({("SMT1500", (9, 0))})
+    coordinator.write_supported_skus = frozenset({("SMT1500", (9, 0))})
     assert await coordinator.async_discover_write_capabilities() == set()
     assert coordinator.write_capability_unresolved == {
         capability.value for capability in support.WriteCapability
@@ -485,7 +492,8 @@ async def _discovery_is_per_feature_and_never_reads_command_region(monkeypatch):
         "entry", coordinator.write_capability_unresolved
     )
 
-    coordinator.raw_modbus_model = "SMT1500"
+    coordinator.raw_modbus_model = "Smart-UPS 1500"
+    coordinator.raw_modbus_sku = "SMT1500"
     coordinator.raw_modbus_firmware = "UPS 9.0"
     seen = []
 
@@ -577,7 +585,7 @@ async def _discovery_is_per_feature_and_never_reads_command_region(monkeypatch):
     assert "apc_modbus_entry_write_battery_test_start" in preserved
     assert "apc_modbus_entry_write_outlet_mog" in preserved
 
-    coordinator.write_supported_models = frozenset()
+    coordinator.write_supported_skus = frozenset()
     seen.clear()
     assert await coordinator.async_discover_write_capabilities() == set()
     assert seen == []

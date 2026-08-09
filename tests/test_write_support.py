@@ -30,7 +30,7 @@ encode_int32 = module.encode_int32
 outlet_precondition = module.outlet_precondition
 parse_firmware = module.parse_firmware
 protocol_constants_valid = module.protocol_constants_valid
-release_model_supported = module.release_model_supported
+release_sku_supported = module.release_sku_supported
 validate_write_multiple_response = module.validate_write_multiple_response
 validate_write_single_response = module.validate_write_single_response
 vendor_family_eligible = module.vendor_family_eligible
@@ -49,23 +49,23 @@ class Response:
         return self.error
 
 
-def test_model_and_protocol_gates_are_exact() -> None:
+def test_sku_and_protocol_gates_are_exact() -> None:
     assert parse_firmware("UPS 10.2 (ID20)") == (10, 2)
     assert vendor_family_eligible("SMT1500", "UPS 9.0")
     assert not vendor_family_eligible("SMT1500", "UPS 8.9")
     assert not vendor_family_eligible("SMT750RM1U", "UPS 15.0")
     assert vendor_family_eligible("SMX1500", "10.0")
     assert not vendor_family_eligible("SMX1500", "9.9")
-    assert vendor_family_eligible("SRT3000", "1.0")
-    assert vendor_family_eligible("SRC3KUXIX709", "1.0")
+    assert not vendor_family_eligible("SRT3000", "1.0")
+    assert not vendor_family_eligible("SRC3KUXIX709", "1.0")
     assert not vendor_family_eligible("SRC3KUX", "99.0")
     assert not vendor_family_eligible("SURTD5000", "99.0")
     accepted = {("SMT1500", (9, 0))}
-    assert release_model_supported("SMT1500", "UPS 9.0", accepted)
-    assert not release_model_supported("SMT1500", "UPS 9.1", accepted)
-    assert not release_model_supported("SMT", "UPS 9.0", accepted)
-    assert release_model_supported("SMT750ic", "UPS 18.0")
-    assert not release_model_supported("SMT750IC", "UPS 18.1")
+    assert release_sku_supported("SMT1500", "UPS 9.0", accepted)
+    assert not release_sku_supported("SMT1500", "UPS 9.1", accepted)
+    assert not release_sku_supported("SMT", "UPS 9.0", accepted)
+    assert release_sku_supported("SMT750ic", "UPS 18.0")
+    assert not release_sku_supported("SMT750IC", "UPS 18.1")
     constants = {
         0x0802: (0x3132, 0x3334, 0x3536, 0x3738),
         0x0806: (0x1234, 0x5678),

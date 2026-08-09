@@ -2,6 +2,17 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [2.0.0-dev.2] - 2026-08-09
+
+### Fixed
+- Matched the write allowlist against the Modbus `SKU_STR` identity at `0x0224`
+  instead of the human-readable model name at `0x0214`.
+
+### Changed
+- Limited write-family eligibility to SMT/SMX SKUs, including exact allowlisted
+  SmartConnect SMT devices.
+- Synchronized integration and package metadata to `2.0.0-dev.2`.
+
 ## [2.0.0-dev.1] - 2026-08-09
 
 ### Fixed

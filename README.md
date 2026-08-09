@@ -68,8 +68,9 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ### Core Features
 - **Safety-Gated Write Development**: `2.0.0-dev` includes disabled-by-default,
-  exact-capability Modbus controls. SmartConnect `SMT750IC` firmware `18.0` is
-  temporarily allowlisted for controlled physical acceptance; it is not yet release-supported.
+  exact-capability Modbus controls for SMT/SMX and SmartConnect SMT devices.
+  SmartConnect SKU `SMT750IC` with firmware `18.0` is temporarily allowlisted
+  for controlled physical acceptance; it is not yet release-supported.
   See [Modbus write support status](WRITE_SUPPORT.md).
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
 - **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
