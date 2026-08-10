@@ -2,6 +2,21 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6] - 2026-08-10
+
+### Added
+- SmartConnect support, including a Modbus identity fallback when SNMP is
+  unavailable and a direct link to the SmartConnect dashboard.
+- More resilient cumulative-energy tracking for supported SMT/SmartConnect UPSs
+  and Rack PDUs, including confirmed counter-rollover reporting.
+
+### Changed
+- SNMP is optional enrichment; Modbus monitoring continues when it is
+  unavailable.
+- Simplified local linting to Ruff, Grain, pytest, ShellCheck, and shfmt.
+- Added the README trademark and use-at-your-own-risk disclaimer.
+- Synchronized authoritative integration/package version metadata to `1.2.6`.
+
 ## [1.2.6-dev.14] - 2026-08-10
 
 ### Changed

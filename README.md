@@ -353,6 +353,11 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 For detailed release notes, see `CHANGELOG.md`.
 
+### v1.2.6 (Current Stable)
+- ✅ Adds SmartConnect support with Modbus identity fallback and dashboard link.
+- ✅ Makes SNMP optional enrichment while retaining Modbus monitoring.
+- ✅ Improves supported cumulative-energy tracking and rollover reporting.
+
 ### v1.2.6-dev.14
 - ✅ Links SmartConnect devices to the SmartConnect dashboard.
 
@@ -367,7 +372,7 @@ For detailed release notes, see `CHANGELOG.md`.
 - ✅ Normalizes legacy Smart-UPS runtime telemetry to Home Assistant's native seconds duration while keeping minutes as the suggested display unit.
 - ✅ Adds SNMP self-test entities only when SNMP enrichment is available for supported UPS families.
 
-### v1.2.5 (Current Stable)
+### v1.2.5
 - ✅ Normalizes the repository license for GitHub Licensee and HACS detection.
 - ✅ Declares `AGPL-3.0-or-later` consistently in project documentation and existing source SPDX headers.
 
