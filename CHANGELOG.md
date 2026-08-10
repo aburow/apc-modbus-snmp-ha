@@ -4,11 +4,14 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.0.0-dev.6] - 2026-08-10
+
 ### Changed
 - SmartConnect device pages now link to the SmartConnect dashboard.
 - Simplified local linting to Ruff, Grain, pytest, ShellCheck, and shfmt.
 - Removed the obsolete Application Notes publication-terms release gate from
   the historical v2.0.0 development record.
+- Synchronized integration and package metadata to `2.0.0-dev.6`.
 
 ## [2.0.0-dev.5] - 2026-08-09
 
