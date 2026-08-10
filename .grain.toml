@@ -1,0 +1,4 @@
+[grain]
+fail_on = ["NAKED_EXCEPT", "VAGUE_TODO"]
+warn_only = ["OBVIOUS_COMMENT", "RESTATED_DOCSTRING", "SINGLE_IMPL_ABC", "BULLET_PROSE"]
+exclude = ["localonly/*"]

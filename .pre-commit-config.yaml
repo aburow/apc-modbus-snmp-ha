@@ -64,31 +64,3 @@ repos:
         language: system
         types: [shell]
         stages: [manual]
-
-      - id: codeql
-        name: codeql security scan
-        entry: scripts/run_codeql.sh
-        language: system
-        pass_filenames: false
-        stages: [manual]
-
-      - id: yamllint
-        name: yamllint
-        entry: scripts/run_uv_tool.sh yamllint -s
-        language: system
-        files: \.(yaml|yml)$
-        stages: [manual]
-
-      - id: sqlfluff-lint
-        name: sqlfluff lint
-        entry: scripts/run_uv_tool.sh sqlfluff lint
-        language: system
-        files: \.sql$
-        stages: [manual]
-
-      - id: semgrep
-        name: semgrep
-        entry: scripts/run_semgrep.sh
-        language: system
-        pass_filenames: false
-        stages: [manual]

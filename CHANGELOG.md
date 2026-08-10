@@ -4,6 +4,12 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+### Changed
+- SmartConnect device pages now link to the SmartConnect dashboard.
+- Simplified local linting to Ruff, Grain, pytest, ShellCheck, and shfmt.
+- Removed the obsolete Application Notes publication-terms release gate from
+  the historical v2.0.0 development record.
+
 ## [2.0.0-dev.5] - 2026-08-09
 
 ### Fixed
@@ -76,7 +82,7 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 - `SMT750IC` firmware `18.0` is temporarily allowlisted for controlled physical
   acceptance on a noncritical load; it is not yet release-supported.
 - Timing configuration remains blocked pending authoritative model-specific
-  ranges. APC application-note publication terms also remain a release gate.
+  ranges.
 
 ### Changed
 - Synchronized integration and package metadata to `2.0.0-dev.0`.
