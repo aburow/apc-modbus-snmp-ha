@@ -6,6 +6,11 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
+> **Testing preview:** v2.0.0 is under test and adds safety-gated remote-control
+> capability for the SmartConnect SMT750IC running firmware 18.0. It is not yet
+> release-supported; use only with a non-critical load. See the
+> [v2.0.0 write-support status](https://github.com/aburow/apc-modbus-snmp-ha/blob/2.0.0-dev/WRITE_SUPPORT.md).
+
 Supported device families include:
 - Legacy Smart-UPS
 - Smart-UPS SMT/SMX/SRT and SmartConnect
