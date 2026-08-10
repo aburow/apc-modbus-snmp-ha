@@ -97,15 +97,15 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ```mermaid
 graph TD
-  HA[Home Assistant Core] -->|config entry| CC[custom_components/apc_modbus]
-  CC --> COORD[Coordinator]
-  NOTE["DataUpdateCoordinator per device<br/>- serialized Modbus I/O per host:port<br/>- block reads with fallback<br/>- backoff on failures"]
-  COORD -.-> NOTE
-  COORD --> MODBUS["Modbus/TCP<br/>(pymodbus)"]
-  COORD --> SNMP["SNMP metadata<br/>(pysnmp in executor)"]
+  HA[Home Assistant Core] -->|config entry| INTEGRATION[APC Modbus integration]
+  INTEGRATION --> COORD[DataUpdateCoordinator]
+  COORD -->|block polling with fallback| MODBUS["Modbus/TCP<br/>(pymodbus)"]
   MODBUS --> DEVICE["APC UPS / PDU"]
-  SNMP --> META["Model / Serial / FW"]
-  DEVICE --> ENT["Home Assistant Entities<br/>(sensors, binary_sensors)"]
+  COORD -->|optional metadata enrichment| SNMP["SNMP v2c<br/>(executor)"]
+  SNMP --> META["Model / serial / firmware<br/>external probes"]
+  COORD --> ENT["Home Assistant entities<br/>sensors, binary sensors, buttons, switches"]
+  ENT -->|disabled-by-default control used| GATE["Write safety gate<br/>exact SKU/firmware + read-only capability discovery"]
+  GATE -->|one serialized, no-retry command| MODBUS
 ```
 
 ## Installation
