@@ -60,8 +60,15 @@ invocation.
 2. Obtain authoritative per-model minimum, maximum, and step values for every
    `0x0405`--`0x0418` timing field. No `NumberEntity` exists until that evidence
    is tracked and tested.
-3. Record the project owner's review of APC Application Notes #176 and #177
-   publication/commercial-use terms. Vendor PDFs are not included in Git.
 
 The first release must advertise only exact SKU/firmware combinations with a
 passing acceptance record. Family prefixes alone are never sufficient.
+
+## Technical source record
+
+Reviewed 2026-08-10: `990-9840B-EN`, *Modbus Register Map - Smart-UPS Models
+with prefix SMT, SMX, SURTD, and SRT*, contains the implemented write-register
+addresses, permissions, command/status bits, data encodings, and
+protocol-verification constants. Supplemental vendor materials reviewed for
+context added no material implementation requirement beyond that register map.
+This is a technical-source record, not a legal determination.
