@@ -353,6 +353,9 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 For detailed release notes, see `CHANGELOG.md`.
 
+### v1.2.6-dev.14
+- ✅ Links SmartConnect devices to the SmartConnect dashboard.
+
 ### v1.2.6-dev.13
 - ✅ Adds a diagnostic Output Energy Rollover count for confirmed SMT/SmartConnect uint32 counter wraps.
 
@@ -411,6 +414,8 @@ For detailed release notes, see `CHANGELOG.md`.
 This project is licensed under the GNU Affero General Public License v3.0 or later.
 
 SPDX-License-Identifier: AGPL-3.0-or-later
+
+The author is not affiliated with APC or Schneider Electric. Use of this software is at the sole risk of the user and/or installer.
 
 ## Credits
 

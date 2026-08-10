@@ -42,3 +42,14 @@ def test_modbus_identity_metadata_is_a_snmp_fallback() -> None:
         assert address in coordinator
     assert 'self.snmp_availability != "unavailable"' in coordinator
     assert "await coordinator.async_read_modbus_metadata()" in setup
+
+
+def test_smartconnect_uses_cloud_configuration_url() -> None:
+    root = Path(__file__).resolve().parents[1]
+    coordinator = (root / "custom_components/apc_modbus/coordinator.py").read_text()
+
+    configuration_url_method = coordinator.split(
+        "def get_configuration_url_for_registry", 1
+    )[1].split("def set_capabilities", 1)[0]
+    assert "APCDeviceType.SMARTCONNECT_UPS" in configuration_url_method
+    assert "https://smartconnect.apc.com/dashboard" in configuration_url_method

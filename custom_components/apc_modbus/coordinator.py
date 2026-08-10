@@ -287,6 +287,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def get_configuration_url_for_registry(self) -> str:
         """Return a best-effort management URL for Home Assistant device info."""
+        if self.device_type == APCDeviceType.SMARTCONNECT_UPS:
+            return "https://smartconnect.apc.com/dashboard"
         host = (self.host or "").strip()
         if not host:
             return ""

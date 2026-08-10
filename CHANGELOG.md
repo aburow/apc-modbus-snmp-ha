@@ -2,6 +2,16 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
+## [1.2.6-dev.14] - 2026-08-10
+
+### Changed
+- SmartConnect device pages now link to the SmartConnect dashboard instead of
+  the device's local Modbus host.
+- Added a trademark and use-at-your-own-risk disclaimer to the README license
+  section.
+- Synchronized authoritative integration/package version metadata to
+  `1.2.6-dev.14`.
+
 ## [1.2.6-dev.13] - 2026-08-08
 
 ### Added
