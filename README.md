@@ -6,8 +6,8 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Development preview:** `2.0.0-dev.6` includes safety-gated write controls
-> for a small allowlisted set of SMT/SmartConnect devices. See
+> **Development preview:** `2.0.0-dev.7` includes safety-gated write controls
+> for a small allowlisted set of SMT/SmartConnect/SRT devices. See
 > [Modbus write support status](WRITE_SUPPORT.md) before enabling them.
 
 Supported device families include:
@@ -375,7 +375,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.0.0-dev.6`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.0.0-dev.7`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

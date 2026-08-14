@@ -4,6 +4,15 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.0.0-dev.7] - 2026-08-14
+
+### Added
+- Added the exact `SRT2200` SKU with UPS firmware `06.0` as a safety-gated
+  Modbus write-control candidate. Other SRT models remain read-only.
+
+### Changed
+- Synchronized integration and package metadata to `2.0.0-dev.7`.
+
 ## [2.0.0-dev.6] - 2026-08-10
 
 ### Changed

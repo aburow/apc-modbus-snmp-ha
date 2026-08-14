@@ -56,7 +56,8 @@ def test_sku_and_protocol_gates_are_exact() -> None:
     assert not vendor_family_eligible("SMT750RM1U", "UPS 15.0")
     assert vendor_family_eligible("SMX1500", "10.0")
     assert not vendor_family_eligible("SMX1500", "9.9")
-    assert not vendor_family_eligible("SRT3000", "1.0")
+    assert vendor_family_eligible("SRT2200", "UPS 06.0")
+    assert not vendor_family_eligible("SRT2200", "UPS 05.9")
     assert not vendor_family_eligible("SRC3KUXIX709", "1.0")
     assert not vendor_family_eligible("SRC3KUX", "99.0")
     assert not vendor_family_eligible("SURTD5000", "99.0")
@@ -66,6 +67,8 @@ def test_sku_and_protocol_gates_are_exact() -> None:
     assert not release_sku_supported("SMT", "UPS 9.0", accepted)
     assert release_sku_supported("SMT750ic", "UPS 18.0")
     assert not release_sku_supported("SMT750IC", "UPS 18.1")
+    assert release_sku_supported("SRT2200", "UPS 06.0")
+    assert not release_sku_supported("SRT2200", "UPS 06.1")
     constants = {
         0x0802: (0x3132, 0x3334, 0x3536, 0x3738),
         0x0806: (0x1234, 0x5678),

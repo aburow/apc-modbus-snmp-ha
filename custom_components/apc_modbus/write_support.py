@@ -126,9 +126,9 @@ PROTOCOL_TESTS = {
     0x0806: (0x1234, 0x5678),
     0x080A: (0x1234,),
 }
-# Development candidate for controlled physical acceptance on a noncritical load.
+# Development candidates for controlled physical acceptance on a noncritical load.
 RELEASE_SUPPORTED_SKUS: frozenset[tuple[str, tuple[int, ...]]] = frozenset(
-    {("SMT750IC", (18, 0))}
+    {("SMT750IC", (18, 0)), ("SRT2200", (6, 0))}
 )
 
 WRITE_ENTITY_SUFFIXES: dict[str, tuple[str, ...]] = {
@@ -174,7 +174,7 @@ def parse_firmware(value: str | None) -> tuple[int, ...] | None:
 
 
 def vendor_family_eligible(sku: str | None, firmware: str | None) -> bool:
-    """Apply SMT/SMX firmware floors before the hardware-accepted allowlist."""
+    """Apply documented family firmware floors before the hardware allowlist."""
     normalized = (sku or "").strip().upper()
     version = parse_firmware(firmware)
     if not normalized or version is None:
@@ -185,6 +185,8 @@ def vendor_family_eligible(sku: str | None, firmware: str | None) -> bool:
         return version >= (9, 0)
     if normalized.startswith("SMX"):
         return version >= (10, 0)
+    if normalized.startswith("SRT"):
+        return version >= (6, 0)
     return False
 
 
