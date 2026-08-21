@@ -50,3 +50,4 @@ def test_command_writes_use_function_16_for_one_register_actions() -> None:
     assert "force_multiple=True" in (MODULE.parent / "button.py").read_text()
     assert "force_multiple or len(words) > 1" in source
     assert '"write_registers"' in source
+    assert "list(words) if force_multiple or len(words) > 1 else words[0]" in source

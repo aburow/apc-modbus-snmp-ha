@@ -180,6 +180,11 @@ class ModbusTransport:
             "write_registers" if force_multiple or len(words) > 1 else "write_register"
         )
 
+    @staticmethod
+    def _write_payload(words: tuple[int, ...], force_multiple: bool):
+        """Use a register list whenever function 16 is selected."""
+        return list(words) if force_multiple or len(words) > 1 else words[0]
+
     def _write_registers(
         self, address: int, words: tuple[int, ...], force_multiple: bool
     ):
@@ -187,7 +192,7 @@ class ModbusTransport:
         method_name = self._write_method_name(words, force_multiple)
         write_fn = getattr(self.client, method_name)
         parameters = inspect.signature(write_fn).parameters
-        payload = words[0] if len(words) == 1 else list(words)
+        payload = self._write_payload(words, force_multiple)
         options = (
             {"no_response_expected": False}
             if "no_response_expected" in parameters

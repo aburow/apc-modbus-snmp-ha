@@ -4,6 +4,13 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.4] - 2026-08-22
+
+### Fixed
+- Pass one-register function-16 commands to PyModbus as a one-item register
+  list. This fixes a client-side error that prevented those validation commands
+  from being sent.
+
 ## [2.1.0-dev.3] - 2026-08-21
 
 ### Fixed
