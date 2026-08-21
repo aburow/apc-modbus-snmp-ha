@@ -95,8 +95,16 @@ class APCModbusCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEnti
         return self.coordinator.last_update_success
 
     async def async_press(self) -> None:
+        _LOGGER.debug(
+            "[%s] Command test requested: action=%s, model=%s, sku=%s, firmware=%s",
+            self.coordinator._log_ctx,
+            self._command.key,
+            self.coordinator.raw_modbus_model or self.coordinator.hw_model,
+            self.coordinator.raw_modbus_sku,
+            self.coordinator.raw_modbus_firmware or self.coordinator.fw_version,
+        )
         await self.coordinator.transport.write(
-            self._command.address, self._command.words
+            self._command.address, self._command.words, command_name=self._command.key
         )
 
 

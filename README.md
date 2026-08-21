@@ -6,7 +6,7 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.1` adds experimental, disabled-by-
+> **Developer pre-release:** `2.1.0-dev.2` adds experimental, disabled-by-
 > default Modbus command validation for device families with documented command
 > registers. Record the exact model and firmware when testing; test only
 > noncritical loads.
@@ -198,6 +198,14 @@ unavailable. Home Assistant will retry automatically`, followed by one
 register, block, OID, and reconnect diagnostics are available only with debug
 logging.
 
+For experimental command validation, debug logging must be enabled before a
+test. Record the button entity ID, exact device model/firmware, transport path,
+time, and observed device state. If Home Assistant reports
+`modbus_write_response_invalid`, do **not** press the button again: the command
+was sent once and may have been accepted, rejected, or ignored by the device.
+Verify the physical state and include the surrounding APC log lines in the test
+record.
+
 When a device needs one Modbus connection per request, the integration reports
 that compatibility mode in plain language.
 
@@ -316,6 +324,22 @@ After updating the logger configuration:
 - Reproduce the issue
 - Collect the relevant log lines from Home Assistant
 
+### Experimental command-validation logs
+
+The same setting—`custom_components.apc_modbus: debug`—is required for command
+testing. Capture the log lines immediately before and after one button press,
+plus the entity ID, model/SKU, UPS firmware, connection path, and observed
+physical result. Never press the same command again after a timeout,
+disconnect, or `modbus_write_response_invalid` error; inspect the UPS and
+reload the integration before another test.
+
+Command diagnostics identify the fixed action, Modbus function/address,
+connection mode, sent-once response state, response type/function/address/count,
+and any Modbus exception code. They do not disclose SNMP communities, other
+credentials, or serial numbers. A response-validation error remains
+intentionally fail-closed; include its surrounding debug context when reporting
+a failed test.
+
 At `debug` log level, the coordinator emits a timing breakdown:
 - `Poll timing breakdown: total=..., lock_wait=..., modbus=..., connect=..., block_reads=..., individual_reads=..., close=..., snmp_metadata=..., snmp_external=...`
 - Use this to identify whether latency is dominated by socket lock contention, Modbus reads, reconnects, or SNMP merges.
@@ -399,7 +423,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.1`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.2`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

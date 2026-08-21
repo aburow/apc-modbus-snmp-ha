@@ -4,6 +4,19 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.2] - 2026-08-21
+
+### Added
+- Debug command-audit records: requested action with model/SKU/firmware, then
+  the sent-once Modbus response type, function, address/count, exception code,
+  transport mode, and response-validation result. Credentials and serial
+  numbers are excluded.
+
+### Changed
+- Documented the debug-log capture required for experimental command
+  validation, including the no-retry response-error procedure and safe
+  response fields needed in a device report.
+
 ## [2.1.0-dev.1] - 2026-08-21
 
 ### Added

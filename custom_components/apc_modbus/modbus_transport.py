@@ -205,7 +205,22 @@ class ModbusTransport:
             ) == words[0]
         return getattr(response, "count", None) == len(words)
 
-    async def write(self, address: int, words: tuple[int, ...]) -> None:
+    @staticmethod
+    def _write_response_details(response) -> dict[str, object]:
+        """Return safe response fields for an experimental command debug record."""
+        error = getattr(response, "isError", getattr(response, "is_error", None))
+        return {
+            "type": type(response).__name__ if response is not None else "None",
+            "function": getattr(response, "function_code", None),
+            "address": getattr(response, "address", None),
+            "count": getattr(response, "count", None),
+            "exception": getattr(response, "exception_code", None),
+            "error": error() if callable(error) else bool(error),
+        }
+
+    async def write(
+        self, address: int, words: tuple[int, ...], *, command_name: str
+    ) -> None:
         """Serialize one command without retrying or reconnecting after it is sent."""
         if not words or getattr(self.client, "retries", 0) not in (None, 0):
             raise ValueError("unsafe_modbus_write")
@@ -221,7 +236,25 @@ class ModbusTransport:
                 response = await self.hass.async_add_executor_job(
                     self._write_registers, address, words
                 )
-            if not self._write_response_valid(response, address, words):
+            details = self._write_response_details(response)
+            valid = self._write_response_valid(response, address, words)
+            _LOGGER.debug(
+                "[%s] Command sent once: action=%s, transport=%s, request_address=0x%04X, "
+                "request_count=%d, response_type=%s, response_function=%s, "
+                "response_address=%s, response_count=%s, exception_code=%s, valid=%s",
+                self.log_ctx,
+                command_name,
+                self.mode,
+                address,
+                len(words),
+                details["type"],
+                details["function"],
+                details["address"],
+                details["count"],
+                details["exception"],
+                valid,
+            )
+            if not valid:
                 raise RuntimeError("modbus_write_response_invalid")
             self.mark_io_activity()
 

@@ -26,3 +26,15 @@ def test_outlet_command_is_fixed_to_a_documented_target_and_source() -> None:
     command = commands.get_command("outlet_off", "switched_outlet_group_2")
     assert command.address == 0x0602
     assert command.words == (2, 0x0404)
+
+
+def test_command_transport_response_record_excludes_raw_register_payload() -> None:
+    transport_module = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components/apc_modbus/modbus_transport.py"
+    )
+    source = transport_module.read_text()
+
+    assert "response_type=%s" in source
+    assert "exception_code=%s" in source
+    assert "response.registers" not in source
