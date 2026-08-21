@@ -44,7 +44,8 @@ from .const import (
     KEY_COORDINATOR,
     SUPPORTED_PLATFORMS,
 )
-from .coordinator import APCModbusCoordinator, create_modbus_client
+from .coordinator import APCModbusCoordinator
+from .modbus_transport import create_modbus_client
 from .device_types import (
     DETECTION_VERSION,
     APCDeviceType,
@@ -52,6 +53,10 @@ from .device_types import (
     device_type_label,
     is_concrete_device_type,
     should_probe_device_type,
+)
+from .device_profiles import (
+    get_binary_sensor_descriptions,
+    get_sensor_descriptions,
 )
 from .external_probe_entities import filter_available_external_probe_keys
 from .register_factory import get_registers_for_device
@@ -66,71 +71,27 @@ def _get_expected_entity_unique_ids(
     coordinator: APCModbusCoordinator, entry_id: str
 ) -> set[str]:
     """Build expected unique_ids for current device type and capabilities."""
-    if coordinator.device_type == APCDeviceType.SMART_UPS:
-        from .const import (
-            BINARY_SENSOR_DESCRIPTIONS,
-            SENSOR_DESCRIPTIONS,
-            SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
-        )
-
-        sensor_keys = {
-            description.key
-            for description in [
-                *SENSOR_DESCRIPTIONS,
-                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
-            ]
-        }
-        binary_keys = {description.key for description in BINARY_SENSOR_DESCRIPTIONS}
-    elif coordinator.device_type == APCDeviceType.SMT_UPS:
-        from . import registers_smt_ups
-        from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
-
-        sensor_keys = {
-            description.key
-            for description in [
-                *registers_smt_ups.SENSOR_DESCRIPTIONS,
-                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
-            ]
-        }
-        binary_keys = {
-            description.key
-            for description in registers_smt_ups.BINARY_SENSOR_DESCRIPTIONS
-        }
-    elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
-        from . import registers_smt_ups
-        from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
-
-        sensor_keys = {
-            description.key
-            for description in [
-                *registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS,
-                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
-            ]
-        }
-        binary_keys = {
-            description.key
-            for description in registers_smt_ups.BINARY_SENSOR_DESCRIPTIONS
-        }
-    elif coordinator.device_type == APCDeviceType.RACK_PDU:
-        from . import registers_rack_pdu
-        from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
-
-        sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(
-            coordinator.device_capabilities
-        )
-        binary_descriptions = registers_rack_pdu.get_binary_sensor_descriptions(
-            coordinator.device_capabilities
-        )
-        sensor_keys = {
-            description.key
-            for description in [
-                *sensor_descriptions,
-                *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
-            ]
-        }
-        binary_keys = {description.key for description in binary_descriptions}
-    else:
+    if not is_concrete_device_type(coordinator.device_type):
         return set()
+
+    from .const import SNMP_EXTERNAL_SENSOR_DESCRIPTIONS
+
+    # Keep stale-entity cleanup on the exact same profile data as platform setup.
+    sensor_keys = {
+        description.key
+        for description in [
+            *get_sensor_descriptions(
+                coordinator.device_type, coordinator.device_capabilities
+            ),
+            *SNMP_EXTERNAL_SENSOR_DESCRIPTIONS,
+        ]
+    }
+    binary_keys = {
+        description.key
+        for description in get_binary_sensor_descriptions(
+            coordinator.device_type, coordinator.device_capabilities
+        )
+    }
 
     if coordinator.snmp_availability == "available" and coordinator.device_type in (
         APCDeviceType.SMART_UPS,
@@ -150,14 +111,6 @@ def _get_expected_entity_unique_ids(
 
     all_keys = sensor_keys | binary_keys
     expected = {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}
-    from .write_support import write_entity_unique_ids
-
-    expected.update(
-        write_entity_unique_ids(
-            entry_id,
-            coordinator.write_capabilities | coordinator.write_capability_unresolved,
-        )
-    )
     return expected
 
 
@@ -174,13 +127,7 @@ async def _async_cleanup_stale_entities(
     removed_count = 0
 
     for entity_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        is_existing_monitor = entity_entry.domain in {"sensor", "binary_sensor"}
-        is_write_control = (
-            entity_entry.domain in {"button", "switch"}
-            and entity_entry.unique_id
-            and entity_entry.unique_id.startswith(f"{prefix}write_")
-        )
-        if not is_existing_monitor and not is_write_control:
+        if entity_entry.domain not in {"sensor", "binary_sensor"}:
             continue
         if not entity_entry.unique_id or not entity_entry.unique_id.startswith(prefix):
             continue
@@ -361,7 +308,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             elif is_concrete_device_type(original_device_type):
                 _LOGGER.warning(
                     "[%s] Modbus device detection was ambiguous; continuing with stored %s. "
-                    "Write controls remain gated until capability discovery completes.",
+                    "Continuing with the stored device classification.",
                     log_ctx,
                     device_type_label(original_device_type),
                 )
@@ -419,30 +366,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         _LOGGER.debug("[%s] Initial refresh failure: %s", log_ctx, err)
         raise ConfigEntryNotReady(f"Failed to fetch initial data: {err}") from err
-
-    try:
-        await coordinator.async_discover_write_capabilities()
-    except (OSError, TimeoutError, RuntimeError, TypeError, ValueError) as err:
-        from .write_support import WriteCapability
-
-        coordinator.write_capabilities.clear()
-        coordinator.write_capability_unresolved.update(
-            capability.value for capability in WriteCapability
-        )
-        _LOGGER.warning(
-            "[%s] Write capability discovery remains unresolved; write controls stay unavailable.",
-            log_ctx,
-        )
-        _LOGGER.debug("[%s] Write capability discovery failure: %s", log_ctx, err)
-
-    if (
-        coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS
-        and coordinator.write_capabilities
-    ):
-        registers, blocks, reg_map = get_registers_for_device(
-            coordinator.device_type, write_companions=True
-        )
-        coordinator.set_registers(registers, blocks, reg_map)
 
     await _async_cleanup_stale_entities(hass, entry, coordinator)
 

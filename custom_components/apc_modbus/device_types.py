@@ -58,6 +58,26 @@ class ProbeOutcome:
         return self.kind == ProbeKind.MODBUS_EXCEPTION and self.exception_code == 2
 
 
+@dataclass(frozen=True)
+class SchemaProbe:
+    """A read-only Modbus request used to identify an APC device family."""
+
+    name: str
+    address: int
+    count: int
+
+
+# Keep the wire-level classifier contract in one place.  Runtime detection and
+# diagnostics deliberately perform these same read-only requests.
+SCHEMA_PROBES = (
+    SchemaProbe("rack_pdu_capabilities", 0x009E, 5),
+    SchemaProbe("rack_pdu_measurements", 0x00CF, 6),
+    SchemaProbe("legacy_ups_id", 0x0021, 1),
+    SchemaProbe("smt_status", 0x0000, 23),
+    SchemaProbe("smt_measurements", 0x0080, 26),
+)
+
+
 def is_concrete_device_type(device_type: APCDeviceType | None) -> bool:
     return device_type in (
         APCDeviceType.SMART_UPS,

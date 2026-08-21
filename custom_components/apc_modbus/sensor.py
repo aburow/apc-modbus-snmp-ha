@@ -23,6 +23,7 @@ from .const import (
     SNMP_SELF_TEST_SENSOR_DESCRIPTIONS,
 )
 from .coordinator import APCModbusCoordinator
+from .device_profiles import get_sensor_descriptions
 from .device_types import APCDeviceType
 from .external_probe_entities import is_external_probe_entity_available
 from .icons_unified import resolve_sensor_icon
@@ -41,46 +42,9 @@ async def async_setup_entry(
         KEY_COORDINATOR
     ]
 
-    # Get device-type-specific sensor descriptions
-    if coordinator.device_type == APCDeviceType.SMART_UPS:
-        # Smart-UPS uses static sensor descriptions from const
-        from .const import SENSOR_DESCRIPTIONS
-
-        sensor_descriptions = SENSOR_DESCRIPTIONS
-    elif coordinator.device_type == APCDeviceType.SMT_UPS:
-        from . import registers_smt_ups
-
-        sensor_descriptions = [
-            *registers_smt_ups.SENSOR_DESCRIPTIONS,
-            *(
-                description
-                for capability, description in registers_smt_ups.WRITE_SENSOR_DESCRIPTIONS.items()
-                if capability in coordinator.write_capabilities
-            ),
-        ]
-    elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
-        from . import registers_smt_ups
-
-        sensor_descriptions = [
-            *registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS,
-            *(
-                description
-                for capability, description in registers_smt_ups.WRITE_SENSOR_DESCRIPTIONS.items()
-                if capability in coordinator.write_capabilities
-            ),
-        ]
-    elif coordinator.device_type == APCDeviceType.RACK_PDU:
-        # Rack PDU uses dynamic sensor descriptions based on capabilities
-        from . import registers_rack_pdu
-
-        sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(
-            coordinator.device_capabilities
-        )
-    else:
-        # Unknown type defaults to Smart-UPS sensor descriptions
-        from .const import SENSOR_DESCRIPTIONS
-
-        sensor_descriptions = SENSOR_DESCRIPTIONS
+    sensor_descriptions = get_sensor_descriptions(
+        coordinator.device_type, getattr(coordinator, "device_capabilities", {})
+    )
 
     external_sensor_descriptions = {
         description.key: description

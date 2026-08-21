@@ -224,6 +224,7 @@ def _load_energy_runtime(monkeypatch: pytest.MonkeyPatch):
     device_types.device_type_label = lambda value: str(value)
     device_types.ProbeKind = object
     device_types.ProbeOutcome = object
+    device_types.SCHEMA_PROBES = ()
     monkeypatch.setitem(sys.modules, "energy_runtime.device_types", device_types)
     registers = ModuleType("energy_runtime.registers_smart_ups")
     registers.REGISTERS, registers.REGISTER_BLOCKS, registers.REGISTER_MAP = [], [], {}
@@ -243,6 +244,16 @@ def _load_energy_runtime(monkeypatch: pytest.MonkeyPatch):
     snmp_state = ModuleType("energy_runtime.snmp_state")
     snmp_state.has_usable_metadata = lambda *_: False
     monkeypatch.setitem(sys.modules, "energy_runtime.snmp_state", snmp_state)
+    profiles = ModuleType("energy_runtime.device_profiles")
+    profiles.get_sensor_descriptions = lambda *_: []
+    monkeypatch.setitem(sys.modules, "energy_runtime.device_profiles", profiles)
+    transport = ModuleType("energy_runtime.modbus_transport")
+    transport.ModbusTransport = object
+    transport.create_modbus_client = lambda *_: None
+    monkeypatch.setitem(sys.modules, "energy_runtime.modbus_transport", transport)
+    poller = ModuleType("energy_runtime.modbus_poller")
+    poller.ModbusPoller = object
+    monkeypatch.setitem(sys.modules, "energy_runtime.modbus_poller", poller)
 
     path = root / "custom_components/apc_modbus/coordinator.py"
     spec = importlib.util.spec_from_file_location("energy_runtime.coordinator", path)

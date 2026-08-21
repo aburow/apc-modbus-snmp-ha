@@ -4,6 +4,15 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.0] - 2026-08-21
+
+### Changed
+- Made the 2.1 development release read-only; removed the experimental Modbus
+  write-control preview.
+- Documented the validated SMT750IC serial-to-Ethernet path as a standard
+  Modbus TCP endpoint with no special integration mode.
+- Synchronized integration and package metadata to `2.1.0-dev.0`.
+
 ## [2.0.0-dev.7] - 2026-08-14
 
 ### Added

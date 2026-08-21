@@ -6,9 +6,8 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Development preview:** `2.0.0-dev.7` includes safety-gated write controls
-> for a small allowlisted set of SMT/SmartConnect/SRT devices. See
-> [Modbus write support status](WRITE_SUPPORT.md) before enabling them.
+> **Development preview:** `2.1.0-dev.0` is a read-only monitoring release.
+> Experimental Modbus write controls are not included.
 
 Supported device families include:
 - Legacy Smart-UPS
@@ -69,11 +68,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
-- **Safety-Gated Write Controls**: Disabled by default and created only after
-  exact SKU/firmware and per-feature capability checks. They remain a
-  development-preview feature; see [Modbus write support status](WRITE_SUPPORT.md).
-- **Clearer Activity Log**: Device-specific logs summarize Modbus outages and
-  recovery, write outcomes, SNMP capability changes, and restored controls.
+- **Clearer Activity Log**: Device-specific logs summarize Modbus outages,
+  recovery, and SNMP capability changes.
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
 - **SmartConnect Dashboard**: SmartConnect device pages link to the
   [SmartConnect dashboard](https://smartconnect.apc.com/dashboard).
@@ -86,7 +82,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button reapplies integration default entity enablement in Entity Registry
 - **Connection Compatibility**: Devices that allow one request per TCP connection automatically use a safe per-request connection mode; it temporarily overrides `Keep Connection Open` without changing the user's preference
-- **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, capability discovery, and first refresh do not all hit at once
+- **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, Rack PDU capability discovery, and first refresh do not all hit at once
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
@@ -107,9 +103,8 @@ graph TD
   MODBUS --> DEVICE["APC UPS / PDU"]
   COORD -->|optional metadata enrichment| SNMP["SNMP v2c<br/>(executor)"]
   SNMP --> META["Model / serial / firmware<br/>external probes"]
-  COORD --> ENT["Home Assistant entities<br/>sensors, binary sensors, buttons, switches"]
-  ENT -->|disabled-by-default control used| GATE["Write safety gate<br/>exact SKU/firmware + read-only capability discovery"]
-  GATE -->|one serialized, no-retry command| MODBUS
+  COORD --> ENT["Home Assistant entities<br/>sensors, binary sensors, buttons"]
+
 ```
 
 ## Installation
@@ -190,14 +185,8 @@ register, block, OID, and reconnect diagnostics are available only with debug
 logging.
 
 When a device needs one Modbus connection per request, the integration reports
-that compatibility mode in plain language. Write controls record whether a
-command was **not sent**, **sent once** with a validated protocol response, or
-may have been applied with an unknown outcome. Unknown writes are never
-replayed automatically; verify the device state instead.
+that compatibility mode in plain language.
 
-Home Assistant buttons retain their last press timestamp. After a control is
-unavailable and later restored, the Logbook clarification `this is not another
-press` explains that a displayed `Pressed` entry was not a second command.
 Before sharing debug logs or diagnostics, redact SNMP communities, serial
 numbers, host addresses, and all credential values.
 - Current SNMP implementation uses SNMP v2c reads in this integration path
@@ -396,7 +385,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.0.0-dev.7`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.0`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 
