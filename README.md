@@ -90,6 +90,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
 - **Resilient Modbus Compatibility**: Read calls adapt across common `pymodbus` unit-id API variants used in different environments
 - **Local Communication**: Direct TCP/Modbus protocol (no cloud dependency)
+- **Serial-to-Ethernet Gateway Support**: Validated Modbus TCP access to an
+  SMT750IC through a Waveshare RS232-to-Ethernet serial server
 - **Block Read Optimization**: Efficient register polling with fallback to individual reads
 - **Consistent Icons**: Sensors and binary sensors use a shared local icon mapping.
 - **Core-First Availability**: UPS integrations default-enable a core sensor set; Rack PDU defaults now enable core device + L1 metrics while non-core/dynamic extras remain opt-in in Entity Registry
@@ -150,6 +152,25 @@ After installation, set up the integration through the UI:
 The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
 
 When **Keep Connection Open** is enabled, the coordinator avoids per-cycle socket close/open overhead, but still reconnects automatically on socket errors and after long idle windows. Some APC devices permit only one Modbus request per TCP connection; the integration detects that transport constraint and safely reconnects for each request instead. In that mode, the Keep Connection Open preference remains stored but is not effective, and the idle-socket diagnostic is skipped. If your UPS exposes a Modbus TCP Timeout setting, set it higher than the configured polling interval; otherwise, disable **Keep Connection Open** for that device.
+
+### Alternative connectivity: serial-to-Ethernet server
+
+The SMT750IC includes an NMC slot, but compatible NMCs can be difficult to
+find or prohibitively expensive in some countries.
+
+The Waveshare Rail-Mount Serial Server RS232/485/422-to-RJ45 Ethernet Module
+has been validated with the SMT750IC. Its Modbus TCP-to-serial gateway
+firmware exposes the UPS over Modbus TCP on port `502`, in the same way as the
+SmartConnect Ethernet interface and NMC2/NMC3 modules.
+
+This is an alternative—not the primary—connection method for users who cannot
+use the UPS's onboard Ethernet port, cannot upgrade firmware for native Modbus
+TCP support, or cannot obtain an NMC at a reasonable cost.
+
+Connect the serial server to the UPS's RJ50 RS232 port. In the UPS front-panel
+configuration menu, open the Modbus settings and enable **USB+Serial**. The
+serial and USB ports can then communicate through the Waveshare unit using
+Modbus TCP.
 
 ### SNMP Requirements
 
