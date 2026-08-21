@@ -98,13 +98,16 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 ```mermaid
 graph TD
   HA[Home Assistant Core] -->|config entry| INTEGRATION[APC Modbus integration]
+  INTEGRATION --> PROFILE[Device profile and schema detection]
   INTEGRATION --> COORD[DataUpdateCoordinator]
-  COORD -->|block polling with fallback| MODBUS["Modbus/TCP<br/>(pymodbus)"]
-  MODBUS --> DEVICE["APC UPS / PDU"]
+  PROFILE --> COORD
+  COORD --> POLLER[Modbus poller]
+  POLLER -->|block reads with fallback| TRANSPORT[Modbus transport]
+  TRANSPORT --> MODBUS["Modbus/TCP<br/>(pymodbus)"]
+  MODBUS --> DEVICE["APC UPS / PDU<br/>or serial-to-Ethernet gateway"]
   COORD -->|optional metadata enrichment| SNMP["SNMP v2c<br/>(executor)"]
   SNMP --> META["Model / serial / firmware<br/>external probes"]
   COORD --> ENT["Home Assistant entities<br/>sensors, binary sensors, buttons"]
-
 ```
 
 ## Installation
