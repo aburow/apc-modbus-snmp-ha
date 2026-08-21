@@ -4,6 +4,12 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.6] - 2026-08-22
+
+### Added
+- Include the installed integration version in each experimental command
+  request debug record.
+
 ## [2.1.0-dev.5] - 2026-08-22
 
 ### Fixed

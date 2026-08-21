@@ -38,6 +38,7 @@ def test_command_transport_response_record_excludes_raw_register_payload() -> No
     assert "response_type=%s" in source
     assert "exception_code=%s" in source
     assert "response.registers" not in source
+    assert "plugin_version=%s" in (MODULE.parent / "button.py").read_text()
 
 
 def test_command_writes_use_function_16_for_one_register_actions() -> None:

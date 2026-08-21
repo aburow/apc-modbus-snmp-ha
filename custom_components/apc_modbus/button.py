@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.loader import async_get_integration
 
 from homeassistant.const import CONF_SCAN_INTERVAL
 
@@ -95,9 +96,11 @@ class APCModbusCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEnti
         return self.coordinator.last_update_success
 
     async def async_press(self) -> None:
+        integration = await async_get_integration(self.hass, DOMAIN)
         _LOGGER.debug(
-            "[%s] Command test requested: action=%s, model=%s, sku=%s, firmware=%s",
+            "[%s] Command test requested: plugin_version=%s, action=%s, model=%s, sku=%s, firmware=%s",
             self.coordinator._log_ctx,
+            integration.manifest.get("version", "unknown"),
             self._command.key,
             self.coordinator.raw_modbus_model or self.coordinator.hw_model,
             self.coordinator.raw_modbus_sku,

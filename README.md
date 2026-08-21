@@ -6,7 +6,7 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.5` adds experimental, disabled-by-
+> **Developer pre-release:** `2.1.0-dev.6` adds experimental, disabled-by-
 > default Modbus command validation for device families with documented command
 > registers. Record the exact model and firmware when testing; test only
 > noncritical loads.
@@ -423,7 +423,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.5`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.6`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 
