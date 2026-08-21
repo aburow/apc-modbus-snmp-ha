@@ -211,6 +211,8 @@ class ModbusTransport:
             return False
         if getattr(response, "address", None) != address:
             return False
+        if getattr(response, "function_code", None) == 16:
+            return getattr(response, "count", None) == len(words)
         if len(words) == 1:
             value = getattr(response, "value", None)
             registers = getattr(response, "registers", ())

@@ -4,6 +4,12 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.5] - 2026-08-22
+
+### Fixed
+- Accept the standard function-16 address/count acknowledgement for
+  one-register experimental commands instead of reporting a false failure.
+
 ## [2.1.0-dev.4] - 2026-08-22
 
 ### Fixed
