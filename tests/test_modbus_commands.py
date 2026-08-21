@@ -38,3 +38,15 @@ def test_command_transport_response_record_excludes_raw_register_payload() -> No
     assert "response_type=%s" in source
     assert "exception_code=%s" in source
     assert "response.registers" not in source
+
+
+def test_command_writes_use_function_16_for_one_register_actions() -> None:
+    transport_module = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components/apc_modbus/modbus_transport.py"
+    )
+    source = transport_module.read_text()
+
+    assert "force_multiple=True" in (MODULE.parent / "button.py").read_text()
+    assert "force_multiple or len(words) > 1" in source
+    assert '"write_registers"' in source

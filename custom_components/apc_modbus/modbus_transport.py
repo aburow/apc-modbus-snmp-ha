@@ -173,9 +173,18 @@ class ModbusTransport:
         self.mark_io_activity()
         return result
 
-    def _write_registers(self, address: int, words: tuple[int, ...]):
+    @staticmethod
+    def _write_method_name(words: tuple[int, ...], force_multiple: bool) -> str:
+        """Select the one Modbus write function for an already-fixed command."""
+        return (
+            "write_registers" if force_multiple or len(words) > 1 else "write_register"
+        )
+
+    def _write_registers(
+        self, address: int, words: tuple[int, ...], force_multiple: bool
+    ):
         """Send exactly one function-6 or function-16 request."""
-        method_name = "write_register" if len(words) == 1 else "write_registers"
+        method_name = self._write_method_name(words, force_multiple)
         write_fn = getattr(self.client, method_name)
         parameters = inspect.signature(write_fn).parameters
         payload = words[0] if len(words) == 1 else list(words)
@@ -219,7 +228,12 @@ class ModbusTransport:
         }
 
     async def write(
-        self, address: int, words: tuple[int, ...], *, command_name: str
+        self,
+        address: int,
+        words: tuple[int, ...],
+        *,
+        command_name: str,
+        force_multiple: bool,
     ) -> None:
         """Serialize one command without retrying or reconnecting after it is sent."""
         if not words or getattr(self.client, "retries", 0) not in (None, 0):
@@ -230,11 +244,11 @@ class ModbusTransport:
                 raise ConnectionException("Unable to open Modbus connection")
             if self.mode == "one_request_per_connection":
                 response = await self.hass.async_add_executor_job(
-                    self._write_one_request, address, words
+                    self._write_one_request, address, words, force_multiple
                 )
             else:
                 response = await self.hass.async_add_executor_job(
-                    self._write_registers, address, words
+                    self._write_registers, address, words, force_multiple
                 )
             details = self._write_response_details(response)
             valid = self._write_response_valid(response, address, words)
@@ -258,7 +272,9 @@ class ModbusTransport:
                 raise RuntimeError("modbus_write_response_invalid")
             self.mark_io_activity()
 
-    def _write_one_request(self, address: int, words: tuple[int, ...]):
+    def _write_one_request(
+        self, address: int, words: tuple[int, ...], force_multiple: bool
+    ):
         """Open once, write once, and close; never replay a command."""
         remaining = self.reconnect_pacing_remaining()
         if remaining > 0:
@@ -266,7 +282,7 @@ class ModbusTransport:
         if not self.client.connect():
             raise ConnectionException("Unable to open Modbus connection")
         try:
-            return self._write_registers(address, words)
+            return self._write_registers(address, words, force_multiple)
         finally:
             self.client.close()
             self._mark_closed()

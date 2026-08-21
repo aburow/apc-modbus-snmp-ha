@@ -104,7 +104,12 @@ class APCModbusCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEnti
             self.coordinator.raw_modbus_firmware or self.coordinator.fw_version,
         )
         await self.coordinator.transport.write(
-            self._command.address, self._command.words, command_name=self._command.key
+            self._command.address,
+            self._command.words,
+            command_name=self._command.key,
+            # This APC NMC accepts function 16 for command registers and
+            # rejects function 6 even for one-register command values.
+            force_multiple=True,
         )
 
 

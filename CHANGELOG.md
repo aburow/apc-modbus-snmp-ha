@@ -4,6 +4,13 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.3] - 2026-08-21
+
+### Fixed
+- Send all fixed APC command writes with Modbus function 16, including
+  one-register actions. Physical validation on `SMT1500RMI2U` firmware `15.1`
+  established that function 6 is rejected while function 16 is recognised.
+
 ## [2.1.0-dev.2] - 2026-08-21
 
 ### Added
