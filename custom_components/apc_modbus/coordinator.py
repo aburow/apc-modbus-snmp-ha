@@ -162,6 +162,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._transport.client
 
     @property
+    def transport(self) -> ModbusTransport:
+        """Expose the V2 transport seam to entity platforms."""
+        return self._transport
+
+    @property
     def transport_mode(self) -> str:
         return self._transport.mode
 

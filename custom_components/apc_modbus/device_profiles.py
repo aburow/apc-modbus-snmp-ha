@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Concrete read-only profiles for supported APC Modbus device families."""
+"""Concrete profiles for supported APC Modbus device families."""
 
 from dataclasses import dataclass
 from typing import Any
@@ -24,6 +24,7 @@ class DeviceProfile:
     aliases: tuple[str, ...]
     dynamic_capabilities: bool = False
     probes: tuple[SchemaProbe, ...] = SCHEMA_PROBES
+    command_operations: frozenset[str] = frozenset()
 
 
 SMART_UPS_PROFILE = DeviceProfile(
@@ -39,6 +40,23 @@ SMT_UPS_PROFILE = DeviceProfile(
     "SENSOR_DESCRIPTIONS",
     "BINARY_SENSOR_DESCRIPTIONS",
     ("smx_ups", "srt_ups"),
+    command_operations=frozenset(
+        {
+            "bypass_enter",
+            "bypass_exit",
+            "battery_test_start",
+            "battery_test_abort",
+            "calibration_start",
+            "calibration_abort",
+            "alarm_mute",
+            "alarm_cancel_mute",
+            "outlet_cancel",
+            "outlet_on",
+            "outlet_off",
+            "outlet_shutdown",
+            "outlet_reboot",
+        }
+    ),
 )
 SMARTCONNECT_UPS_PROFILE = DeviceProfile(
     APCDeviceType.SMARTCONNECT_UPS,

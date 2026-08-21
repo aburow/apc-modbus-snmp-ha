@@ -6,8 +6,10 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Development preview:** `2.1.0-dev.0` is a read-only monitoring release.
-> Experimental Modbus write controls are not included.
+> **Developer pre-release:** `2.1.0-dev.1` adds experimental, disabled-by-
+> default Modbus command validation for device families with documented command
+> registers. Record the exact model and firmware when testing; test only
+> noncritical loads.
 
 Supported device families include:
 - Legacy Smart-UPS
@@ -68,6 +70,15 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
+- **Experimental Modbus Write Validation**: Documented fixed commands are
+  disabled by default and intended for supervised physical testing. Commands
+  are sent once with no automatic retry or replay, then reconciled through
+  readable device status. Devices without an authoritative command map remain
+  monitoring-only; capture the exact model and firmware for every test.
+- **Maintenance Bypass Validation**: Where the exact device documents bypass,
+  enter/return commands are maintenance-only. Use an approved maintenance
+  window, verify prerequisites and the return path, and restore normal output
+  before ending the test.
 - **Clearer Activity Log**: Device-specific logs summarize Modbus outages,
   recovery, and SNMP capability changes.
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
@@ -388,7 +399,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.0`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.1`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

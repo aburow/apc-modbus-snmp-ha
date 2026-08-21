@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""The single read-only Modbus TCP client owner."""
+"""The single Modbus TCP client owner."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def create_modbus_client(host: str, port: int, timeout: int) -> ModbusTcpClient:
 
 
 class ModbusTransport:
-    """Serialize read-only Modbus requests and manage their TCP lifecycle."""
+    """Serialize Modbus requests and manage their TCP lifecycle."""
 
     def __init__(
         self,
@@ -172,6 +172,71 @@ class ModbusTransport:
         result = await self.hass.async_add_executor_job(request)
         self.mark_io_activity()
         return result
+
+    def _write_registers(self, address: int, words: tuple[int, ...]):
+        """Send exactly one function-6 or function-16 request."""
+        method_name = "write_register" if len(words) == 1 else "write_registers"
+        write_fn = getattr(self.client, method_name)
+        parameters = inspect.signature(write_fn).parameters
+        payload = words[0] if len(words) == 1 else list(words)
+        options = (
+            {"no_response_expected": False}
+            if "no_response_expected" in parameters
+            else {}
+        )
+        for unit_name in ("device_id", "slave", "unit"):
+            if unit_name in parameters:
+                return write_fn(address, payload, **{unit_name: self.unit}, **options)
+        return write_fn(address, payload, **options)
+
+    @staticmethod
+    def _write_response_valid(response, address: int, words: tuple[int, ...]) -> bool:
+        """Require the Modbus acknowledgement to echo the complete request."""
+        error = getattr(response, "isError", getattr(response, "is_error", None))
+        if response is None or (callable(error) and error()):
+            return False
+        if getattr(response, "address", None) != address:
+            return False
+        if len(words) == 1:
+            value = getattr(response, "value", None)
+            registers = getattr(response, "registers", ())
+            return (
+                value if value is not None else (registers[0] if registers else None)
+            ) == words[0]
+        return getattr(response, "count", None) == len(words)
+
+    async def write(self, address: int, words: tuple[int, ...]) -> None:
+        """Serialize one command without retrying or reconnecting after it is sent."""
+        if not words or getattr(self.client, "retries", 0) not in (None, 0):
+            raise ValueError("unsafe_modbus_write")
+        async with self.io_lock:
+            # Reconnecting before dispatch is safe; never retry after dispatch.
+            if not await self.ensure_connection():
+                raise ConnectionException("Unable to open Modbus connection")
+            if self.mode == "one_request_per_connection":
+                response = await self.hass.async_add_executor_job(
+                    self._write_one_request, address, words
+                )
+            else:
+                response = await self.hass.async_add_executor_job(
+                    self._write_registers, address, words
+                )
+            if not self._write_response_valid(response, address, words):
+                raise RuntimeError("modbus_write_response_invalid")
+            self.mark_io_activity()
+
+    def _write_one_request(self, address: int, words: tuple[int, ...]):
+        """Open once, write once, and close; never replay a command."""
+        remaining = self.reconnect_pacing_remaining()
+        if remaining > 0:
+            time.sleep(remaining)
+        if not self.client.connect():
+            raise ConnectionException("Unable to open Modbus connection")
+        try:
+            return self._write_registers(address, words)
+        finally:
+            self.client.close()
+            self._mark_closed()
 
     async def ensure_connection(self) -> bool:
         if self.mode == "one_request_per_connection":

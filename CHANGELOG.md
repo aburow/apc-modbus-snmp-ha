@@ -4,6 +4,23 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.1] - 2026-08-21
+
+### Added
+- Experimental Modbus command validation for device families with documented
+  command registers. Controls are disabled by default and intended for
+  supervised, noncritical-load physical testing through HACS; record the
+  exact model/firmware for each result.
+- Maintenance-only bypass validation for exact devices that document it,
+  requiring an approved maintenance window and a verified return to normal
+  output.
+
+### Safety
+- Commands use the V2 profile/transport path with one-shot, zero-retry,
+  no-replay handling and readable-status reconciliation. This is not general
+  write support; devices without an authoritative command map remain
+  monitoring-only.
+
 ## [2.1.0-dev.0] - 2026-08-21
 
 ### Changed

@@ -22,19 +22,14 @@ def _extract_method(name: str, *, async_def: bool = False) -> str:
     return textwrap.dedent(COORDINATOR[start : start + 1 + end])
 
 
-def test_runtime_has_no_modbus_write_api_or_write_entity_module() -> None:
+def test_runtime_has_only_the_v2_transport_command_seam() -> None:
     runtime = "\n".join(path.read_text() for path in COMPONENT.glob("*.py"))
 
     assert not (COMPONENT / "write_support.py").exists()
-    for api in (
-        "write_support",
-        "async_write_register",
-        "write_register",
-        "write_registers",
-        "write_coil",
-        "write_coils",
-    ):
-        assert api not in runtime
+    assert "async_execute_write" not in runtime
+    assert "write_operation_available" not in runtime
+    assert "modbus_commands" in runtime
+    assert "async with self.io_lock:" in (COMPONENT / "modbus_transport.py").read_text()
 
 
 def test_one_modbus_outage_warning_is_followed_by_one_recovery_message() -> None:

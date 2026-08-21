@@ -32,7 +32,9 @@ from .const import (
 from .coordinator import APCModbusCoordinator
 from .device_types import DETECTION_VERSION, choose_device_type, device_type_label
 from .diagnostic_collector import collect_diagnostic_dump
+from .device_profiles import get_device_profile
 from .entity_defaults import async_reset_entry_monitors_to_defaults
+from .modbus_commands import OUTLET_TARGET_BITS, get_command
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -52,7 +54,50 @@ async def async_setup_entry(
         APCModbusRedetectDeviceTypeButton(coordinator, entry),
         APCModbusResetMonitorDefaultsButton(coordinator, entry.entry_id),
     ]
+    profile = get_device_profile(coordinator.device_type)
+    for command_key in sorted(profile.command_operations):
+        targets = OUTLET_TARGET_BITS if command_key.startswith("outlet_") else (None,)
+        entities.extend(
+            APCModbusCommandButton(coordinator, entry, command_key, target)
+            for target in targets
+        )
     async_add_entities(entities)
+
+
+class APCModbusCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
+    """Disabled-by-default, fixed command for physical validation."""
+
+    has_entity_name = True
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(
+        self,
+        coordinator: APCModbusCoordinator,
+        entry: ConfigEntry,
+        key: str,
+        target: str | None,
+    ) -> None:
+        super().__init__(coordinator)
+        self._command = get_command(key, target)
+        self._attr_name = self._command.name
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{self._command.key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=coordinator.device_name,
+            manufacturer="APC",
+            model=coordinator.get_device_model_for_registry(),
+            serial_number=coordinator.serial_number,
+            configuration_url=coordinator.get_configuration_url_for_registry(),
+        )
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.last_update_success
+
+    async def async_press(self) -> None:
+        await self.coordinator.transport.write(
+            self._command.address, self._command.words
+        )
 
 
 class APCModbusDiagnosticButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
