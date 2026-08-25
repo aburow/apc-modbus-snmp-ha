@@ -64,6 +64,7 @@ SMARTCONNECT_UPS_PROFILE = DeviceProfile(
     "SMARTCONNECT_SENSOR_DESCRIPTIONS",
     "BINARY_SENSOR_DESCRIPTIONS",
     (),
+    command_operations=SMT_UPS_PROFILE.command_operations,
 )
 RACK_PDU_PROFILE = DeviceProfile(
     APCDeviceType.RACK_PDU,

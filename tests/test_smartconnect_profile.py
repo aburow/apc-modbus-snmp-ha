@@ -53,3 +53,15 @@ def test_smartconnect_uses_cloud_configuration_url() -> None:
     )[1].split("def set_capabilities", 1)[0]
     assert "APCDeviceType.SMARTCONNECT_UPS" in configuration_url_method
     assert "https://smartconnect.apc.com/dashboard" in configuration_url_method
+
+
+def test_smartconnect_exposes_the_smt_command_set_for_testing() -> None:
+    root = Path(__file__).resolve().parents[1]
+    profiles = (root / "custom_components/apc_modbus/device_profiles.py").read_text()
+
+    smartconnect_profile = profiles.split("SMARTCONNECT_UPS_PROFILE =", 1)[1].split(
+        "RACK_PDU_PROFILE =", 1
+    )[0]
+    assert (
+        "command_operations=SMT_UPS_PROFILE.command_operations" in smartconnect_profile
+    )

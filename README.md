@@ -6,9 +6,9 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.6` adds experimental, disabled-by-
-> default Modbus command validation for device families with documented command
-> registers. Record the exact model and firmware when testing; test only
+> **Developer pre-release:** `2.1.0-dev.7` enables the experimental Modbus
+> command-validation buttons for testers on SMT/SMX/SRT and SmartConnect
+> profiles. Record the exact model and firmware when testing; test only
 > noncritical loads.
 
 Supported device families include:
@@ -71,8 +71,11 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ### Core Features
 - **Experimental Modbus Write Validation**: Documented fixed commands are
-  disabled by default and intended for supervised physical testing. Commands
-  are sent once with no automatic retry or replay, then reconciled through
+  enabled by default for supervised physical testing on SMT/SMX/SRT and
+  SmartConnect devices.
+  An update enables buttons that this integration previously disabled; manually
+  disabled buttons remain disabled.
+  Commands are sent once with no automatic retry or replay, then reconciled through
   readable device status. Devices without an authoritative command map remain
   monitoring-only; capture the exact model and firmware for every test.
 - **Maintenance Bypass Validation**: Where the exact device documents bypass,
@@ -199,8 +202,9 @@ register, block, OID, and reconnect diagnostics are available only with debug
 logging.
 
 For experimental command validation, debug logging must be enabled before a
-test. Record the button entity ID, exact device model/firmware, transport path,
-time, and observed device state. If Home Assistant reports
+test. Confirm the exact device model/firmware and command, capture its initial
+physical state, press the button once, then record the button entity ID,
+transport path, time, response, and observed result. If Home Assistant reports
 `modbus_write_response_invalid`, do **not** press the button again: the command
 was sent once and may have been accepted, rejected, or ignored by the device.
 Verify the physical state and include the surrounding APC log lines in the test
@@ -218,6 +222,21 @@ numbers, host addresses, and all credential values.
 - Use the correct SNMP community string (usually "public")
 - Ensure network path is open between Home Assistant and device port 161
 - If setup fails, check Home Assistant logs for SNMP error details
+
+### Legacy Smart-UPS operational commands (planned)
+
+Legacy Smart-UPS models have no documented Modbus write registers in their
+legacy map. A future V2 validation path may instead use documented APC
+PowerNet SNMP `SET` operations through an NMC or PowerNet Agent with a
+write-enabled account. Candidate actions are conserve-battery, off, reboot,
+sleep, simulated power failure, alarm test, turn-on, and battery self-test.
+They remain disabled by default and require exact model/NMC firmware evidence,
+one-shot/no-replay handling, and physical validation. Runtime calibration is
+an NMC CLI operation (`ups -r start`), not a PowerNet SNMP `SET`; software
+bypass is limited to models that explicitly document it (for example,
+Matrix-UPS/Symmetra), not conventional legacy Smart-UPS.
+
+This release does not implement SNMP command sending.
 
 **Fallback Behavior:**
 - If SNMP is unavailable at startup, the integration will still function and stops routine SNMP retry traffic
@@ -423,7 +442,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.6`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.7`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

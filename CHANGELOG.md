@@ -4,6 +4,19 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.7] - 2026-08-25
+
+### Changed
+- Enabled the existing experimental Modbus command buttons by default for
+  supervised tester validation on SMT/SMX/SRT and SmartConnect devices.
+  Commands remain fixed, one-shot, zero-retry operations; legacy Smart-UPS
+  and Rack PDU devices remain monitoring-only.
+
+### Documentation
+- Added the V2 plan for exact-model legacy Smart-UPS operational validation
+  through documented PowerNet SNMP `SET` commands. No SNMP write runtime is
+  included in this release.
+
 ## [2.1.0-dev.6] - 2026-08-22
 
 ### Added

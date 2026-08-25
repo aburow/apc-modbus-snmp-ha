@@ -13,6 +13,7 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.components.persistent_notification import async_create
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -62,14 +63,29 @@ async def async_setup_entry(
             APCModbusCommandButton(coordinator, entry, command_key, target)
             for target in targets
         )
+    command_unique_ids = {
+        entity.unique_id
+        for entity in entities
+        if isinstance(entity, APCModbusCommandButton)
+    }
+    entity_registry = er.async_get(hass)
+    for entity_entry in er.async_entries_for_config_entry(
+        entity_registry, entry.entry_id
+    ):
+        if (
+            entity_entry.unique_id in command_unique_ids
+            and entity_entry.disabled_by == er.RegistryEntryDisabler.INTEGRATION
+        ):
+            entity_registry.async_update_entity(
+                entity_entry.entity_id, disabled_by=None
+            )
     async_add_entities(entities)
 
 
 class APCModbusCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
-    """Disabled-by-default, fixed command for physical validation."""
+    """Fixed command for supervised physical validation."""
 
     has_entity_name = True
-    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self,
