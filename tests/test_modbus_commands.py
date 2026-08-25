@@ -78,9 +78,18 @@ def test_command_writes_use_function_16_for_one_register_actions() -> None:
     assert 'getattr(response, "function_code", None) == 16' in source
 
 
-def test_command_buttons_are_enabled_for_testers() -> None:
+def test_command_buttons_are_available_but_disabled_by_default() -> None:
     source = (MODULE.parent / "button.py").read_text()
 
-    assert "_attr_entity_registry_enabled_default = False" not in source
-    assert "RegistryEntryDisabler.INTEGRATION" in source
-    assert "disabled_by=None" in source
+    assert source.count("_attr_entity_registry_enabled_default = False") == 2
+    assert "RegistryEntryDisabler.INTEGRATION" not in source
+
+
+def test_reset_defaults_disables_current_and_retained_write_entities() -> None:
+    source = (MODULE.parent / "entity_defaults.py").read_text()
+
+    assert "set(COMMANDS)" in source
+    assert "set(LEGACY_SNMP_COMMANDS)" in source
+    assert 'entity_entry.domain in {"button", "switch"}' in source
+    assert 'local_key.startswith("write_")' in source
+    assert "should_enable = False" in source

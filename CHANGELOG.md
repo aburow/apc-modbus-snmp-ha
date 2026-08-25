@@ -4,6 +4,15 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.9] - 2026-08-25
+
+### Changed
+- Kept every exposed Modbus and legacy SNMP write command disabled by default
+  until a tester explicitly enables its entity.
+- Extended **Reset Monitor Defaults** to disable all current and retained legacy
+  write controls while restoring each device family's basic sensor and binary
+  sensor defaults.
+
 ## [2.1.0-dev.8] - 2026-08-25
 
 ### Added

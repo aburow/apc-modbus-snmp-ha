@@ -6,10 +6,9 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.8` enables the experimental Modbus
-> command-validation buttons for testers on SMT/SMX/SRT and SmartConnect
-> profiles. Record the exact model and firmware when testing; test only
-> noncritical loads.
+> **Developer pre-release:** `2.1.0-dev.9` exposes experimental write controls
+> for supported profiles, disabled by default until each tester enables them.
+> Record the exact model and firmware; test only noncritical loads.
 
 Supported device families include:
 - Legacy Smart-UPS
@@ -71,10 +70,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ### Core Features
 - **Experimental Modbus Write Validation**: Documented fixed commands are
-  enabled by default for supervised physical testing on SMT/SMX/SRT and
-  SmartConnect devices.
-  An update enables buttons that this integration previously disabled; manually
-  disabled buttons remain disabled.
+  available but disabled by default for supervised physical testing on
+  SMT/SMX/SRT and SmartConnect devices.
   Commands are sent once with no automatic retry or replay, then reconciled through
   readable device status. Devices without an authoritative command map remain
   monitoring-only; capture the exact model and firmware for every test.
@@ -94,7 +91,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Schema-Based Detection**: Modbus probes distinguish legacy Smart-UPS, SMT/SMX/SRT (including SmartConnect-compatible SMT schema), and Rack PDU register families without SNMP
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
-- **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button reapplies integration default entity enablement in Entity Registry
+- **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button
+  restores the device-family basic monitor set and disables all write controls.
 - **Connection Compatibility**: Devices that allow one request per TCP connection automatically use a safe per-request connection mode; it temporarily overrides `Keep Connection Open` without changing the user's preference
 - **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, Rack PDU capability discovery, and first refresh do not all hit at once
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
@@ -225,13 +223,14 @@ numbers, host addresses, and all credential values.
 - Ensure network path is open between Home Assistant and device port 161
 - If setup fails, check Home Assistant logs for SNMP error details
 
-### Legacy Smart-UPS operational commands (planned)
+### Legacy Smart-UPS operational commands
 
 Legacy Smart-UPS models have no documented Modbus write registers in their
 legacy map. The V2 test path sends documented APC PowerNet SNMP `SET`
 operations through an NMC or PowerNet Agent using **SNMP Write Community**.
 Available actions are conserve-battery, off, reboot, sleep, simulated power
-failure, alarm test, turn-on, and battery self-test. Runtime calibration is
+failure, alarm test, turn-on, and battery self-test. These buttons are disabled
+by default until explicitly enabled for testing. Runtime calibration is
 an NMC CLI operation (`ups -r start`), not a PowerNet SNMP `SET`; software
 bypass is limited to models that explicitly document it (for example,
 Matrix-UPS/Symmetra), not conventional legacy Smart-UPS.
@@ -440,7 +439,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.8`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.9`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

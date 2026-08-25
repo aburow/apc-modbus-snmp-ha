@@ -9,9 +9,21 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .const import DOMAIN
+from .modbus_commands import COMMANDS, OUTLET_ACTION_BITS, OUTLET_TARGET_BITS
 from .sensor_availability_unified import (
     is_binary_sensor_enabled_by_default,
     is_sensor_enabled_by_default,
+)
+from .snmp_commands import LEGACY_SNMP_COMMANDS
+
+WRITE_ENTITY_KEYS = (
+    set(COMMANDS)
+    | set(LEGACY_SNMP_COMMANDS)
+    | {
+        f"{action}_{target}"
+        for action in OUTLET_ACTION_BITS
+        for target in OUTLET_TARGET_BITS
+    }
 )
 
 
@@ -21,7 +33,7 @@ async def async_reset_entry_monitors_to_defaults(
     entry_id: str,
     device_family: str,
 ) -> tuple[int, int, int]:
-    """Reset sensor/binary-sensor enablement to integration defaults.
+    """Reset monitor defaults and disable write controls.
 
     Returns tuple: (enabled_count, disabled_count, unchanged_count).
     """
@@ -32,8 +44,6 @@ async def async_reset_entry_monitors_to_defaults(
     unchanged_count = 0
 
     for entity_entry in er.async_entries_for_config_entry(ent_reg, entry_id):
-        if entity_entry.domain not in {"sensor", "binary_sensor"}:
-            continue
         unique_id = entity_entry.unique_id or ""
         if not unique_id.startswith(unique_id_prefix):
             continue
@@ -41,10 +51,16 @@ async def async_reset_entry_monitors_to_defaults(
         local_key = unique_id[len(unique_id_prefix) :]
         if entity_entry.domain == "sensor":
             should_enable = is_sensor_enabled_by_default(local_key, device_family)
-        else:
+        elif entity_entry.domain == "binary_sensor":
             should_enable = is_binary_sensor_enabled_by_default(
                 local_key, device_family
             )
+        elif entity_entry.domain in {"button", "switch"} and (
+            local_key in WRITE_ENTITY_KEYS or local_key.startswith("write_")
+        ):
+            should_enable = False
+        else:
+            continue
 
         target_disabled_by = (
             None if should_enable else er.RegistryEntryDisabler.INTEGRATION
