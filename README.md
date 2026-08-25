@@ -6,7 +6,7 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.9` exposes experimental write controls
+> **Developer pre-release:** `2.1.0-dev.10` exposes experimental write controls
 > for supported profiles, disabled by default until each tester enables them.
 > Record the exact model and firmware; test only noncritical loads.
 
@@ -160,6 +160,13 @@ After installation, set up the integration through the UI:
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
    - **Keep Connection Open**: Reuse Modbus TCP session across polls (default: disabled)
+
+To change an existing device, open **Settings → Devices & services → APC UPS
+Modbus → Configure**. This updates the host, Modbus and SNMP ports, unit ID,
+scan interval, read/write SNMP communities, device name, connection preference,
+and output-energy rollover value without removing or re-adding the entry. The
+integration reloads after saving. Changing the host, Modbus port, or unit ID
+also runs fresh device-type detection for the new endpoint.
 
 The integration auto-detects whether the device is a UPS or Rack PDU, and for UPS devices it auto-selects the correct register family.
 
@@ -439,7 +446,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.9`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.10`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

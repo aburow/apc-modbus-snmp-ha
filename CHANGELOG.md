@@ -4,6 +4,16 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.10] - 2026-08-25
+
+### Added
+- Added a **Configure** options flow for existing entries. It updates host,
+  Modbus/SNMP ports, unit ID, scan interval, read/write SNMP communities,
+  device name, connection preference, and output-energy rollover settings
+  without re-adding the device.
+- Changing the Modbus endpoint or unit through **Configure** resets stored
+  classification so the reloaded integration performs fresh device detection.
+
 ## [2.1.0-dev.9] - 2026-08-25
 
 ### Changed
