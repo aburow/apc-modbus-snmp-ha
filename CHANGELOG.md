@@ -4,6 +4,17 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.11] - 2026-08-25
+
+### Fixed
+- Fixed the **Configure** options flow on current Home Assistant releases. It
+  now uses Home Assistant's framework-provided config entry instead of the
+  removed manual OptionsFlow constructor path.
+
+### Documentation
+- Refreshed the README configuration, command-testing, SNMP, troubleshooting,
+  and architecture documentation for the current 2.1 development runtime.
+
 ## [2.1.0-dev.10] - 2026-08-25
 
 ### Added

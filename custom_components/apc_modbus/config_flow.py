@@ -111,7 +111,7 @@ class APCModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         config_entry: config_entries.ConfigEntry,
     ) -> APCModbusOptionsFlow:
         """Return the options flow for an existing entry."""
-        return APCModbusOptionsFlow(config_entry)
+        return APCModbusOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Handle the initial config flow step."""
@@ -126,10 +126,6 @@ class APCModbusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class APCModbusOptionsFlow(config_entries.OptionsFlow):
     """Edit connection and monitoring settings without re-adding a device."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Store the entry being updated."""
-        self.config_entry = config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None

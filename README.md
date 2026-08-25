@@ -4,36 +4,22 @@
 ![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hacs.yaml/badge.svg)
 ![Hassfest](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hassfest.yaml/badge.svg)
 
-A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
+A Home Assistant custom integration for APC UPS and Rack PDU monitoring over
+Modbus/TCP, with optional SNMP v2c enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.10` exposes experimental write controls
+> **Developer pre-release:** `2.1.0-dev.11` exposes experimental write controls
 > for supported profiles, disabled by default until each tester enables them.
 > Record the exact model and firmware; test only noncritical loads.
 
-Supported device families include:
-- Legacy Smart-UPS
-- Smart-UPS SMT/SMX/SRT and SmartConnect
-- NetShelter Rack PDU
+Supported device profiles are Legacy Smart-UPS, SMT/SMX/SRT, SmartConnect, and
+NetShelter Rack PDU. Profiles are selected from read-only Modbus schema probes;
+SNMP is not required for device-family detection.
 
 This custom-component runs standalone and DOES NOT require additional components such as NUT or APCUPSD.
-
-Modbus/TCP is an extremely efficient method for collecting bulk data at a high rate and is used in industrial automation services for
-this purpose.
 
 If you do not have a Modbus enabled APC device the project at https://github.com/aburow/ups-snmp-ha provides a similar capability using SNMP only.
 
 ## Features
-
-### Multi-Device Support
-- **Smart-UPS**: Traditional APC Smart-UPS devices
-  - Full battery and load monitoring
-
-- **NetShelter Rack PDU**: APC power distribution units
-  - Dynamic entity creation based on device capabilities
-  - Device-level power measurements (kW, kVA, kWh)
-  - Per-phase measurements (L1, L2, L3) with current, voltage, power
-  - Per-outlet monitoring (up to 64 metered outlets)
-  - Per-bank monitoring (up to 12 banks)
 
 ### Smart-UPS Sensors
 - Input/output voltage and current
@@ -69,12 +55,11 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - If a compatible probe is connected or changed while Home Assistant is running, newly detected probe entities are added after the next hourly SNMP detection refresh. Removed probe entities may remain unavailable until the integration is reloaded.
 
 ### Core Features
-- **Experimental Modbus Write Validation**: Documented fixed commands are
-  available but disabled by default for supervised physical testing on
-  SMT/SMX/SRT and SmartConnect devices.
-  Commands are sent once with no automatic retry or replay, then reconciled through
-  readable device status. Devices without an authoritative command map remain
-  monitoring-only; capture the exact model and firmware for every test.
+- **Experimental command testing**: Documented fixed commands are available
+  but disabled by default. Modbus commands apply to SMT/SMX/SRT and
+  SmartConnect profiles; legacy Smart-UPS uses documented PowerNet SNMP `SET`
+  commands with a separate write community. Commands are sent once with no
+  automatic retry or replay. Rack PDUs remain monitoring-only.
 - **Maintenance Bypass Validation**: Where the exact device documents bypass,
   enter/return commands are maintenance-only. Use an approved maintenance
   window, verify prerequisites and the return path, and restore normal output
@@ -84,10 +69,14 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Optional SNMP Enrichment**: SNMP adds self-test data, input-frequency fallback, and compatible external probes. SMT/SMX/SRT and SmartConnect devices also supply model, SKU, serial, and firmware through a one-time Modbus identity read when SNMP is unavailable.
 - **SmartConnect Dashboard**: SmartConnect device pages link to the
   [SmartConnect dashboard](https://smartconnect.apc.com/dashboard).
-- **Device Family Coverage**: Legacy Smart-UPS, Smart-UPS SMT/SMX/SRT, and NetShelter Rack PDU
+- **Device Family Coverage**: Legacy Smart-UPS, SMT/SMX/SRT, SmartConnect, and
+  NetShelter Rack PDU
 - **Dynamic Entity Generation**: Rack PDU creates only sensors for present hardware (no placeholder entities)
-- **Easy Configuration**: Setup auto-detects UPS vs Rack PDU and picks the correct UPS register family
-- **Manual Diagnostics Button**: Per-device `Run plugin diagnostics` button captures SNMP + Modbus raw dump and displays it in a Home Assistant persistent-notification modal for quick troubleshooting
+- **Configure Without Re-adding**: Update connection, timing, and SNMP settings
+  on an existing entry from Home Assistant's **Configure** action
+- **Manual Diagnostics Button**: Per-device `Run plugin diagnostics` captures
+  redacted SNMP and Modbus data, the runtime detection probes, and a derived
+  detection summary in a persistent notification
 - **Schema-Based Detection**: Modbus probes distinguish legacy Smart-UPS, SMT/SMX/SRT (including SmartConnect-compatible SMT schema), and Rack PDU register families without SNMP
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
@@ -109,17 +98,23 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 
 ```mermaid
 graph TD
-  HA[Home Assistant Core] -->|config entry| INTEGRATION[APC Modbus integration]
-  INTEGRATION --> PROFILE[Device profile and schema detection]
-  INTEGRATION --> COORD[DataUpdateCoordinator]
-  PROFILE --> COORD
+  HA[Home Assistant Core] --> FLOW[Setup / Configure flow]
+  FLOW --> ENTRY[APC config entry]
+  ENTRY --> SETUP[Integration setup]
+  SETUP --> DETECT[Read-only Modbus schema detection]
+  DETECT --> PROFILE[Device profile]
+  SETUP --> COORD[DataUpdateCoordinator]
+  PROFILE --> ENT[Entities: sensors, binary sensors, controls]
   COORD --> POLLER[Modbus poller]
-  POLLER -->|block reads with fallback| TRANSPORT[Modbus transport]
-  TRANSPORT --> MODBUS["Modbus/TCP<br/>(pymodbus)"]
-  MODBUS --> DEVICE["APC UPS / PDU<br/>or serial-to-Ethernet gateway"]
-  COORD -->|optional metadata enrichment| SNMP["SNMP v2c<br/>(executor)"]
-  SNMP --> META["Model / serial / firmware<br/>external probes"]
-  COORD --> ENT["Home Assistant entities<br/>sensors, binary sensors, buttons"]
+  POLLER -->|block reads, individual fallback| TRANSPORT[Serialized Modbus transport]
+  TRANSPORT --> MODBUS["Modbus/TCP via pymodbus"]
+  MODBUS --> DEVICE["APC UPS / Rack PDU<br/>or serial-to-Ethernet gateway"]
+  COORD -->|optional read enrichment| SNMPREAD["SNMP v2c read"]
+  SNMPREAD --> META["Metadata, self-test, frequency, probes"]
+  ENT -->|SMT/SMX/SRT, SmartConnect| MODBUSWRITE["One-shot Modbus command"]
+  MODBUSWRITE --> TRANSPORT
+  ENT -->|Legacy Smart-UPS| SNMPWRITE["PowerNet SNMP SET<br/>separate write community"]
+  SNMPWRITE --> DEVICE
 ```
 
 ## Installation
@@ -133,12 +128,15 @@ graph TD
 5. Install "APC UPS Modbus"
 6. Restart Home Assistant
 
+To install the current development build, enable pre-release versions for this
+repository in HACS before selecting the version.
+
 ### Manual Installation
 
 1. Copy `custom_components/apc_modbus/` to `config/custom_components/` on your Home Assistant instance
 2. Restart Home Assistant
 3. Go to Settings → Devices & Services → Integrations
-4. Click "Create Integration"
+4. Click **Add Integration**
 5. Search for "APC UPS Modbus"
 
 ## Configuration
@@ -146,7 +144,7 @@ graph TD
 After installation, set up the integration through the UI:
 
 1. Go to **Settings → Devices & Services → Integrations**
-2. Click **Create Integration**
+2. Click **Add Integration**
 3. Search for and select **APC UPS Modbus**
 4. Fill in the required configuration:
    - **Host**: Modbus/TCP host name or address of the device
@@ -160,6 +158,8 @@ After installation, set up the integration through the UI:
    - **Unit ID**: Modbus unit ID (default: 1)
    - **Scan Interval**: Update interval in seconds (default: 10)
    - **Keep Connection Open**: Reuse Modbus TCP session across polls (default: disabled)
+   - **Output Energy Completed Rollovers**: Confirmed prior uint32 energy-counter
+     wraps for a supported SMT/SmartConnect device (default: 0)
 
 To change an existing device, open **Settings → Devices & services → APC UPS
 Modbus → Configure**. This updates the host, Modbus and SNMP ports, unit ID,
@@ -191,12 +191,20 @@ configuration menu, open the Modbus settings and enable **USB+Serial**. The
 serial and USB ports can then communicate through the Waveshare unit using
 Modbus TCP.
 
-### SNMP Requirements
+### SNMP requirements
 
-SNMP is optional. It enriches Modbus monitoring with device metadata, input-frequency fallback, external probes, and Smart-UPS self-test data:
-- During setup, the integration attempts SNMP metadata retrieval without blocking Modbus detection
-- If SNMP is unavailable, setup and Modbus monitoring continue; routine SNMP calls are disabled for that entry to avoid repeated failures
-- SNMP-backed metadata and entities remain unavailable until you run **Re-detect Device Type**, which explicitly retries SNMP enrichment
+SNMP is optional for monitoring. The read community enriches Modbus data with
+metadata, input-frequency fallback, external probes, and Smart-UPS self-test
+data.
+
+- Setup attempts one read-metadata request without blocking Modbus detection.
+- If SNMP is unavailable, Modbus monitoring continues and routine SNMP reads
+  stop for that entry.
+- **Configure** reloads the integration after saving a changed community or
+  SNMP port; **Re-detect Device Type** also retries read enrichment.
+- The separate **SNMP Write Community** is used only by legacy Smart-UPS
+  PowerNet command buttons. It is never used for reads and should remain blank
+  unless a tester has explicitly enabled a command entity.
 
 ### Logs and activity history
 
@@ -222,13 +230,13 @@ that compatibility mode in plain language.
 
 Before sharing debug logs or diagnostics, redact SNMP communities, serial
 numbers, host addresses, and all credential values.
-- Current SNMP implementation uses SNMP v2c reads in this integration path
 
 **Recommended Setup:**
-- Ensure SNMP is enabled on the device (port 161)
-- Use the correct SNMP community string (usually "public")
-- Ensure network path is open between Home Assistant and device port 161
-- If setup fails, check Home Assistant logs for SNMP error details
+- Enable SNMP v2c on the device when enrichment or legacy command testing is
+  required.
+- Use a least-privilege read community for enrichment and a separate write
+  community only for legacy command testing.
+- Ensure Home Assistant can reach the configured UDP SNMP port.
 
 ### Legacy Smart-UPS operational commands
 
@@ -237,10 +245,9 @@ legacy map. The V2 test path sends documented APC PowerNet SNMP `SET`
 operations through an NMC or PowerNet Agent using **SNMP Write Community**.
 Available actions are conserve-battery, off, reboot, sleep, simulated power
 failure, alarm test, turn-on, and battery self-test. These buttons are disabled
-by default until explicitly enabled for testing. Runtime calibration is
-an NMC CLI operation (`ups -r start`), not a PowerNet SNMP `SET`; software
-bypass is limited to models that explicitly document it (for example,
-Matrix-UPS/Symmetra), not conventional legacy Smart-UPS.
+by default until explicitly enabled for testing. Runtime calibration is not a
+legacy PowerNet SNMP `SET` command, and conventional legacy Smart-UPS models
+do not expose a documented software-bypass command through this integration.
 
 **Fallback Behavior:**
 - If SNMP is unavailable at startup, the integration will still function and stops routine SNMP retry traffic
@@ -251,21 +258,22 @@ Matrix-UPS/Symmetra), not conventional legacy Smart-UPS.
 
 ## Supported Devices
 
-### Smart-UPS
-- Smart-UPS 500 / 750 / 1000 / 1500 / 2200 / 3000 VA and larger
-- Smart-UPS VT series
-- Smart-UPS C series
-- Any Smart-UPS model with Modbus/TCP support
-- SmartConnect variants that expose the documented SMT Modbus schema
+### UPS profiles
 
-**Tested on:**
-- Smart-UPS 1500
-- Smart-UPS 3000
+- **Legacy Smart-UPS**: devices that expose the supported legacy Smart-UPS
+  Modbus schema.
+- **SMT/SMX/SRT**: devices that expose the supported SMT Modbus schema.
+- **SmartConnect**: devices with the SmartConnect sentinel pattern and the
+  supported SMT schema.
+
+The integration does not maintain a model-number allowlist for monitoring.
+Successful schema detection is the compatibility requirement. Experimental
+commands remain profile-based and require physical validation on the exact
+model and firmware.
 
 ### NetShelter Rack PDU
-- AP8xxx series (e.g., AP8652, AP8861)
-- APDU models (e.g., APDU4-XM)
-- Any NetShelter Rack PDU with Modbus/TCP support
+- NetShelter Rack PDUs that return the supported capability and measurement
+  schemas (including AP8xxx examples such as AP8652 and AP8861)
 
 **Capabilities:**
 - 1 or 3 phase power distribution
@@ -273,24 +281,22 @@ Matrix-UPS/Symmetra), not conventional legacy Smart-UPS.
 - Up to 12 branch circuits/banks
 - Per-phase and per-outlet energy monitoring
 
-**Tested on:**
-- NetShelter Rack PDU AP8XXX series
-
 ## Requirements
 
 - A current Home Assistant release compatible with Python 3.13
 - APC UPS or Rack PDU with:
   - **Modbus/TCP** enabled (port 502, configurable)
-  - **SNMP** enabled (port 161, optional; required only for SNMP enrichment)
+  - **SNMP v2c** enabled (port 161, configurable and optional for monitoring;
+    required for SNMP enrichment or legacy PowerNet command testing)
 - Network connectivity to the device
 - Python 3.13+ (built into current Home Assistant)
 
-## Tested Platforms
+## Validation coverage
 
 - Home Assistant Core runtime on Python 3.13
-- APC Smart-UPS legacy family (examples tested: Smart-UPS 1500, Smart-UPS 3000)
-- APC Smart-UPS SMT/SMX/SRT register family (multiple field dumps validated)
-- APC NetShelter Rack PDU family (AP8xxx series in mixed single/three-phase deployments)
+- Legacy Smart-UPS, SMT/SMX/SRT, SmartConnect, and Rack PDU schema fixtures
+- Rack PDU single- and three-phase capability paths
+- Focused command transport and options-flow regression tests
 
 ## Compatibility
 
@@ -384,35 +390,30 @@ The built-in diagnostics button also includes:
 
 For device-family correction without deleting and re-adding an entry, use the built-in `Re-detect Device Type` button from the device page.
 
-### SNMP Connection Failed (Device Info Not Populated)
-- **Symptom**: Device model, serial number, and firmware info are not shown for a device without the SMT/SmartConnect Modbus identity block
-- **Check logs for**: "Unable to retrieve SNMP metadata after 3 attempts"
-- **Impact**: Integration still works - all Modbus sensors function normally, but device info is empty
-- **Solution**:
-  1. Verify SNMP is enabled on the device (check device configuration)
-  2. Check SNMP community string (usually "public" by default)
-  3. Verify network connectivity: `ping <device-host>`
-  4. Check firewall rules allow port 161 (UDP)
-  5. Verify no network path issues: `timeout 5 nc -u <device-host> 161`
-  6. Test SNMP manually: `snmpget -v 2c -c public <device-host> 1.3.6.1.4.1.318.1.1.1.1.1.1.0`
-  7. Once fixed, restart Home Assistant or reload the integration
+### SNMP enrichment is unavailable
 
-**Note:** After correcting SNMP settings or connectivity, use **Re-detect Device
-Type** to retry SNMP enrichment without deleting the integration entry.
+- **Symptom**: A legacy device has no SNMP-derived metadata, self-test,
+  input-frequency fallback, or external-probe data.
+- **Impact**: Base Modbus monitoring continues. SMT and SmartConnect profiles
+  can still obtain model, SKU, serial, and firmware from their Modbus identity
+  block.
+- **Resolution**: Verify SNMP v2c access and the read community, then use
+  **Configure** to save any change. The integration reloads automatically. Use
+  **Re-detect Device Type** to explicitly retry enrichment after a network or
+  device-side correction.
 
-### Modbus Connection Issues
-- **Error**: "Unable to connect to APC device"
-- **Solution**:
-  - Verify device host and port are correct
-  - Check network connectivity: `ping <device-host>`
-  - Ensure Modbus/TCP is enabled on the device
+### Modbus connection issues
+
+- Verify the host, Modbus TCP port, and unit ID in **Configure**.
+- Confirm Modbus/TCP is enabled on the UPS or PDU and reachable from Home
+  Assistant.
+- Save a corrected endpoint through **Configure**. This reloads the entry and
+  performs fresh schema detection.
 
 ### PyModbus Environment Compatibility
 - Home Assistant runtime behavior depends on the `pymodbus` version loaded in that environment.
 - This integration now tolerates common unit-id call signatures (`device_id`, `slave`, `unit`, and positional fallback) to reduce version-skew issues.
 - If another custom component alters your runtime package set, capture startup logs showing the detected `pymodbus` version for troubleshooting.
-  - Check firewall rules allow port 502 (TCP)
-  - Verify Home Assistant can reach port 502: `telnet <device-host> 502`
 
 ### Missing Rack PDU Sensors
 - **Issue**: Fewer outlet/bank sensors than expected
@@ -446,7 +447,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.10`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.11`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

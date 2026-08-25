@@ -401,7 +401,7 @@ def _load_config_flow_schema(monkeypatch: pytest.MonkeyPatch):
             super().__init_subclass__()
 
     class OptionsFlow(_Flow):
-        pass
+        config_entry = None
 
     config_entries.ConfigFlow = ConfigFlow
     config_entries.OptionsFlow = OptionsFlow
@@ -497,7 +497,9 @@ def test_options_flow_updates_existing_entry_without_readding(
     async def reload_entry(entry_id):
         reloads.append(entry_id)
 
-    flow = module.APCModbusOptionsFlow(entry)
+    flow = module.APCModbusConfigFlow.async_get_options_flow(entry)
+    assert isinstance(flow, module.APCModbusOptionsFlow)
+    flow.config_entry = entry
     flow.hass = SimpleNamespace(
         config_entries=SimpleNamespace(
             async_update_entry=lambda _entry, **kwargs: updates.append(kwargs),
@@ -580,7 +582,8 @@ def test_options_flow_keeps_classification_when_endpoint_is_unchanged(
     async def reload_entry(entry_id):
         reloads.append(entry_id)
 
-    flow = module.APCModbusOptionsFlow(entry)
+    flow = module.APCModbusOptionsFlow()
+    flow.config_entry = entry
     flow.hass = SimpleNamespace(
         config_entries=SimpleNamespace(
             async_update_entry=lambda _entry, **kwargs: updates.append(kwargs),
