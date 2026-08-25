@@ -9,13 +9,17 @@ COORDINATOR = (
 INIT = (
     Path(__file__).resolve().parents[1] / "custom_components/apc_modbus/__init__.py"
 ).read_text()
+TRANSPORT = (
+    Path(__file__).resolve().parents[1]
+    / "custom_components/apc_modbus/modbus_transport.py"
+).read_text()
 
 
 def test_transport_promotion_retries_without_stale_session_data() -> None:
     assert "def _promote_transport_mode" in COORDINATOR
     assert "data.clear()" in COORDINATOR
-    assert "def _read_one_request" in COORDINATOR
-    assert "self.client.close()" in COORDINATOR
+    assert "def _read_one_request" in TRANSPORT
+    assert "self.client.close()" in TRANSPORT
     assert "CONF_TRANSPORT_MODE" in INIT
     assert "transport_mode_persist=" in INIT
 

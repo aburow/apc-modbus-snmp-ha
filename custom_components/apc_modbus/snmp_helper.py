@@ -21,7 +21,9 @@ from pysnmp.hlapi.v3arch.asyncio import (
     SnmpEngine,
     UdpTransportTarget,
     get_cmd,
+    set_cmd,
 )
+from pysnmp.proto.rfc1902 import Integer
 
 from .device_types import APCDeviceType
 
@@ -58,6 +60,23 @@ SELF_TEST_OIDS = {
 }
 SELF_TEST_TIME_RE = re.compile(r"(?:[01]\d|2[0-3]):[0-5]\d")
 SELF_TEST_DATE_RE = re.compile(r"\d{2}/\d{2}/(?:\d{2}|\d{4})")
+
+
+async def async_set_snmp_integer(
+    host: str, oid: str, value: int, community: str, snmp_port: int = 161
+) -> None:
+    """Send one SNMPv2c SET request without retrying it."""
+    target = await UdpTransportTarget.create((host, snmp_port), timeout=5, retries=0)
+    error, status, index, _ = await set_cmd(
+        SnmpEngine(),
+        CommunityData(community, mpModel=1),
+        target,
+        ContextData(),
+        ObjectType(ObjectIdentity(oid), Integer(value)),
+    )
+    if error or status:
+        detail = str(error or status.prettyPrint())
+        raise RuntimeError(f"snmp_set_failed:{detail}:{index}")
 
 
 def _dedupe_oids_preserve_order(oids: list[str]) -> list[str]:
@@ -175,7 +194,7 @@ async def async_get_snmp_value(
         return None
 
     except asyncio.TimeoutError:
-        _LOGGER.warning(
+        _LOGGER.debug(
             "SNMP query to %s timed out after %ds for OID %s", host, timeout, oid
         )
         return None
@@ -208,9 +227,8 @@ async def async_get_device_metadata(
     All values are None if SNMP fails.
     """
     _LOGGER.debug(
-        "Querying SNMP metadata from %s (community: %s, device_type: %s)",
+        "Querying SNMP metadata from %s (device type: %s)",
         host,
-        community,
         device_type.value if device_type else "auto",
     )
 

@@ -16,10 +16,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .modbus_wire import (
+    MBAP_HEADER_LENGTH,
+    read_holding_registers as _modbus_read_holding_registers,
+    read_holding_registers_on_connection as _modbus_read_holding_registers_on_connection,
+)
+
 from .device_types import (
     classify_device_type,
     ProbeKind,
     ProbeOutcome,
+    SCHEMA_PROBES,
 )
 from .snmp_helper import (
     async_get_snmp_value,
@@ -27,7 +34,6 @@ from .snmp_helper import (
     get_external_probe_data_detected_sync,
 )
 
-MBAP_HEADER_LENGTH = 7
 MIN_MODBUS_RESPONSE_LENGTH = 9
 MODBUS_EXCEPTION_FLAG = 0x80
 INT16_SIGN_BIT = 0x8000
@@ -75,11 +81,7 @@ MODBUS_BLOCKS: list[tuple[int, int]] = [
 ]
 
 MODBUS_PROBES: list[tuple[str, int, int]] = [
-    ("rack_pdu_capabilities", 0x009E, 5),
-    ("rack_pdu_measurements", 0x00CF, 6),
-    ("legacy_ups_id", 0x0021, 1),
-    ("smt_status", 0x0000, 23),
-    ("smt_measurements", 0x0080, 26),
+    (probe.name, probe.address, probe.count) for probe in SCHEMA_PROBES
 ]
 
 RUNTIME_BLOCK_KEY = "0x0080_count_26"
@@ -108,62 +110,6 @@ def _load_integration_version() -> str:
 
 
 INTEGRATION_VERSION = _load_integration_version()
-
-
-def _modbus_read_holding_registers(
-    host: str, port: int, unit_id: int, address: int, count: int, timeout: int = 5
-) -> bytes:
-    with socket.create_connection((host, port), timeout=timeout) as connection:
-        return _modbus_read_holding_registers_on_connection(
-            connection,
-            unit_id,
-            address,
-            count,
-        )
-
-
-def _modbus_read_holding_registers_on_connection(
-    connection: socket.socket,
-    unit_id: int,
-    address: int,
-    count: int,
-) -> bytes:
-    transaction_id = 1
-    protocol_id = 0
-    request_length = 6
-    function_code = 3
-    mbap_header = struct.pack(
-        ">HHHB",
-        transaction_id,
-        protocol_id,
-        request_length,
-        unit_id,
-    )
-    pdu = struct.pack(">BHH", function_code, address, count)
-    payload_request = mbap_header + pdu
-
-    connection.sendall(payload_request)
-    header = _recv_exact(connection, MBAP_HEADER_LENGTH)
-
-    _, _, response_length, _ = struct.unpack(">HHHB", header)
-    if response_length < 2:
-        raise RuntimeError("Invalid MBAP length")
-    payload = _recv_exact(connection, response_length - 1)
-
-    return header + payload
-
-
-def _recv_exact(connection: socket.socket, size: int) -> bytes:
-    """Read exactly one Modbus TCP frame segment from a stream socket."""
-    chunks: list[bytes] = []
-    remaining = size
-    while remaining:
-        chunk = connection.recv(remaining)
-        if not chunk:
-            raise RuntimeError("Short Modbus TCP response")
-        chunks.append(chunk)
-        remaining -= len(chunk)
-    return b"".join(chunks)
 
 
 def _parse_modbus_response(response: bytes) -> dict[str, Any]:
@@ -342,15 +288,8 @@ def _probe_outcome(modbus_block: dict[str, Any] | None, count: int) -> ProbeOutc
 def _build_detection_summary(modbus_probes: dict[str, Any]) -> dict[str, Any]:
     """Summarize exact runtime probe results using the same classifier as HA."""
     probes = {
-        "rack_pdu_capabilities": _probe_outcome(
-            modbus_probes.get("rack_pdu_capabilities"), 5
-        ),
-        "rack_pdu_measurements": _probe_outcome(
-            modbus_probes.get("rack_pdu_measurements"), 6
-        ),
-        "legacy_ups_id": _probe_outcome(modbus_probes.get("legacy_ups_id"), 1),
-        "smt_status": _probe_outcome(modbus_probes.get("smt_status"), 23),
-        "smt_measurements": _probe_outcome(modbus_probes.get("smt_measurements"), 26),
+        probe.name: _probe_outcome(modbus_probes.get(probe.name), probe.count)
+        for probe in SCHEMA_PROBES
     }
     detected = classify_device_type(probes)
 

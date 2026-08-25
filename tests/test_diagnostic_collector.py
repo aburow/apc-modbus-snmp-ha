@@ -29,6 +29,9 @@ snmp.detect_external_probe_oids_sync = lambda *args, **kwargs: {}
 snmp.get_external_probe_data_detected_sync = lambda *args, **kwargs: {}
 sys.modules.setdefault("custom_components.apc_modbus.snmp_helper", snmp)
 load("custom_components.apc_modbus.device_types", PACKAGE_ROOT / "device_types.py")
+profiles = load(
+    "custom_components.apc_modbus.device_profiles", PACKAGE_ROOT / "device_profiles.py"
+)
 collector = load(
     "custom_components.apc_modbus.diagnostic_collector",
     PACKAGE_ROOT / "diagnostic_collector.py",
@@ -79,6 +82,68 @@ def test_probe_set_has_only_schema_reads() -> None:
         ("smt_status", 0x0000, 23),
         ("smt_measurements", 0x0080, 26),
     ]
+
+
+def test_profiles_and_diagnostics_share_the_runtime_probe_contract() -> None:
+    device_types = sys.modules["custom_components.apc_modbus.device_types"]
+    expected = [
+        (probe.name, probe.address, probe.count) for probe in device_types.SCHEMA_PROBES
+    ]
+    assert collector.MODBUS_PROBES == expected
+    assert {
+        tuple((probe.name, probe.address, probe.count) for probe in profile.probes)
+        for profile in profiles.DEVICE_PROFILES.values()
+    } == {tuple(expected)}
+
+
+def test_diagnostics_classify_each_family_from_captured_schema_outcomes() -> None:
+    cases = (
+        (
+            "smart_ups",
+            {
+                "rack_pdu_capabilities": exception(),
+                "rack_pdu_measurements": exception(),
+                "legacy_ups_id": response([0]),
+                "smt_status": exception(),
+                "smt_measurements": exception(),
+            },
+        ),
+        (
+            "smt_ups",
+            {
+                "rack_pdu_capabilities": exception(),
+                "rack_pdu_measurements": exception(),
+                "legacy_ups_id": exception(),
+                "smt_status": response([0] * 23),
+                "smt_measurements": response([0] * 26),
+            },
+        ),
+        (
+            "rack_pdu",
+            {
+                "rack_pdu_capabilities": response([1, 1, 0, 20, 0]),
+                "rack_pdu_measurements": response([0, 0, 0, 0, 0, 4]),
+                "legacy_ups_id": exception(),
+                "smt_status": exception(),
+                "smt_measurements": exception(),
+            },
+        ),
+        (
+            "smartconnect_ups",
+            {
+                "rack_pdu_capabilities": exception(),
+                "rack_pdu_measurements": exception(),
+                "legacy_ups_id": response([0xFFFF]),
+                "smt_status": response([0, 8194, *([0] * 21)]),
+                "smt_measurements": response([0, 4845, *([0xFFFF] * 24)]),
+            },
+        ),
+    )
+    for expected, modbus_probes in cases:
+        assert (
+            collector._build_detection_summary(modbus_probes)["detected_device_type"]
+            == expected
+        )
 
 
 def test_constrained_diagnostics_skip_idle_socket_probe() -> None:

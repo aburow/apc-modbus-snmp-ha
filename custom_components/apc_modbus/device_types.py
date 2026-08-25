@@ -17,6 +17,23 @@ class APCDeviceType(Enum):
     UNKNOWN = "unknown"
 
 
+DEVICE_TYPE_LABELS = {
+    APCDeviceType.UPS: "UPS",
+    APCDeviceType.SMART_UPS: "Smart-UPS",
+    APCDeviceType.SMT_UPS: "SMT/SMX UPS",
+    APCDeviceType.RACK_PDU: "Rack PDU",
+    APCDeviceType.SMARTCONNECT_UPS: "SmartConnect UPS",
+    APCDeviceType.UNKNOWN: "Unknown APC device",
+}
+
+
+def device_type_label(device_type: APCDeviceType | None) -> str:
+    """Return the stable user-facing label for a device family."""
+    return DEVICE_TYPE_LABELS.get(
+        device_type, DEVICE_TYPE_LABELS[APCDeviceType.UNKNOWN]
+    )
+
+
 class ProbeKind(Enum):
     RESPONSE = "response"
     MODBUS_EXCEPTION = "modbus_exception"
@@ -39,6 +56,26 @@ class ProbeOutcome:
     @property
     def unsupported(self) -> bool:
         return self.kind == ProbeKind.MODBUS_EXCEPTION and self.exception_code == 2
+
+
+@dataclass(frozen=True)
+class SchemaProbe:
+    """A read-only Modbus request used to identify an APC device family."""
+
+    name: str
+    address: int
+    count: int
+
+
+# Keep the wire-level classifier contract in one place.  Runtime detection and
+# diagnostics deliberately perform these same read-only requests.
+SCHEMA_PROBES = (
+    SchemaProbe("rack_pdu_capabilities", 0x009E, 5),
+    SchemaProbe("rack_pdu_measurements", 0x00CF, 6),
+    SchemaProbe("legacy_ups_id", 0x0021, 1),
+    SchemaProbe("smt_status", 0x0000, 23),
+    SchemaProbe("smt_measurements", 0x0080, 26),
+)
 
 
 def is_concrete_device_type(device_type: APCDeviceType | None) -> bool:

@@ -84,13 +84,6 @@ def get_registers_for_device(
         try:
             from . import registers_smt_ups
 
-            # Read with the same two large SMT blocks as SMT_UPS rather than
-            # splitting into per-register requests: block reads are diagnosed
-            # and validated as a single unit, and narrower reads around the
-            # gaps left by unsupported registers were never confirmed to work
-            # on SmartConnect firmware. Registers this family doesn't support
-            # are simply excluded from SMARTCONNECT_SENSOR_DESCRIPTIONS, so
-            # decoding their sentinel values here is harmless.
             return (
                 registers_smt_ups.REGISTERS,
                 registers_smt_ups.REGISTER_BLOCKS,

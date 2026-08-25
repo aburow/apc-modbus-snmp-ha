@@ -1,5 +1,6 @@
 """Regression tests for Issue 14 output-energy continuity."""
 
+import asyncio
 import importlib.util
 import sys
 from types import ModuleType
@@ -99,9 +100,6 @@ def test_output_energy_tracker_rollover_persistence_and_legacy_migration() -> No
 def test_issue_14_sensor_contract() -> None:
     root = Path(__file__).resolve().parents[1]
     registers = (root / "custom_components/apc_modbus/registers_smt_ups.py").read_text()
-    catalog = (
-        root / "custom_components/apc_modbus/sensor_catalog_unified.py"
-    ).read_text()
     config_flow = (root / "custom_components/apc_modbus/config_flow.py").read_text()
     sensor = (root / "custom_components/apc_modbus/sensor.py").read_text()
 
@@ -115,9 +113,6 @@ def test_issue_14_sensor_contract() -> None:
     assert 'register_key="output_energy"' in registers
     assert "suggested_display_precision=3" in registers
     assert "UnitOfEnergy.KILO_WATT_HOUR" in registers
-    assert '"key": "output_energy_kwh"' in catalog
-    assert '"key": "output_energy_rollover"' in catalog
-    assert '"unit": "kWh"' in catalog
     assert 'description.key == "output_energy_rollover"' in sensor
     assert 'coordinator.data.get("output_energy")' in sensor
     assert "CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS" in config_flow
@@ -227,8 +222,10 @@ def _load_energy_runtime(monkeypatch: pytest.MonkeyPatch):
         SMT_UPS="smt", SMARTCONNECT_UPS="smartconnect"
     )
     device_types.classify_device_type = lambda *_: None
+    device_types.device_type_label = lambda value: str(value)
     device_types.ProbeKind = object
     device_types.ProbeOutcome = object
+    device_types.SCHEMA_PROBES = ()
     monkeypatch.setitem(sys.modules, "energy_runtime.device_types", device_types)
     registers = ModuleType("energy_runtime.registers_smart_ups")
     registers.REGISTERS, registers.REGISTER_BLOCKS, registers.REGISTER_MAP = [], [], {}
@@ -248,6 +245,16 @@ def _load_energy_runtime(monkeypatch: pytest.MonkeyPatch):
     snmp_state = ModuleType("energy_runtime.snmp_state")
     snmp_state.has_usable_metadata = lambda *_: False
     monkeypatch.setitem(sys.modules, "energy_runtime.snmp_state", snmp_state)
+    profiles = ModuleType("energy_runtime.device_profiles")
+    profiles.get_sensor_descriptions = lambda *_: []
+    monkeypatch.setitem(sys.modules, "energy_runtime.device_profiles", profiles)
+    transport = ModuleType("energy_runtime.modbus_transport")
+    transport.ModbusTransport = object
+    transport.create_modbus_client = lambda *_: None
+    monkeypatch.setitem(sys.modules, "energy_runtime.modbus_transport", transport)
+    poller = ModuleType("energy_runtime.modbus_poller")
+    poller.ModbusPoller = object
+    monkeypatch.setitem(sys.modules, "energy_runtime.modbus_poller", poller)
 
     path = root / "custom_components/apc_modbus/coordinator.py"
     spec = importlib.util.spec_from_file_location("energy_runtime.coordinator", path)
@@ -382,36 +389,55 @@ def _load_config_flow_schema(monkeypatch: pytest.MonkeyPatch):
     homeassistant = ModuleType("homeassistant")
     config_entries = ModuleType("homeassistant.config_entries")
 
-    class ConfigFlow:
+    class _Flow:
+        def async_show_form(self, **kwargs):
+            return {"type": "form", **kwargs}
+
+        def async_create_entry(self, **kwargs):
+            return {"type": "create_entry", **kwargs}
+
+    class ConfigFlow(_Flow):
         def __init_subclass__(cls, **kwargs):
             super().__init_subclass__()
 
+    class OptionsFlow(_Flow):
+        config_entry = None
+
     config_entries.ConfigFlow = ConfigFlow
+    config_entries.OptionsFlow = OptionsFlow
     homeassistant.config_entries = config_entries
     ha_const = ModuleType("homeassistant.const")
     ha_const.CONF_HOST = "host"
     ha_const.CONF_PORT = "port"
     ha_const.CONF_SCAN_INTERVAL = "scan_interval"
+    ha_core = ModuleType("homeassistant.core")
+    ha_core.callback = lambda func: func
     monkeypatch.setitem(sys.modules, "homeassistant", homeassistant)
     monkeypatch.setitem(sys.modules, "homeassistant.config_entries", config_entries)
     monkeypatch.setitem(sys.modules, "homeassistant.const", ha_const)
+    monkeypatch.setitem(sys.modules, "homeassistant.core", ha_core)
 
     package = ModuleType("issue14_config")
     package.__path__ = []
     monkeypatch.setitem(sys.modules, "issue14_config", package)
     const = ModuleType("issue14_config.const")
     for key, value in {
+        "CONF_DETECTION_VERSION": "detection_version",
         "CONF_DEVICE_NAME": "device_name",
+        "CONF_DEVICE_TYPE": "device_type",
         "CONF_KEEP_CONNECTION_OPEN": "keep_connection_open",
         "CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS": "output_energy_completed_rollovers",
         "CONF_SNMP_COMMUNITY": "snmp_community",
+        "CONF_SNMP_WRITE_COMMUNITY": "snmp_write_community",
         "CONF_SNMP_PORT": "snmp_port",
+        "CONF_TRANSPORT_MODE": "transport_mode",
         "CONF_UNIT": "unit",
         "DEFAULT_KEEP_CONNECTION_OPEN": False,
         "DEFAULT_NAME": "APC UPS",
         "DEFAULT_PORT": 502,
         "DEFAULT_SCAN_INTERVAL": 10,
         "DEFAULT_SNMP_COMMUNITY": "public",
+        "DEFAULT_SNMP_WRITE_COMMUNITY": "",
         "DEFAULT_SNMP_PORT": 161,
         "DEFAULT_UNIT": 1,
         "DOMAIN": "apc_modbus",
@@ -428,16 +454,157 @@ def _load_config_flow_schema(monkeypatch: pytest.MonkeyPatch):
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
-    return module.DATA_SCHEMA, Invalid
+    return module, module.DATA_SCHEMA, Invalid
 
 
 def test_data_schema_rejects_invalid_output_energy_rollover_counts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    schema, invalid = _load_config_flow_schema(monkeypatch)
+    _, schema, invalid = _load_config_flow_schema(monkeypatch)
     valid = {"host": "ups", "snmp_community": "public"}
     assert schema(valid)["output_energy_completed_rollovers"] == 0
 
     for value in (-1, 1.5):
         with pytest.raises(invalid):
             schema({**valid, "output_energy_completed_rollovers": value})
+
+
+def test_options_flow_updates_existing_entry_without_readding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module, _, _ = _load_config_flow_schema(monkeypatch)
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            "host": "192.0.2.10",
+            "port": 502,
+            "unit": 1,
+            "device_name": "Office UPS",
+            "snmp_community": "read-old",
+            "snmp_write_community": "",
+            "snmp_port": 161,
+            "scan_interval": 10,
+            "keep_connection_open": False,
+            "output_energy_completed_rollovers": 0,
+            "device_type": "smart_ups",
+            "detection_version": 4,
+            "transport_mode": "session",
+        },
+    )
+    updates = []
+    reloads = []
+
+    async def reload_entry(entry_id):
+        reloads.append(entry_id)
+
+    flow = module.APCModbusConfigFlow.async_get_options_flow(entry)
+    assert isinstance(flow, module.APCModbusOptionsFlow)
+    flow.config_entry = entry
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_update_entry=lambda _entry, **kwargs: updates.append(kwargs),
+            async_reload=reload_entry,
+        )
+    )
+
+    form = asyncio.run(flow.async_step_init())
+    assert form["type"] == "form"
+    assert (
+        form["data_schema"]({"host": "192.0.2.10", "snmp_community": "read-old"})[
+            "snmp_write_community"
+        ]
+        == ""
+    )
+
+    result = asyncio.run(
+        flow.async_step_init(
+            {
+                "host": "192.0.2.11",
+                "port": 1502,
+                "unit": 2,
+                "device_name": "Lab UPS",
+                "snmp_community": "read-new",
+                "snmp_write_community": "write-new",
+                "snmp_port": 1161,
+                "scan_interval": 30,
+                "keep_connection_open": True,
+                "output_energy_completed_rollovers": 3,
+            }
+        )
+    )
+
+    assert result == {"type": "create_entry", "title": "", "data": {}}
+    assert reloads == ["entry-1"]
+    assert updates == [
+        {
+            "data": {
+                "host": "192.0.2.11",
+                "port": 1502,
+                "unit": 2,
+                "device_name": "Lab UPS",
+                "snmp_community": "read-new",
+                "snmp_write_community": "write-new",
+                "snmp_port": 1161,
+                "scan_interval": 30,
+                "keep_connection_open": True,
+                "output_energy_completed_rollovers": 3,
+            },
+            "title": "Lab UPS",
+        }
+    ]
+
+
+def test_options_flow_keeps_classification_when_endpoint_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module, _, _ = _load_config_flow_schema(monkeypatch)
+    entry = SimpleNamespace(
+        entry_id="entry-1",
+        data={
+            "host": "192.0.2.10",
+            "port": 502,
+            "unit": 1,
+            "device_name": "Office UPS",
+            "snmp_community": "read-old",
+            "snmp_write_community": "",
+            "snmp_port": 161,
+            "scan_interval": 10,
+            "keep_connection_open": False,
+            "output_energy_completed_rollovers": 0,
+            "device_type": "smart_ups",
+            "detection_version": 4,
+            "transport_mode": "session",
+        },
+    )
+    updates = []
+    reloads = []
+
+    async def reload_entry(entry_id):
+        reloads.append(entry_id)
+
+    flow = module.APCModbusOptionsFlow()
+    flow.config_entry = entry
+    flow.hass = SimpleNamespace(
+        config_entries=SimpleNamespace(
+            async_update_entry=lambda _entry, **kwargs: updates.append(kwargs),
+            async_reload=reload_entry,
+        )
+    )
+
+    asyncio.run(
+        flow.async_step_init(
+            {
+                **{
+                    key: value
+                    for key, value in entry.data.items()
+                    if key not in {"device_type", "detection_version", "transport_mode"}
+                },
+                "snmp_write_community": "write-new",
+            }
+        )
+    )
+
+    assert updates[0]["data"]["device_type"] == "smart_ups"
+    assert updates[0]["data"]["detection_version"] == 4
+    assert updates[0]["data"]["transport_mode"] == "session"
+    assert reloads == ["entry-1"]

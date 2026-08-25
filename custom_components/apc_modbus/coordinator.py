@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import functools
-import inspect
 import logging
 import time
 from datetime import timedelta
@@ -26,7 +25,6 @@ from pymodbus.exceptions import ConnectionException, ModbusException
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers.storage import Store
 
 from .const import (
     DEFAULT_IDLE_RECONNECT_SECONDS,
@@ -37,10 +35,13 @@ from .const import (
 from .device_types import (
     APCDeviceType,
     classify_device_type,
+    device_type_label,
     ProbeKind,
     ProbeOutcome,
+    SCHEMA_PROBES,
 )
-from .output_energy_tracker import OutputEnergyTracker
+from .modbus_poller import ModbusPoller
+from .modbus_transport import ModbusTransport
 from . import registers_smart_ups
 from .snmp_helper import (
     detect_external_probe_oids_sync,
@@ -77,6 +78,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         transport_mode: str = "session",
         transport_mode_persist: Callable[[str], None] | None = None,
         output_energy_completed_rollovers: int = 0,
+        snmp_write_community: str = "",
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -85,7 +87,6 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=DOMAIN,
             update_interval=timedelta(seconds=scan_interval),
         )
-        self.client = client
         self.unit = unit
         self.device_name = device_name
         self.host = host
@@ -93,39 +94,33 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry_id = entry_id
         self.timeout = timeout
         self.snmp_community = snmp_community
+        self.snmp_write_community = snmp_write_community
         self.snmp_port = snmp_port
         self._keep_connection_open = keep_connection_open
-        self.transport_mode = (
-            "one_request_per_connection"
-            if transport_mode == "one_request_per_connection"
-            else "session"
-        )
         self._transport_mode_persist = transport_mode_persist
-        self._session_request_succeeded = False
-        self.transport_promotion_reason: str | None = None
         self._idle_reconnect_seconds = DEFAULT_IDLE_RECONNECT_SECONDS
         self._log_ctx = f"{self.device_name} {self.host}:{self.port} (unit {self.unit})"
-        # Serialize Modbus client access to avoid concurrent reads on one socket.
         self._io_lock = io_lock
-        # Connection/backoff tracking
-        self._connect_failures = 0
         self._backoff_until: float | None = None
         self._backoff_base = 2.0
         self._backoff_max = 60.0
-        self._last_io_monotonic = 0.0
-        self._reconnect_count = 0
-        self._recreate_count = 0
-        # Small pacing delays for devices that drop connections on back-to-back reads.
-        # Defaults for Smart-UPS; Rack PDU overrides in set_device_type().
-        self._post_connect_delay = 0.05
+        self._modbus_failure_started: float | None = None
+        self._modbus_failure_warning_emitted = False
         self._inter_block_delay = 0.05
-        # Minimum gap between closing a TCP connection and opening the next one.
-        # Some devices (SmartConnect UPS) briefly refuse new connections right
-        # after a previous one closes, in both persistent-session reconnects
-        # and one-request-per-connection polling. 0 = no extra gap enforced.
-        # SmartConnect overrides this in set_device_type().
-        self._min_reconnect_delay = 0.0
-        self._last_close_monotonic = 0.0
+        self._transport = ModbusTransport(
+            hass,
+            client,
+            unit,
+            host,
+            port,
+            timeout,
+            io_lock,
+            self._log_ctx,
+            transport_mode,
+            transport_mode_persist,
+            lambda: self.effective_keep_connection_open,
+            self._idle_reconnect_seconds,
+        )
         # Initialize data as empty dict to ensure it's always present
         self.data: dict[str, Any] = {}
         # Device metadata (populated via SNMP at startup)
@@ -144,69 +139,80 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Device type and capabilities (for multi-device support)
         self.device_type: APCDeviceType = APCDeviceType.SMART_UPS
         self.device_capabilities: dict[str, int] = {}
+        self.raw_modbus_model: str | None = None
+        self.raw_modbus_sku: str | None = None
+        self.raw_modbus_firmware: str | None = None
         # Registers and blocks (loaded from factory based on device type)
         self.registers: list[dict[str, Any]] = registers_smart_ups.REGISTERS
         self.register_blocks: list[dict[str, Any]] = registers_smart_ups.REGISTER_BLOCKS
         self.register_map: dict[int, dict[str, Any]] = registers_smart_ups.REGISTER_MAP
-        read_params = inspect.signature(self.client.read_holding_registers).parameters
-        self._unit_param_candidates: list[str] = [
-            name for name in ("device_id", "slave", "unit") if name in read_params
-        ]
-        self._resolved_unit_param: str | None = None
         self._output_energy_completed_rollovers = output_energy_completed_rollovers
-        self._output_energy_tracker = OutputEnergyTracker.from_storage(
-            None, self._output_energy_completed_rollovers
+        self._poller = ModbusPoller(
+            hass,
+            self._transport,
+            entry_id,
+            self._log_ctx,
+            output_energy_completed_rollovers,
         )
-        self._output_energy_store = Store[dict[str, Any]](
-            hass, 1, f"{DOMAIN}.{entry_id}_output_energy"
+        self._poller.set_registers(
+            self.registers, self.register_blocks, self.register_map
         )
-        self._output_energy_tracker_restored = False
+
+    @property
+    def client(self) -> ModbusTcpClient:
+        """Compatibility view of the transport-owned client."""
+        return self._transport.client
+
+    @property
+    def transport(self) -> ModbusTransport:
+        """Expose the V2 transport seam to entity platforms."""
+        return self._transport
+
+    @property
+    def transport_mode(self) -> str:
+        return self._transport.mode
+
+    @transport_mode.setter
+    def transport_mode(self, value: str) -> None:
+        self._transport.mode = value
+
+    @property
+    def transport_promotion_reason(self) -> str | None:
+        return self._transport.promotion_reason
+
+    @transport_promotion_reason.setter
+    def transport_promotion_reason(self, value: str | None) -> None:
+        self._transport.promotion_reason = value
+
+    def _transport_value(name: str):
+        return property(
+            lambda self: getattr(self._transport, name),
+            lambda self, value: setattr(self._transport, name, value),
+        )
+
+    _connect_failures = _transport_value("connect_failures")
+    _last_io_monotonic = _transport_value("last_io_monotonic")
+    _reconnect_count = _transport_value("reconnect_count")
+    _recreate_count = _transport_value("recreate_count")
+    _post_connect_delay = _transport_value("post_connect_delay")
+    _min_reconnect_delay = _transport_value("min_reconnect_delay")
+    _last_close_monotonic = _transport_value("last_close_monotonic")
+    _session_request_succeeded = _transport_value("session_request_succeeded")
 
     async def async_restore_output_energy_tracker(self) -> None:
         """Restore the SMT output-energy tracker before its first update."""
-        state = await self._output_energy_store.async_load()
-        self._output_energy_tracker = OutputEnergyTracker.from_storage(
-            state, self._output_energy_completed_rollovers
+        await self._poller.async_restore_output_energy_tracker(
+            self._output_energy_completed_rollovers
         )
-        self._output_energy_tracker_restored = True
 
     async def _async_track_output_energy(self, data: dict[str, Any]) -> None:
         """Keep the SMT-compatible output-energy counter in canonical Wh."""
-        raw_wh = data.get("output_energy")
-        if self.device_type not in (
-            APCDeviceType.SMT_UPS,
-            APCDeviceType.SMARTCONNECT_UPS,
-        ) or not isinstance(raw_wh, int):
-            return
-        if self.device_type == APCDeviceType.SMARTCONNECT_UPS and raw_wh == 2**32 - 1:
-            data.pop("output_energy", None)
-            data.pop("output_energy_rollover", None)
-            return
-        if not self._output_energy_tracker_restored:
-            await self.async_restore_output_energy_tracker()
-        total_wh, reason = self._output_energy_tracker.update(
-            raw_wh, self.serial_number
+        await self._poller.async_track_output_energy(
+            data,
+            self.device_type,
+            self.serial_number,
+            self._output_energy_completed_rollovers,
         )
-        if reason == "pending_reset":
-            _LOGGER.warning(
-                "[%s] Rejected Output Energy counter decrease to %d Wh; "
-                "awaiting reset confirmation",
-                self._log_ctx,
-                raw_wh,
-            )
-        elif reason == "reset":
-            _LOGGER.warning(
-                "[%s] Confirmed Output Energy meter reset at %d Wh; preserving continuity",
-                self._log_ctx,
-                raw_wh,
-            )
-        data["output_energy"] = total_wh
-        data["output_energy_rollover"] = self._output_energy_tracker.rollover_count
-        if reason != "pending_reset":
-            self._output_energy_store.async_delay_save(
-                self._output_energy_tracker.as_dict,
-                OUTPUT_ENERGY_STORE_SAVE_DELAY_SECONDS,
-            )
 
     def set_device_metadata(
         self,
@@ -260,8 +266,14 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def set_device_type(self, device_type: APCDeviceType) -> None:
         """Store device type and tune pacing for slower models."""
+        changed = self.device_type != device_type
         self.device_type = device_type
-        _LOGGER.info("Device type set to: %s", device_type.value)
+        if changed:
+            _LOGGER.info(
+                "[%s] Device classification set to %s.",
+                self._log_ctx,
+                device_type_label(device_type),
+            )
         # Rack PDU is typically slower to respond, so use longer delays.
         if self.device_type == APCDeviceType.RACK_PDU:
             self._post_connect_delay = 0.10
@@ -314,6 +326,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.registers = registers
         self.register_blocks = register_blocks
         self.register_map = register_map
+        self._poller.set_registers(registers, register_blocks, register_map)
         _LOGGER.debug(
             "Registers updated: %d registers, %d blocks",
             len(registers),
@@ -322,7 +335,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_read_modbus_metadata(self) -> bool:
         """Populate UPS identity from Modbus when SNMP is unavailable."""
-        if self.snmp_availability != "unavailable" or self.device_type not in (
+        if self.device_type not in (
             APCDeviceType.SMT_UPS,
             APCDeviceType.SMARTCONNECT_UPS,
         ):
@@ -361,6 +374,12 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not any((firmware, model, serial_number)):
             return False
 
+        self.raw_modbus_firmware = self._clean_metadata_value(firmware)
+        self.raw_modbus_model = self._clean_metadata_value(model)
+        self.raw_modbus_sku = self._clean_metadata_value(sku)
+
+        if self.snmp_availability != "unavailable":
+            return True
         self.set_device_metadata(
             hw_model=f"{model} ({sku})" if model and sku else model or sku,
             serial_number=serial_number,
@@ -380,30 +399,22 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return None
 
             probes: dict[str, ProbeOutcome] = {}
-            for name, address, count in (
-                ("rack_pdu_capabilities", 0x009E, 5),
-                ("rack_pdu_measurements", 0x00CF, 6),
-                ("legacy_ups_id", 0x0021, 1),
-                ("smt_status", 0x0000, 23),
-                ("smt_measurements", 0x0080, 26),
-            ):
-                probes[name] = await self._probe_outcome(address, count, name)
+            for probe in SCHEMA_PROBES:
+                probes[probe.name] = await self._probe_outcome(
+                    probe.address, probe.count, probe.name
+                )
                 if self.transport_mode == "one_request_per_connection":
-                    for retry_name, retry_address, retry_count in (
-                        ("rack_pdu_capabilities", 0x009E, 5),
-                        ("rack_pdu_measurements", 0x00CF, 6),
-                        ("legacy_ups_id", 0x0021, 1),
-                        ("smt_status", 0x0000, 23),
-                        ("smt_measurements", 0x0080, 26),
-                    ):
+                    for retry_probe in SCHEMA_PROBES:
                         if (
                             probes.get(
-                                retry_name, ProbeOutcome(ProbeKind.RESPONSE)
+                                retry_probe.name, ProbeOutcome(ProbeKind.RESPONSE)
                             ).kind
                             == ProbeKind.TRANSPORT_FAILURE
                         ):
-                            probes[retry_name] = await self._probe_outcome(
-                                retry_address, retry_count, retry_name
+                            probes[retry_probe.name] = await self._probe_outcome(
+                                retry_probe.address,
+                                retry_probe.count,
+                                retry_probe.name,
                             )
             detected = classify_device_type(probes)
 
@@ -467,21 +478,15 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _promote_transport_mode(self, reason: str) -> None:
         """Persist proven single-request compatibility after a session failure."""
-        if self.transport_mode != "session" or not self._session_request_succeeded:
-            return
-        self.transport_mode = "one_request_per_connection"
-        self.transport_promotion_reason = reason
-        if self._transport_mode_persist:
-            self._transport_mode_persist(self.transport_mode)
-        _LOGGER.warning(
-            "[%s] Promoted Modbus transport mode: %s", self._log_ctx, reason
-        )
+        self._transport.promote(reason)
 
     def _build_read_request(self, address: int, count: int):
         """Build a compatible read request for old and new pymodbus APIs."""
         if self.transport_mode == "one_request_per_connection":
-            return functools.partial(self._read_one_request, address, count)
-        return functools.partial(self._read_holding_registers_compat, address, count)
+            return functools.partial(self._transport._read_one_request, address, count)
+        return functools.partial(
+            self._transport._read_holding_registers, address, count
+        )
 
     def _read_one_request(self, address: int, count: int):
         """Read one block on a fresh socket for constrained APC TCP servers.
@@ -489,22 +494,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Runs in an executor thread, so pacing uses a blocking sleep rather
         than asyncio.sleep.
         """
-        remaining = self._reconnect_pacing_remaining()
-        if remaining > 0:
-            _LOGGER.debug(
-                "[%s] Waiting %.3fs before reconnect (min gap %.1fs since last close)",
-                self._log_ctx,
-                remaining,
-                self._min_reconnect_delay,
-            )
-            time.sleep(remaining)
-        if not self.client.connect():
-            raise ConnectionException("Unable to open Modbus connection")
-        try:
-            return self._read_holding_registers_compat(address, count)
-        finally:
-            self.client.close()
-            self._mark_closed()
+        return self._transport._read_one_request(address, count)
 
     @property
     def effective_keep_connection_open(self) -> bool:
@@ -526,38 +516,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Supports unit-id argument names used by different pymodbus branches and
         caches the first successful variant for future reads.
         """
-        read_fn = self.client.read_holding_registers
-
-        attempts: list[tuple[str, object]] = []
-        if self._resolved_unit_param:
-            attempts.append(("kw", self._resolved_unit_param))
-        for candidate in self._unit_param_candidates:
-            if candidate != self._resolved_unit_param:
-                attempts.append(("kw", candidate))
-        attempts.extend(
-            [
-                ("positional", self.unit),
-                ("none", None),
-            ]
-        )
-
-        last_type_error: TypeError | None = None
-        for kind, value in attempts:
-            try:
-                if kind == "kw":
-                    result = read_fn(address, count=count, **{str(value): self.unit})
-                    self._resolved_unit_param = str(value)
-                    return result
-                if kind == "positional":
-                    return read_fn(address, count, int(value))
-                return read_fn(address, count=count)
-            except TypeError as err:
-                last_type_error = err
-                continue
-
-        if last_type_error is not None:
-            raise last_type_error
-        raise TypeError("No compatible pymodbus read_holding_registers signature found")
+        return self._transport._read_holding_registers(address, count)
 
     async def async_discover_capabilities(self) -> dict[str, int]:
         """Discover device capabilities for Rack PDU (reads capability registers).
@@ -587,7 +546,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             capabilities[cap_name] = result.registers[0]
                         else:
                             _LOGGER.debug(
-                                "Failed to read capability register %s at 0x%04X",
+                                "[%s] Failed to read capability register %s at 0x%04X",
+                                self._log_ctx,
                                 cap_name,
                                 addr,
                             )
@@ -599,19 +559,24 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         TypeError,
                     ) as err:
                         _LOGGER.debug(
-                            "Error reading capability register %s: %s", cap_name, err
+                            "[%s] Error reading capability register %s: %s",
+                            self._log_ctx,
+                            cap_name,
+                            err,
                         )
 
             if capabilities:
                 _LOGGER.info(
-                    "Rack PDU capabilities discovered: %d phases, %d outlets, %d banks",
+                    "[%s] Rack PDU capabilities discovered: %d phases, %d outlets, %d banks.",
+                    self._log_ctx,
                     capabilities.get("num_phases", 0),
                     capabilities.get("num_metered_outlets", 0),
                     capabilities.get("num_banks", 0),
                 )
             else:
                 _LOGGER.warning(
-                    "Failed to discover any capability registers for Rack PDU"
+                    "[%s] Rack PDU capability discovery returned no usable registers; using defaults.",
+                    self._log_ctx,
                 )
 
         except (
@@ -621,7 +586,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             TimeoutError,
             TypeError,
         ) as err:
-            _LOGGER.error("Error discovering capabilities: %s", err)
+            _LOGGER.error(
+                "[%s] Rack PDU capability discovery failed; using defaults.",
+                self._log_ctx,
+            )
+            _LOGGER.debug("[%s] Rack PDU capability failure: %s", self._log_ctx, err)
 
         return capabilities
 
@@ -640,6 +609,66 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return False
 
     async def _async_update_data(self) -> dict[str, Any]:
+        """Merge one concrete Modbus poll with optional Home Assistant enrichment."""
+        poll_start = time.monotonic()
+        reconnects_at_start = self._reconnect_count
+        recreates_at_start = self._recreate_count
+        try:
+            if not self._should_run_now():
+                remaining = max(0.0, (self._backoff_until or 0) - time.monotonic())
+                raise UpdateFailed(
+                    f"Modbus retry backoff active; next attempt in about {remaining:.0f}s"
+                )
+            result = await self._poller.async_poll(
+                keep_connection_open=self.effective_keep_connection_open
+            )
+            data, errors = result.data, result.errors
+        except Exception as err:
+            self._register_failure(str(err))
+            self._record_modbus_failure(str(err))
+            raise
+        if not data:
+            self._register_failure("No data read")
+            self._record_modbus_failure("no usable register data was returned")
+            raise UpdateFailed(f"Unable to read any registers: {', '.join(errors)}")
+        if errors:
+            _LOGGER.debug(
+                "[%s] Failed to read %d registers: %s",
+                self._log_ctx,
+                len(errors),
+                ", ".join(errors),
+            )
+        self._reset_backoff()
+        self._record_modbus_recovery()
+        snmp_metadata_start = time.monotonic()
+        await self._maybe_refresh_snmp_metadata()
+        snmp_metadata_elapsed = time.monotonic() - snmp_metadata_start
+        self._merge_device_metadata(data)
+        snmp_external_start = time.monotonic()
+        await self._merge_snmp_external_probe_data(data)
+        snmp_external_elapsed = time.monotonic() - snmp_external_start
+        await self._merge_snmp_self_test_data(data)
+        self._apply_device_compat_aliases(data)
+        await self._async_track_output_energy(data)
+        _LOGGER.debug(
+            "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
+            "block_reads=%.3fs, individual_reads=%.3fs, close=%.3fs, "
+            "snmp_metadata=%.3fs, snmp_external=%.3fs, reconnects=%d, recreates=%d",
+            self._log_ctx,
+            time.monotonic() - poll_start,
+            result.lock_wait,
+            result.elapsed,
+            result.block_reads_elapsed,
+            result.individual_reads_elapsed,
+            result.close_elapsed,
+            snmp_metadata_elapsed,
+            snmp_external_elapsed,
+            self._reconnect_count - reconnects_at_start,
+            self._recreate_count - recreates_at_start,
+        )
+        return data
+
+    async def _legacy_async_update_data(self) -> dict[str, Any]:
         """Fetch data from the UPS via Modbus (block reads with fallback to individual reads)."""
         data: dict[str, Any] = {}
         errors: list[str] = []
@@ -671,7 +700,10 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER.debug("[%s] Acquired I/O lock", self._log_ctx)
             try:
                 if not self._should_run_now():
-                    raise UpdateFailed("Backoff active; skipping update cycle")
+                    remaining = max(0.0, (self._backoff_until or 0) - time.monotonic())
+                    raise UpdateFailed(
+                        f"Modbus retry backoff active; next attempt in about {remaining:.0f}s"
+                    )
                 ensure_connection_start = time.monotonic()
                 connected = await self._ensure_connection()
                 ensure_connection_elapsed = time.monotonic() - ensure_connection_start
@@ -692,7 +724,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # A promoted mode invalidates any values read on the failed session.
                 if self.transport_mode != mode_before_reads:
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "[%s] Retrying update with fresh connections after transport promotion",
                         self._log_ctx,
                     )
@@ -702,8 +734,8 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # If block reads failed, fall back to individual reads with reconnection.
                 if not block_read_ok:
-                    _LOGGER.info(
-                        "[%s] Block reads failed or incomplete, falling back to individual register reads",
+                    _LOGGER.debug(
+                        "[%s] Retrying the same reads using individual Modbus registers",
                         self._log_ctx,
                     )
                     individual_reads_start = time.monotonic()
@@ -712,7 +744,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self._try_individual_reads(data, errors)
                     individual_reads_elapsed = time.monotonic() - individual_reads_start
                     if self.transport_mode != mode_before_individual_reads:
-                        _LOGGER.info(
+                        _LOGGER.debug(
                             "[%s] Retrying update with fresh connections after individual-read transport promotion",
                             self._log_ctx,
                         )
@@ -728,9 +760,11 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
             except UpdateFailed as err:
                 self._register_failure(str(err))
+                self._record_modbus_failure(str(err))
                 raise
             except Exception as err:
                 self._register_failure(str(err))
+                self._record_modbus_failure(str(err))
                 raise
             finally:
                 if self.effective_keep_connection_open:
@@ -741,33 +775,19 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else:
                     # Legacy safe mode: close per-cycle to avoid stale sockets.
                     close_start = time.monotonic()
-                    try:
-                        close_request = functools.partial(self.client.close)
-                        await self.hass.async_add_executor_job(close_request)
-                        close_elapsed = time.monotonic() - close_start
-                        self._last_io_monotonic = 0.0
-                        _LOGGER.debug(
-                            "[%s] Closed Modbus client after update (%.3fs)",
-                            self._log_ctx,
-                            close_elapsed,
-                        )
-                    except (
-                        ConnectionException,
-                        ModbusException,
-                        OSError,
-                        TimeoutError,
-                    ) as close_err:
-                        _LOGGER.debug(
-                            "[%s] Error closing Modbus client: %s",
-                            self._log_ctx,
-                            close_err,
-                        )
-                    finally:
-                        self._mark_closed()
+                    await self._transport.close()
+                    close_elapsed = time.monotonic() - close_start
+                    self._last_io_monotonic = 0.0
+                    _LOGGER.debug(
+                        "[%s] Closed Modbus client after update (%.3fs)",
+                        self._log_ctx,
+                        close_elapsed,
+                    )
                 modbus_cycle_elapsed = time.monotonic() - cycle_start
 
         if not data:
             self._register_failure("No data read")
+            self._record_modbus_failure("no usable register data was returned")
             raise UpdateFailed(f"Unable to read any registers: {', '.join(errors)}")
 
         if errors:
@@ -791,6 +811,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             modbus_cycle_elapsed,
         )
         self._reset_backoff()
+        self._record_modbus_recovery()
 
         snmp_metadata_start = time.monotonic()
         await self._maybe_refresh_snmp_metadata()
@@ -805,6 +826,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         await self._merge_snmp_self_test_data(data)
         self._apply_device_compat_aliases(data)
         await self._async_track_output_energy(data)
+        self._clear_reconciled_unknown_writes(data)
 
         _LOGGER.debug(
             "[%s] Poll timing breakdown: total=%.3fs, lock_wait=%.3fs, modbus=%.3fs, "
@@ -826,14 +848,43 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return data
 
+    def _record_modbus_failure(self, reason: str) -> None:
+        """Emit one actionable warning for a bounded communication episode."""
+        if self._modbus_failure_started is None:
+            self._modbus_failure_started = time.monotonic()
+        if self._modbus_failure_warning_emitted:
+            return
+        self._modbus_failure_warning_emitted = True
+        _LOGGER.warning(
+            "[%s] Modbus communication is unavailable; affected entities may be unavailable. "
+            "Home Assistant will retry automatically (%s).",
+            self._log_ctx,
+            reason,
+        )
+
+    def _record_modbus_recovery(self) -> None:
+        """Report the first usable poll after a communication episode."""
+        if self._modbus_failure_started is None:
+            return
+        duration = time.monotonic() - self._modbus_failure_started
+        _LOGGER.info(
+            "[%s] Modbus communication recovered after %.1fs.", self._log_ctx, duration
+        )
+        self._modbus_failure_started = None
+        self._modbus_failure_warning_emitted = False
+
     def _apply_device_compat_aliases(self, data: dict[str, Any]) -> None:
         """Populate compatibility aliases for device families with sparse maps."""
-        if self.device_type == APCDeviceType.SMT_UPS:
+        if self.device_type in (
+            APCDeviceType.SMT_UPS,
+            APCDeviceType.SMARTCONNECT_UPS,
+        ):
             # APC 990-9840B SMT/SMX/SRT map exposes a measured output frequency
             # register but no dedicated numeric input-frequency register.
             # Keep this as a last-resort fallback after SNMP merge.
             if (
-                data.get("input_frequency") is None
+                self.device_type == APCDeviceType.SMT_UPS
+                and data.get("input_frequency") is None
                 and data.get("output_frequency") is not None
             ):
                 data["input_frequency"] = data["output_frequency"]
@@ -903,19 +954,39 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         if isinstance(detection, dict):
-            self._snmp_probe_detection = {
+            new_detection = {
                 str(k): (v if isinstance(v, str) or v is None else str(v))
                 for k, v in detection.items()
             }
-            _LOGGER.info(
-                "[%s] SNMP probe detection (hourly): temp1=%s hum1=%s temp2=%s hum2=%s freq=%s",
-                self._log_ctx,
-                bool(self._snmp_probe_detection.get("temp_1_oid")),
-                bool(self._snmp_probe_detection.get("humidity_1_oid")),
-                bool(self._snmp_probe_detection.get("temp_2_oid")),
-                bool(self._snmp_probe_detection.get("humidity_2_oid")),
-                bool(self._snmp_probe_detection.get("frequency_oid")),
-            )
+            old_features = self._snmp_features(self._snmp_probe_detection)
+            new_features = self._snmp_features(new_detection)
+            self._snmp_probe_detection = new_detection
+            added = sorted(new_features - old_features)
+            removed = sorted(old_features - new_features)
+            if added or removed:
+                changes = [
+                    *(f"{feature} detected" for feature in added),
+                    *(f"{feature} no longer detected" for feature in removed),
+                ]
+                _LOGGER.info(
+                    "[%s] SNMP capabilities changed: %s.",
+                    self._log_ctx,
+                    "; ".join(changes),
+                )
+            else:
+                _LOGGER.debug("[%s] SNMP capabilities unchanged.", self._log_ctx)
+
+    @staticmethod
+    def _snmp_features(detection: dict[str, str | None]) -> set[str]:
+        """Map cached OID availability to user-facing capability labels."""
+        labels = {
+            "temp_1_oid": "External temperature probe 1",
+            "humidity_1_oid": "External humidity probe 1",
+            "temp_2_oid": "External temperature probe 2",
+            "humidity_2_oid": "External humidity probe 2",
+            "frequency_oid": "SNMP input-frequency fallback",
+        }
+        return {label for key, label in labels.items() if detection.get(key)}
 
     def _merge_device_metadata(self, data: dict[str, Any]) -> None:
         """Inject canonical metadata keys into coordinator data for bridge consumers."""
@@ -1032,19 +1103,13 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._keep_connection_open = enabled
             if not enabled:
                 # Returning to legacy per-cycle close mode: drop any existing long-lived socket.
-                try:
-                    close_request = functools.partial(self.client.close)
-                    await self.hass.async_add_executor_job(close_request)
-                except (ConnectionException, ModbusException, OSError, TimeoutError):
-                    pass
-                finally:
-                    self._mark_closed()
+                await self._transport.close()
                 self._last_io_monotonic = 0.0
 
         _LOGGER.info(
-            "[%s] keep_connection_open set to %s",
+            "[%s] Persistent Modbus connection %s.",
             self._log_ctx,
-            self._keep_connection_open,
+            "enabled" if self._keep_connection_open else "disabled",
         )
 
     def mark_snmp_metadata_refresh_needed(self) -> None:
@@ -1081,159 +1146,37 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _reconnect_pacing_remaining(self) -> float:
         """Seconds still required before the next TCP connect, if any."""
-        if self._min_reconnect_delay <= 0 or self._last_close_monotonic <= 0:
-            return 0.0
-        elapsed = time.monotonic() - self._last_close_monotonic
-        return max(0.0, self._min_reconnect_delay - elapsed)
+        return self._transport.reconnect_pacing_remaining()
 
     async def _await_reconnect_pacing(self) -> None:
         """Wait out the minimum gap some devices need after closing a connection."""
-        remaining = self._reconnect_pacing_remaining()
-        if remaining > 0:
-            _LOGGER.debug(
-                "[%s] Waiting %.3fs before reconnect (min gap %.1fs since last close)",
-                self._log_ctx,
-                remaining,
-                self._min_reconnect_delay,
-            )
-            await asyncio.sleep(remaining)
+        await self._transport._await_reconnect_pacing()
 
     def _mark_closed(self) -> None:
         """Record when the TCP connection was closed, for reconnect pacing."""
-        self._last_close_monotonic = time.monotonic()
+        self._transport._mark_closed()
 
     async def _ensure_connection(self) -> bool:
         """Ensure Modbus client is connected before starting reads."""
-        if self.transport_mode == "one_request_per_connection":
-            return True
-        if self.effective_keep_connection_open and self._last_io_monotonic > 0:
-            idle_for = time.monotonic() - self._last_io_monotonic
-            if idle_for >= self._idle_reconnect_seconds:
-                _LOGGER.info(
-                    "[%s] Modbus socket idle for %.1fs; reconnecting before poll",
-                    self._log_ctx,
-                    idle_for,
-                )
-                reconnected = await self._async_reconnect(
-                    reason=f"idle>{self._idle_reconnect_seconds:.0f}s",
-                    recreate_client=False,
-                )
-                if not reconnected:
-                    reconnected = await self._async_reconnect(
-                        reason="idle_reconnect_retry",
-                        recreate_client=True,
-                    )
-                return reconnected
-
-        try:
-            await self._await_reconnect_pacing()
-            connect_start = time.monotonic()
-            connect_request = functools.partial(self.client.connect)
-            ok = await self.hass.async_add_executor_job(connect_request)
-            _LOGGER.debug(
-                "[%s] client.connect() -> %s (%.3fs)",
-                self._log_ctx,
-                ok,
-                time.monotonic() - connect_start,
-            )
-            if ok:
-                self._connect_failures = 0
-                self._mark_io_activity()
-                if self._post_connect_delay > 0:
-                    await asyncio.sleep(self._post_connect_delay)
-                    _LOGGER.debug(
-                        "[%s] Post-connect delay %.3fs",
-                        self._log_ctx,
-                        self._post_connect_delay,
-                    )
-                return True
-            self._connect_failures += 1
-            if self._connect_failures >= 3:
-                _LOGGER.debug(
-                    "[%s] Recreating Modbus client after %d connect failures",
-                    self._log_ctx,
-                    self._connect_failures,
-                )
-                self._connect_failures = 0
-                ok = await self._async_reconnect(
-                    reason="connect_failures>=3",
-                    recreate_client=True,
-                )
-                return ok
-            return False
-        except (ConnectionException, ModbusException, OSError, TimeoutError) as err:
-            _LOGGER.debug("[%s] Connection attempt failed: %s", self._log_ctx, err)
-            return False
+        return await self._transport.ensure_connection()
 
     def _mark_io_activity(self) -> None:
         """Record the latest successful Modbus socket activity time."""
-        self._last_io_monotonic = time.monotonic()
-        if self.transport_mode == "session":
-            self._session_request_succeeded = True
+        self._transport.mark_io_activity()
 
     def _record_transport_failure(self, err: Exception) -> None:
         """Promote only for socket-style failures, never Modbus exceptions."""
-        if isinstance(err, ModbusException) and not isinstance(
-            err, ConnectionException
-        ):
-            return
-        if isinstance(err, (OSError, TimeoutError, ConnectionException)):
-            self._promote_transport_mode(type(err).__name__)
+        self._transport.record_failure(err)
 
     async def _async_reconnect(self, *, reason: str, recreate_client: bool) -> bool:
         """Reconnect the Modbus socket, optionally recreating the client object."""
-        self._reconnect_count += 1
-        if recreate_client:
-            self._recreate_count += 1
-            await self._recreate_client()
-        else:
-            try:
-                close_request = functools.partial(self.client.close)
-                await self.hass.async_add_executor_job(close_request)
-            except (ConnectionException, ModbusException, OSError, TimeoutError):
-                pass
-            finally:
-                self._mark_closed()
-
-        await self._await_reconnect_pacing()
-        reconnect_start = time.monotonic()
-        connect_request = functools.partial(self.client.connect)
-        ok = await self.hass.async_add_executor_job(connect_request)
-        _LOGGER.debug(
-            "[%s] reconnect(reason=%s, recreate=%s) -> %s (%.3fs, total_reconnects=%d, total_recreates=%d)",
-            self._log_ctx,
-            reason,
-            recreate_client,
-            ok,
-            time.monotonic() - reconnect_start,
-            self._reconnect_count,
-            self._recreate_count,
+        return await self._transport.reconnect(
+            reason=reason, recreate_client=recreate_client
         )
-        if ok:
-            self._connect_failures = 0
-            self._mark_io_activity()
-            if self._post_connect_delay > 0:
-                await asyncio.sleep(self._post_connect_delay)
-        return ok
 
     async def _recreate_client(self) -> None:
         """Close and recreate the Modbus client to clear dead sockets."""
-        try:
-            close_request = functools.partial(self.client.close)
-            await self.hass.async_add_executor_job(close_request)
-        except (ConnectionException, ModbusException, OSError, TimeoutError):
-            pass
-        finally:
-            self._mark_closed()
-        self.client = ModbusTcpClient(
-            host=self.host, port=self.port, timeout=self.timeout
-        )
-        read_params = inspect.signature(self.client.read_holding_registers).parameters
-        self._unit_param_candidates = [
-            name for name in ("device_id", "slave", "unit") if name in read_params
-        ]
-        self._resolved_unit_param = None
-        # Keep cached SNMP metadata/probe detection across Modbus client recreation.
+        await self._transport._recreate_client()
 
     def _register_failure(self, reason: str) -> None:
         """Apply exponential backoff on repeated failures."""
@@ -1283,7 +1226,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # Check if result is an error
                 if self._is_error_response(result):
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "[%s] Block read returned error %s (0x%04X, %d registers): %s",
                         self._log_ctx,
                         block["name"],
@@ -1346,7 +1289,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 TypeError,
             ) as err:
                 self._record_transport_failure(err)
-                _LOGGER.warning(
+                _LOGGER.debug(
                     "[%s] Exception in block read %s: %s (type: %s)",
                     self._log_ctx,
                     block["name"],
@@ -1468,7 +1411,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                     # If too many consecutive failures, abort
                     if consecutive_failures >= 5:
-                        _LOGGER.warning(
+                        _LOGGER.debug(
                             "[%s] Too many consecutive read failures, aborting update cycle",
                             self._log_ctx,
                         )
@@ -1514,7 +1457,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
                 if consecutive_failures >= 5:
-                    _LOGGER.warning(
+                    _LOGGER.debug(
                         "[%s] Too many consecutive read failures, aborting update cycle",
                         self._log_ctx,
                     )

@@ -1,9 +1,12 @@
 import importlib.util
 import asyncio
+import logging
 import sys
 import types
 from datetime import date
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = ROOT / "custom_components" / "apc_modbus"
@@ -41,6 +44,9 @@ if "pysnmp.hlapi.v3arch.asyncio" not in sys.modules:
     async def _dummy_get_cmd(*args, **kwargs):
         return (None, None, None, [])
 
+    async def _dummy_set_cmd(*args, **kwargs):
+        return (None, None, None, [])
+
     asyncio_mod.CommunityData = _Dummy
     asyncio_mod.ContextData = _Dummy
     asyncio_mod.ObjectIdentity = _Dummy
@@ -48,11 +54,16 @@ if "pysnmp.hlapi.v3arch.asyncio" not in sys.modules:
     asyncio_mod.SnmpEngine = _Dummy
     asyncio_mod.UdpTransportTarget = _Dummy
     asyncio_mod.get_cmd = _dummy_get_cmd
+    asyncio_mod.set_cmd = _dummy_set_cmd
 
     sys.modules["pysnmp"] = pysnmp
     sys.modules["pysnmp.hlapi"] = hlapi
     sys.modules["pysnmp.hlapi.v3arch"] = v3arch
     sys.modules["pysnmp.hlapi.v3arch.asyncio"] = asyncio_mod
+    rfc1902 = types.ModuleType("pysnmp.proto.rfc1902")
+    rfc1902.Integer = _Dummy
+    sys.modules["pysnmp.proto"] = types.ModuleType("pysnmp.proto")
+    sys.modules["pysnmp.proto.rfc1902"] = rfc1902
 
 _load_module(
     "custom_components.apc_modbus.device_types", PACKAGE_ROOT / "device_types.py"
@@ -61,6 +72,28 @@ SNMP_HELPER = _load_module(
     "custom_components.apc_modbus.snmp_helper",
     PACKAGE_ROOT / "snmp_helper.py",
 )
+
+
+def test_metadata_logging_does_not_disclose_community(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """SNMP must receive the configured community without logging it."""
+    sentinel = "do-not-log-this-community"
+    calls: list[str] = []
+
+    async def _fake_get(_host, _oid, community, **_kwargs):
+        calls.append(community)
+        return None
+
+    monkeypatch.setattr(SNMP_HELPER, "async_get_snmp_value", _fake_get)
+    with caplog.at_level(logging.DEBUG):
+        metadata = asyncio.run(
+            SNMP_HELPER.async_get_device_metadata("127.0.0.1", sentinel)
+        )
+
+    assert calls and set(calls) == {sentinel}
+    assert sentinel not in caplog.text
+    assert sentinel not in str(metadata)
 
 
 def test_parse_frequency_hz_handles_hz_and_tenths() -> None:

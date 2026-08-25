@@ -23,6 +23,7 @@ from .const import (
     SNMP_SELF_TEST_SENSOR_DESCRIPTIONS,
 )
 from .coordinator import APCModbusCoordinator
+from .device_profiles import get_sensor_descriptions
 from .device_types import APCDeviceType
 from .external_probe_entities import is_external_probe_entity_available
 from .icons_unified import resolve_sensor_icon
@@ -41,32 +42,9 @@ async def async_setup_entry(
         KEY_COORDINATOR
     ]
 
-    # Get device-type-specific sensor descriptions
-    if coordinator.device_type == APCDeviceType.SMART_UPS:
-        # Smart-UPS uses static sensor descriptions from const
-        from .const import SENSOR_DESCRIPTIONS
-
-        sensor_descriptions = SENSOR_DESCRIPTIONS
-    elif coordinator.device_type == APCDeviceType.SMT_UPS:
-        from . import registers_smt_ups
-
-        sensor_descriptions = registers_smt_ups.SENSOR_DESCRIPTIONS
-    elif coordinator.device_type == APCDeviceType.SMARTCONNECT_UPS:
-        from . import registers_smt_ups
-
-        sensor_descriptions = registers_smt_ups.SMARTCONNECT_SENSOR_DESCRIPTIONS
-    elif coordinator.device_type == APCDeviceType.RACK_PDU:
-        # Rack PDU uses dynamic sensor descriptions based on capabilities
-        from . import registers_rack_pdu
-
-        sensor_descriptions = registers_rack_pdu.get_sensor_descriptions(
-            coordinator.device_capabilities
-        )
-    else:
-        # Unknown type defaults to Smart-UPS sensor descriptions
-        from .const import SENSOR_DESCRIPTIONS
-
-        sensor_descriptions = SENSOR_DESCRIPTIONS
+    sensor_descriptions = get_sensor_descriptions(
+        coordinator.device_type, getattr(coordinator, "device_capabilities", {})
+    )
 
     external_sensor_descriptions = {
         description.key: description
@@ -133,9 +111,13 @@ async def async_setup_entry(
             return
 
         _LOGGER.info(
-            "Adding %d newly detected SNMP external probe sensor(s): %s",
+            "[%s] Adding %d newly detected SNMP external probe sensor(s): %s",
+            coordinator._log_ctx,
             len(new_descriptions),
-            ", ".join(description.key for description in new_descriptions),
+            ", ".join(
+                getattr(description, "name", description.key)
+                for description in new_descriptions
+            ),
         )
         async_add_entities(
             APCModbusSensor(coordinator, description, entry.entry_id)
@@ -173,9 +155,13 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
             else coordinator.fw_version,
         )
         self._attr_icon = resolve_sensor_icon(description.key)
-        self._attr_entity_registry_enabled_default = is_sensor_enabled_by_default(
-            description.key,
-            coordinator.device_type.value,
+        self._attr_entity_registry_enabled_default = (
+            description.entity_registry_enabled_default
+            if description.key.endswith("_operation_state")
+            else is_sensor_enabled_by_default(
+                description.key,
+                coordinator.device_type.value,
+            )
         )
         # Energy is stored as integer Wh and converted to kWh only for the entity.
         if description.device_class != SensorDeviceClass.ENUM:

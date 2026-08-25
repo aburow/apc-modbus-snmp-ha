@@ -26,9 +26,7 @@ async def async_setup_entry(
     coordinator: APCModbusCoordinator = hass.data[DOMAIN][entry.entry_id][
         KEY_COORDINATOR
     ]
-    async_add_entities(
-        [APCModbusKeepConnectionOpenSwitch(coordinator, entry)],
-    )
+    async_add_entities([APCModbusKeepConnectionOpenSwitch(coordinator, entry)])
 
 
 class APCModbusKeepConnectionOpenSwitch(

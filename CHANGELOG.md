@@ -2,30 +2,234 @@
 
 All notable changes to the APC UPS Modbus integration will be documented in this file.
 
-## [1.2.6] - 2026-08-10
+## [Unreleased]
+
+## [2.1.0] - 2026-08-25
 
 ### Added
-- SmartConnect support, including a Modbus identity fallback when SNMP is
-  unavailable and a direct link to the SmartConnect dashboard.
-- More resilient cumulative-energy tracking for supported SMT/SmartConnect UPSs
-  and Rack PDUs, including confirmed counter-rollover reporting.
+- Promoted the V2 Modbus and legacy PowerNet SNMP command-testing paths to the
+  stable release line. Commands remain disabled by default and require explicit
+  per-entity enablement.
+- Added a **Configure** flow for updating existing connection, timing, and
+  read/write SNMP settings without re-adding an entry.
+
+### Fixed
+- Updated the Configure flow for current Home Assistant OptionsFlow handling.
+
+### Documentation
+- Added the 1.2.6-to-2.1 migration review and refreshed the README architecture,
+  configuration, SNMP, command-testing, and troubleshooting guidance.
+
+## [2.1.0-dev.11] - 2026-08-25
+
+### Fixed
+- Fixed the **Configure** options flow on current Home Assistant releases. It
+  now uses Home Assistant's framework-provided config entry instead of the
+  removed manual OptionsFlow constructor path.
+
+### Documentation
+- Refreshed the README configuration, command-testing, SNMP, troubleshooting,
+  and architecture documentation for the current 2.1 development runtime.
+
+## [2.1.0-dev.10] - 2026-08-25
+
+### Added
+- Added a **Configure** options flow for existing entries. It updates host,
+  Modbus/SNMP ports, unit ID, scan interval, read/write SNMP communities,
+  device name, connection preference, and output-energy rollover settings
+  without re-adding the device.
+- Changing the Modbus endpoint or unit through **Configure** resets stored
+  classification so the reloaded integration performs fresh device detection.
+
+## [2.1.0-dev.9] - 2026-08-25
 
 ### Changed
-- SNMP is optional enrichment; Modbus monitoring continues when it is
-  unavailable.
+- Kept every exposed Modbus and legacy SNMP write command disabled by default
+  until a tester explicitly enables its entity.
+- Extended **Reset Monitor Defaults** to disable all current and retained legacy
+  write controls while restoring each device family's basic sensor and binary
+  sensor defaults.
+
+## [2.1.0-dev.8] - 2026-08-25
+
+### Added
+- Added a separate optional SNMP write-community field for legacy PowerNet
+  command testing. Existing SNMP reads continue to use the read community.
+- Added legacy Smart-UPS PowerNet SNMP command buttons for documented SET
+  operations using that write community.
+
+## [2.1.0-dev.7] - 2026-08-25
+
+### Changed
+- Enabled the existing experimental Modbus command buttons by default for
+  supervised tester validation on SMT/SMX/SRT and SmartConnect devices.
+  Commands remain fixed, one-shot, zero-retry operations; legacy Smart-UPS
+  and Rack PDU devices remain monitoring-only.
+
+### Documentation
+- Added the V2 plan for exact-model legacy Smart-UPS operational validation
+  through documented PowerNet SNMP `SET` commands. No SNMP write runtime is
+  included in this release.
+
+## [2.1.0-dev.6] - 2026-08-22
+
+### Added
+- Include the installed integration version in each experimental command
+  request debug record.
+
+## [2.1.0-dev.5] - 2026-08-22
+
+### Fixed
+- Accept the standard function-16 address/count acknowledgement for
+  one-register experimental commands instead of reporting a false failure.
+
+## [2.1.0-dev.4] - 2026-08-22
+
+### Fixed
+- Pass one-register function-16 commands to PyModbus as a one-item register
+  list. This fixes a client-side error that prevented those validation commands
+  from being sent.
+
+## [2.1.0-dev.3] - 2026-08-21
+
+### Fixed
+- Send all fixed APC command writes with Modbus function 16, including
+  one-register actions. Physical validation on `SMT1500RMI2U` firmware `15.1`
+  established that function 6 is rejected while function 16 is recognised.
+
+## [2.1.0-dev.2] - 2026-08-21
+
+### Added
+- Debug command-audit records: requested action with model/SKU/firmware, then
+  the sent-once Modbus response type, function, address/count, exception code,
+  transport mode, and response-validation result. Credentials and serial
+  numbers are excluded.
+
+### Changed
+- Documented the debug-log capture required for experimental command
+  validation, including the no-retry response-error procedure and safe
+  response fields needed in a device report.
+
+## [2.1.0-dev.1] - 2026-08-21
+
+### Added
+- Experimental Modbus command validation for device families with documented
+  command registers. Controls are disabled by default and intended for
+  supervised, noncritical-load physical testing through HACS; record the
+  exact model/firmware for each result.
+- Maintenance-only bypass validation for exact devices that document it,
+  requiring an approved maintenance window and a verified return to normal
+  output.
+
+### Safety
+- Commands use the V2 profile/transport path with one-shot, zero-retry,
+  no-replay handling and readable-status reconciliation. This is not general
+  write support; devices without an authoritative command map remain
+  monitoring-only.
+
+## [2.1.0-dev.0] - 2026-08-21
+
+### Changed
+- Made the 2.1 development release read-only; removed the experimental Modbus
+  write-control preview.
+- Documented the validated SMT750IC serial-to-Ethernet path as a standard
+  Modbus TCP endpoint with no special integration mode.
+- Synchronized integration and package metadata to `2.1.0-dev.0`.
+
+## [2.0.0-dev.7] - 2026-08-14
+
+### Added
+- Added the exact `SRT2200` SKU with UPS firmware `06.0` as a safety-gated
+  Modbus write-control candidate. Other SRT models remain read-only.
+
+### Changed
+- Synchronized integration and package metadata to `2.0.0-dev.7`.
+
+## [2.0.0-dev.6] - 2026-08-10
+
+### Changed
+- SmartConnect device pages now link to the SmartConnect dashboard.
 - Simplified local linting to Ruff, Grain, pytest, ShellCheck, and shfmt.
-- Added the README trademark and use-at-your-own-risk disclaimer.
-- Synchronized authoritative integration/package version metadata to `1.2.6`.
+- Removed the obsolete Application Notes publication-terms release gate from
+  the historical v2.0.0 development record.
+- Synchronized integration and package metadata to `2.0.0-dev.6`.
 
-## [1.2.6-dev.14] - 2026-08-10
+## [2.0.0-dev.5] - 2026-08-09
+
+### Fixed
+- Declared the built-in Home Assistant `logbook` integration as a dependency
+  for the control-restoration Logbook entry, resolving Hassfest validation.
 
 ### Changed
-- SmartConnect device pages now link to the SmartConnect dashboard instead of
-  the device's local Modbus host.
-- Added a trademark and use-at-your-own-risk disclaimer to the README license
-  section.
-- Synchronized authoritative integration/package version metadata to
-  `1.2.6-dev.14`.
+- Renamed the manual control to **Run plugin diagnostics** to distinguish
+  integration diagnostics from appliance diagnostics.
+- Removed unused external bridge contracts and their tests.
+- Added a project affiliation and use-at-your-own-risk disclaimer.
+- Synchronized integration and package metadata to `2.0.0-dev.5`.
+
+## [2.0.0-dev.4] - 2026-08-09
+
+### Fixed
+- Added the Logbook clarification when an APC control recovers after a press;
+  the retained native button timestamp is not another command.
+- Explain a refused runtime calibration with its charge/load prerequisites and
+  the already-polled current values.
+
+### Changed
+- Synchronized integration and package metadata to `2.0.0-dev.4`.
+
+## [2.0.0-dev.3] - 2026-08-09
+
+### Security
+- Removed SNMP community values from integration debug logging.
+
+### Changed
+- Made integration operational logs device-specific and human-readable,
+  aggregated communication-failure episodes, and added recovery messages.
+- Added allowlisted write lifecycle audit messages and clarified restored native
+  button timestamps in the Home Assistant Logbook.
+- Synchronized integration and package metadata to `2.0.0-dev.3`.
+
+## [2.0.0-dev.2] - 2026-08-09
+
+### Fixed
+- Matched the write allowlist against the Modbus `SKU_STR` identity at `0x0224`
+  instead of the human-readable model name at `0x0214`.
+
+### Changed
+- Limited write-family eligibility to SMT/SMX SKUs, including exact allowlisted
+  SmartConnect SMT devices.
+- Synchronized integration and package metadata to `2.0.0-dev.2`.
+
+## [2.0.0-dev.1] - 2026-08-09
+
+### Fixed
+- Allowed the exact `SMT750IC` firmware `18.0` SmartConnect development
+  candidate to run per-feature write discovery and poll companion status.
+- Kept every other SmartConnect model and firmware on the read-only profile.
+
+## [2.0.0-dev.0] - 2026-08-09
+
+### Added
+- Added the safety-gated implementation for per-outlet actions, battery
+  self-test start/abort, runtime-calibration start/abort, and audible-alarm
+  mute/cancel. Native Home Assistant controls and operation-state sensors are
+  disabled by default and created only for an exact discovered capability.
+- Added per-feature read-only capability discovery, SMT-only companion status
+  polling, translated entity/error strings, fixed command builders, and
+  behavioral safety tests.
+
+### Safety
+- Disabled pymodbus client retries for initial and recreated clients. The write
+  coordinator invokes each command at most once, validates the exact response,
+  suppresses conflicts, and reconciles through readable status without replay.
+- `SMT750IC` firmware `18.0` is temporarily allowlisted for controlled physical
+  acceptance on a noncritical load; it is not yet release-supported.
+- Timing configuration remains blocked pending authoritative model-specific
+  ranges.
+
+### Changed
+- Synchronized integration and package metadata to `2.0.0-dev.0`.
 
 ## [1.2.6-dev.13] - 2026-08-08
 
