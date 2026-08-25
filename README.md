@@ -7,9 +7,11 @@
 A Home Assistant custom integration for APC UPS and Rack PDU monitoring over
 Modbus/TCP, with optional SNMP v2c enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.11` exposes experimental write controls
-> for supported profiles, disabled by default until each tester enables them.
-> Record the exact model and firmware; test only noncritical loads.
+> **Write testing release:** `2.1.0` exposes experimental write controls through
+> both MODBUS and SNMP depending on the device profile. All write commands are
+> disabled by default. A user can enable these options in their own right and at
+> their own risk. If you test this capability, please report the exact model and
+> firmware whether there are issues or not; test only noncritical loads.
 
 Supported device profiles are Legacy Smart-UPS, SMT/SMX/SRT, SmartConnect, and
 NetShelter Rack PDU. Profiles are selected from read-only Modbus schema probes;
@@ -127,9 +129,6 @@ graph TD
 4. Select "Integration" category
 5. Install "APC UPS Modbus"
 6. Restart Home Assistant
-
-To install the current development build, enable pre-release versions for this
-repository in HACS before selecting the version.
 
 ### Manual Installation
 
@@ -447,7 +446,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 ## Version
 
-Current version: `2.1.0-dev.11`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

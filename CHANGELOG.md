@@ -4,6 +4,22 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-25
+
+### Added
+- Promoted the V2 Modbus and legacy PowerNet SNMP command-testing paths to the
+  stable release line. Commands remain disabled by default and require explicit
+  per-entity enablement.
+- Added a **Configure** flow for updating existing connection, timing, and
+  read/write SNMP settings without re-adding an entry.
+
+### Fixed
+- Updated the Configure flow for current Home Assistant OptionsFlow handling.
+
+### Documentation
+- Added the 1.2.6-to-2.1 migration review and refreshed the README architecture,
+  configuration, SNMP, command-testing, and troubleshooting guidance.
+
 ## [2.1.0-dev.11] - 2026-08-25
 
 ### Fixed

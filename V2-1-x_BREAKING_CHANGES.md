@@ -2,12 +2,11 @@
 
 ## Scope
 
-This document compares the current stable release, `v1.2.6`, with the current
-2.1 development pre-release, `v2.1.0-dev.11`.
+This document compares the previous stable release, `v1.2.6`, with the current
+stable release, `v2.1.0`.
 
-`v2.1.0-dev.11` is a tester pre-release, not a stable replacement for
-`v1.2.6`. Install it through HACS only after enabling pre-release versions for
-this repository.
+`v2.1.0` is the HACS release line for the V2 architecture and opt-in write
+testing controls.
 
 ## Summary
 
@@ -94,8 +93,7 @@ entity IDs during an in-place upgrade.
 
 1. Create a Home Assistant backup.
 2. Export or note APC entity IDs used by automations and dashboards.
-3. Install `v2.1.0-dev.11` through the HACS pre-release selector and restart
-   Home Assistant.
+3. Install `v2.1.0` through HACS and restart Home Assistant.
 4. Confirm normal monitoring before enabling any write entity.
 5. For legacy SNMP write testing only, set a distinct write-enabled community
    through **Configure**.
