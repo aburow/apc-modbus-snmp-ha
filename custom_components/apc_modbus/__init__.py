@@ -30,6 +30,7 @@ from .const import (
     CONF_TRANSPORT_MODE,
     CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS,
     CONF_SNMP_COMMUNITY,
+    CONF_SNMP_WRITE_COMMUNITY,
     CONF_SNMP_PORT,
     CONF_UNIT,
     DEFAULT_KEEP_CONNECTION_OPEN,
@@ -37,6 +38,7 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SNMP_COMMUNITY,
+    DEFAULT_SNMP_WRITE_COMMUNITY,
     DEFAULT_SNMP_PORT,
     DEFAULT_UNIT,
     DOMAIN,
@@ -157,6 +159,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "[%s] APC Modbus integration starting (pymodbus %s).", log_ctx, PYMODBUS_VERSION
     )
     snmp_community = entry.data.get(CONF_SNMP_COMMUNITY, DEFAULT_SNMP_COMMUNITY)
+    snmp_write_community = entry.data.get(
+        CONF_SNMP_WRITE_COMMUNITY, DEFAULT_SNMP_WRITE_COMMUNITY
+    )
     snmp_port = entry.data.get(CONF_SNMP_PORT, DEFAULT_SNMP_PORT)
     keep_connection_open = entry.data.get(
         CONF_KEEP_CONNECTION_OPEN, DEFAULT_KEEP_CONNECTION_OPEN
@@ -217,6 +222,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         output_energy_completed_rollovers=entry.data.get(
             CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS, 0
         ),
+        snmp_write_community=snmp_write_community,
     )
 
     startup_stagger_delay = compute_startup_stagger_delay(

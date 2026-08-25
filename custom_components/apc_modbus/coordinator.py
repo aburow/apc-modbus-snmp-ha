@@ -78,6 +78,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         transport_mode: str = "session",
         transport_mode_persist: Callable[[str], None] | None = None,
         output_energy_completed_rollovers: int = 0,
+        snmp_write_community: str = "",
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -93,6 +94,7 @@ class APCModbusCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entry_id = entry_id
         self.timeout = timeout
         self.snmp_community = snmp_community
+        self.snmp_write_community = snmp_write_community
         self.snmp_port = snmp_port
         self._keep_connection_open = keep_connection_open
         self._transport_mode_persist = transport_mode_persist

@@ -17,6 +17,7 @@ from .const import (
     CONF_KEEP_CONNECTION_OPEN,
     CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS,
     CONF_SNMP_COMMUNITY,
+    CONF_SNMP_WRITE_COMMUNITY,
     CONF_SNMP_PORT,
     CONF_UNIT,
     DEFAULT_KEEP_CONNECTION_OPEN,
@@ -24,6 +25,7 @@ from .const import (
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_SNMP_COMMUNITY,
+    DEFAULT_SNMP_WRITE_COMMUNITY,
     DEFAULT_SNMP_PORT,
     DEFAULT_UNIT,
     DOMAIN,
@@ -33,6 +35,9 @@ DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_SNMP_COMMUNITY, default=DEFAULT_SNMP_COMMUNITY): str,
+        vol.Optional(
+            CONF_SNMP_WRITE_COMMUNITY, default=DEFAULT_SNMP_WRITE_COMMUNITY
+        ): str,
         vol.Optional(CONF_SNMP_PORT, default=DEFAULT_SNMP_PORT): int,
         vol.Optional(CONF_DEVICE_NAME, default=DEFAULT_NAME): str,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,

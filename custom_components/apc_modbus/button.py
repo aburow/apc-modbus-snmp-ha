@@ -37,6 +37,8 @@ from .diagnostic_collector import collect_diagnostic_dump
 from .device_profiles import get_device_profile
 from .entity_defaults import async_reset_entry_monitors_to_defaults
 from .modbus_commands import OUTLET_TARGET_BITS, get_command
+from .snmp_commands import LEGACY_SNMP_COMMANDS
+from .snmp_helper import async_set_snmp_integer
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -63,10 +65,14 @@ async def async_setup_entry(
             APCModbusCommandButton(coordinator, entry, command_key, target)
             for target in targets
         )
+    entities.extend(
+        APCSnmpCommandButton(coordinator, entry, command_key)
+        for command_key in sorted(profile.snmp_command_operations)
+    )
     command_unique_ids = {
         entity.unique_id
         for entity in entities
-        if isinstance(entity, APCModbusCommandButton)
+        if isinstance(entity, (APCModbusCommandButton, APCSnmpCommandButton))
     }
     entity_registry = er.async_get(hass)
     for entity_entry in er.async_entries_for_config_entry(
@@ -129,6 +135,34 @@ class APCModbusCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEnti
             # This APC NMC accepts function 16 for command registers and
             # rejects function 6 even for one-register command values.
             force_multiple=True,
+        )
+
+
+class APCSnmpCommandButton(CoordinatorEntity[APCModbusCoordinator], ButtonEntity):
+    """One documented PowerNet SNMP command."""
+
+    has_entity_name = True
+
+    def __init__(
+        self, coordinator: APCModbusCoordinator, entry: ConfigEntry, key: str
+    ) -> None:
+        super().__init__(coordinator)
+        self._command = LEGACY_SNMP_COMMANDS[key]
+        self._attr_name = self._command.name
+        self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{self._command.key}"
+        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)})
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    async def async_press(self) -> None:
+        await async_set_snmp_integer(
+            self.coordinator.host,
+            self._command.oid,
+            self._command.value,
+            self.coordinator.snmp_write_community,
+            self.coordinator.snmp_port,
         )
 
 

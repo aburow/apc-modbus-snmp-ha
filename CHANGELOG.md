@@ -4,6 +4,14 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.0-dev.8] - 2026-08-25
+
+### Added
+- Added a separate optional SNMP write-community field for legacy PowerNet
+  command testing. Existing SNMP reads continue to use the read community.
+- Added legacy Smart-UPS PowerNet SNMP command buttons for documented SET
+  operations using that write community.
+
 ## [2.1.0-dev.7] - 2026-08-25
 
 ### Changed

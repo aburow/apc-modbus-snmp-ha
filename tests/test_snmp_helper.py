@@ -44,6 +44,9 @@ if "pysnmp.hlapi.v3arch.asyncio" not in sys.modules:
     async def _dummy_get_cmd(*args, **kwargs):
         return (None, None, None, [])
 
+    async def _dummy_set_cmd(*args, **kwargs):
+        return (None, None, None, [])
+
     asyncio_mod.CommunityData = _Dummy
     asyncio_mod.ContextData = _Dummy
     asyncio_mod.ObjectIdentity = _Dummy
@@ -51,11 +54,16 @@ if "pysnmp.hlapi.v3arch.asyncio" not in sys.modules:
     asyncio_mod.SnmpEngine = _Dummy
     asyncio_mod.UdpTransportTarget = _Dummy
     asyncio_mod.get_cmd = _dummy_get_cmd
+    asyncio_mod.set_cmd = _dummy_set_cmd
 
     sys.modules["pysnmp"] = pysnmp
     sys.modules["pysnmp.hlapi"] = hlapi
     sys.modules["pysnmp.hlapi.v3arch"] = v3arch
     sys.modules["pysnmp.hlapi.v3arch.asyncio"] = asyncio_mod
+    rfc1902 = types.ModuleType("pysnmp.proto.rfc1902")
+    rfc1902.Integer = _Dummy
+    sys.modules["pysnmp.proto"] = types.ModuleType("pysnmp.proto")
+    sys.modules["pysnmp.proto.rfc1902"] = rfc1902
 
 _load_module(
     "custom_components.apc_modbus.device_types", PACKAGE_ROOT / "device_types.py"

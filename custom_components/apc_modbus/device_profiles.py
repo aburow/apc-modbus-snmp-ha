@@ -25,6 +25,7 @@ class DeviceProfile:
     dynamic_capabilities: bool = False
     probes: tuple[SchemaProbe, ...] = SCHEMA_PROBES
     command_operations: frozenset[str] = frozenset()
+    snmp_command_operations: frozenset[str] = frozenset()
 
 
 SMART_UPS_PROFILE = DeviceProfile(
@@ -33,6 +34,18 @@ SMART_UPS_PROFILE = DeviceProfile(
     "SENSOR_DESCRIPTIONS",
     "BINARY_SENSOR_DESCRIPTIONS",
     ("ups",),
+    snmp_command_operations=frozenset(
+        {
+            "conserve_battery",
+            "ups_off",
+            "ups_reboot",
+            "ups_sleep",
+            "simulate_power_failure",
+            "alarm_test",
+            "ups_turn_on",
+            "battery_self_test",
+        }
+    ),
 )
 SMT_UPS_PROFILE = DeviceProfile(
     APCDeviceType.SMT_UPS,

@@ -6,7 +6,7 @@
 
 A Home Assistant integration for monitoring APC power devices via Modbus/TCP with optional SNMP enrichment.
 
-> **Developer pre-release:** `2.1.0-dev.7` enables the experimental Modbus
+> **Developer pre-release:** `2.1.0-dev.8` enables the experimental Modbus
 > command-validation buttons for testers on SMT/SMX/SRT and SmartConnect
 > profiles. Record the exact model and firmware when testing; test only
 > noncritical loads.
@@ -152,7 +152,9 @@ After installation, set up the integration through the UI:
 3. Search for and select **APC UPS Modbus**
 4. Fill in the required configuration:
    - **Host**: Modbus/TCP host name or address of the device
-   - **SNMP Community**: SNMP community string (default: "public"; optional enrichment)
+   - **SNMP Community**: Read-only SNMP community string (default: "public"; optional enrichment)
+   - **SNMP Write Community**: Separate write-enabled SNMP community for legacy
+     command testing; leave blank unless testing PowerNet SNMP `SET` commands.
 5. Optional advanced settings:
    - **Device Name**: Friendly name for the device (default: "APC UPS")
    - **Port**: Modbus/TCP port (default: 502)
@@ -226,17 +228,13 @@ numbers, host addresses, and all credential values.
 ### Legacy Smart-UPS operational commands (planned)
 
 Legacy Smart-UPS models have no documented Modbus write registers in their
-legacy map. A future V2 validation path may instead use documented APC
-PowerNet SNMP `SET` operations through an NMC or PowerNet Agent with a
-write-enabled account. Candidate actions are conserve-battery, off, reboot,
-sleep, simulated power failure, alarm test, turn-on, and battery self-test.
-They remain disabled by default and require exact model/NMC firmware evidence,
-one-shot/no-replay handling, and physical validation. Runtime calibration is
+legacy map. The V2 test path sends documented APC PowerNet SNMP `SET`
+operations through an NMC or PowerNet Agent using **SNMP Write Community**.
+Available actions are conserve-battery, off, reboot, sleep, simulated power
+failure, alarm test, turn-on, and battery self-test. Runtime calibration is
 an NMC CLI operation (`ups -r start`), not a PowerNet SNMP `SET`; software
 bypass is limited to models that explicitly document it (for example,
 Matrix-UPS/Symmetra), not conventional legacy Smart-UPS.
-
-This release does not implement SNMP command sending.
 
 **Fallback Behavior:**
 - If SNMP is unavailable at startup, the integration will still function and stops routine SNMP retry traffic
@@ -442,7 +440,7 @@ Type** to retry SNMP enrichment without deleting the integration entry.
 
 ## Version
 
-Current version: `2.1.0-dev.7`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.0-dev.8`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 
