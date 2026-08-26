@@ -111,6 +111,8 @@ def is_sensor_enabled_by_default(local_key: str, device_family: str) -> bool:
     """Return whether a sensor should be entity-registry enabled by default."""
     if local_key == "output_energy_rollover":
         return True
+    if local_key in {"snmp_self_test_time", "snmp_self_test_day"}:
+        return False
     if (
         local_key.lower().startswith("snmp_self_test_")
         or local_key == "snmp_last_self_test_date"

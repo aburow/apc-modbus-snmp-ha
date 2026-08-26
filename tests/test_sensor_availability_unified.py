@@ -46,13 +46,17 @@ def test_self_test_sensors_are_enabled_only_for_ups_families() -> None:
         "snmp_self_test_schedule",
         "snmp_self_test_result",
         "snmp_last_self_test_date",
-        "snmp_self_test_time",
-        "snmp_self_test_day",
         "snmp_runtime_calibration_status",
     )
     for key in keys:
         assert AVAILABILITY.is_sensor_enabled_by_default(key, "smart_ups")
         assert not AVAILABILITY.is_sensor_enabled_by_default(key, "rack_pdu")
+
+
+def test_self_test_day_and_time_are_hidden_by_default() -> None:
+    for key in ("snmp_self_test_day", "snmp_self_test_time"):
+        assert not AVAILABILITY.is_sensor_enabled_by_default(key, "smart_ups")
+        assert not AVAILABILITY.is_sensor_enabled_by_default(key, "smt_ups")
 
 
 def test_non_primary_phase_ups_sensor_keys_disabled_by_default() -> None:
