@@ -114,6 +114,14 @@ REGISTERS: list[dict] = [
         "type": "uint16",
         "scale": 1,
     },
+    # SimpleSignalingStatus_BF (0x0012): simple signal output states.
+    {
+        "key": "simple_signaling_status_bf",
+        "address": 0x0012,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
     # GeneralError_BF (0x0013): miscellaneous system faults
     {
         "key": "general_error_bf",
@@ -346,7 +354,7 @@ REGISTER_BLOCKS: list[dict] = [
         "name": "status",
         "start_address": 0x0000,
         "count": 23,
-        "registers": [0x0000, 0x0002, 0x0013, 0x0014, 0x0016],
+        "registers": [0x0000, 0x0002, 0x0012, 0x0013, 0x0014, 0x0016],
     },
     {
         # Covers RunTimeRemaining (0x0080) through Input.Efficiency_EN (0x009A).
@@ -681,6 +689,14 @@ BINARY_SENSOR_DESCRIPTIONS: list[APCModbusBinarySensorDescription] = [
         device_class=BinarySensorDeviceClass.PROBLEM,
         register_key="ups_status_bf",
         bit_index=21,  # OverloadState: operating in overload state
+    ),
+    # --- SimpleSignalingStatus_BF bits (register 0x0012, UINT16) ---
+    APCModbusBinarySensorDescription(
+        key="ups_shutdown_imminent",
+        name="Shutdown Imminent",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="simple_signaling_status_bf",
+        bit_index=1,  # ShutdownImminent: UPS committed to disconnect output power
     ),
     # --- BatterySystemError_BF bits (register 0x0016, UINT16) ---
     APCModbusBinarySensorDescription(

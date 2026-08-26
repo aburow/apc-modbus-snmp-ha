@@ -262,6 +262,21 @@ def test_smt_status_change_cause_uses_documented_enum() -> None:
     )
     assert '"key": "ups_status_change_cause"' in source_text
     assert '"address": 0x0002' in source_text
-    assert '"registers": [0x0000, 0x0002, 0x0013, 0x0014, 0x0016]' in source_text
+    assert (
+        '"registers": [0x0000, 0x0002, 0x0012, 0x0013, 0x0014, 0x0016]' in source_text
+    )
     assert 'key="ups_status_change_cause"' in source_text
     assert "value_map=UPS_STATUS_CHANGE_CAUSES" in source_text
+
+
+def test_smt_shutdown_imminent_uses_simple_signaling_status_bit_one() -> None:
+    source = MODULE_PATH.with_name("registers_smt_ups.py").read_text()
+
+    assert '"key": "simple_signaling_status_bf"' in source
+    assert '"address": 0x0012' in source
+    assert '"registers": [0x0000, 0x0002, 0x0012, 0x0013, 0x0014, 0x0016]' in source
+    shutdown_imminent = source.split('key="ups_shutdown_imminent"', 1)[1][:350]
+    assert 'name="Shutdown Imminent"' in shutdown_imminent
+    assert "device_class=BinarySensorDeviceClass.PROBLEM" in shutdown_imminent
+    assert 'register_key="simple_signaling_status_bf"' in shutdown_imminent
+    assert "bit_index=1" in shutdown_imminent
