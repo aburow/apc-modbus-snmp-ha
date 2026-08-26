@@ -644,7 +644,7 @@ BINARY_SENSOR_DESCRIPTIONS: list[APCModbusBinarySensorDescription] = [
     APCModbusBinarySensorDescription(
         key="ups_on_battery",
         name="UPS On Battery",
-        device_class=BinarySensorDeviceClass.BATTERY,
+        device_class=BinarySensorDeviceClass.POWER,
         register_key="ups_status_bf",
         bit_index=2,  # StateOnBattery: output sourced from battery
     ),

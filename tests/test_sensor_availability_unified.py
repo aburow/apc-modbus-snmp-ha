@@ -280,3 +280,10 @@ def test_smt_shutdown_imminent_uses_simple_signaling_status_bit_one() -> None:
     assert "device_class=BinarySensorDeviceClass.PROBLEM" in shutdown_imminent
     assert 'register_key="simple_signaling_status_bf"' in shutdown_imminent
     assert "bit_index=1" in shutdown_imminent
+
+
+def test_ups_on_battery_uses_power_device_class_for_all_ups_maps() -> None:
+    for filename in ("const.py", "registers_smart_ups.py", "registers_smt_ups.py"):
+        source = MODULE_PATH.with_name(filename).read_text()
+        on_battery = source.split('key="ups_on_battery"', 1)[1][:250]
+        assert "device_class=BinarySensorDeviceClass.POWER" in on_battery
