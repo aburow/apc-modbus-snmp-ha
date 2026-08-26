@@ -32,6 +32,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - Input/output frequency
 - Real-time power measurements
 - Status bits and fault indicators
+- UPS efficiency, last status-change cause, and shutdown-imminent indicators on SMT/SMX/SRT and SmartConnect devices
 - And more...
 
 ### Energy Counters
@@ -446,7 +447,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 ## Version
 
-Current version: `2.1.0`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.1-dev.0` (pre-release). See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 
