@@ -182,6 +182,10 @@ class APCModbusSensor(CoordinatorEntity, SensorEntity):
         if value is None:
             return None
 
+        value_transform = getattr(self.entity_description, "value_transform", None)
+        if value_transform:
+            return value_transform(value)
+
         if self.entity_description.value_map:
             try:
                 code = int(value)

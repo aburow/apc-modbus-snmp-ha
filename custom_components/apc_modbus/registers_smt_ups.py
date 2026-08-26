@@ -31,6 +31,66 @@ from homeassistant.const import (
 
 from .const import APCModbusBinarySensorDescription, APCModbusSensorDescription
 
+EFFICIENCY_STATUS = {
+    -1: "Not Available",
+    -2: "Load Too Low",
+    -3: "Output Off",
+    -4: "On Battery",
+    -5: "In Bypass",
+    -6: "Battery Charging",
+    -7: "Poor AC Input",
+    -8: "Battery Disconnected",
+}
+
+UPS_STATUS_CHANGE_CAUSES = {
+    0: "System Initialization",
+    1: "High Input Voltage",
+    2: "Low Input Voltage",
+    3: "Distorted Input",
+    4: "Rapid Change of Input Voltage",
+    5: "High Input Frequency",
+    6: "Low Input Frequency",
+    7: "Frequency and/or Phase Difference",
+    8: "Acceptable Input",
+    9: "Automatic Test",
+    10: "Test Ended",
+    11: "Local UI Command",
+    12: "Protocol Command",
+    13: "Low Battery Voltage",
+    14: "General Error",
+    15: "Power System Error",
+    16: "Battery System Error",
+    17: "Error Cleared",
+    18: "Automatic Restart",
+    19: "Distorted Inverter Output",
+    20: "Inverter Output Acceptable",
+    21: "EPO Interface",
+    22: "Input Phase Delta Out of Range",
+    23: "Input Neutral Not Connected",
+    24: "ATS Transfer",
+    25: "Configuration Change",
+    26: "Alert Asserted",
+    27: "Alert Cleared",
+    28: "Plug Rating Exceeded",
+    29: "Outlet Group State Change",
+    30: "Failure Bypass Expired",
+}
+
+
+def _efficiency_percentage(value: int | float) -> float | None:
+    """Return the documented percentage only when Efficiency_EN is valid."""
+    return value / 128 if value >= 0 else None
+
+
+def _efficiency_status(value: int | float) -> str:
+    """Return the documented Efficiency_EN state."""
+    return (
+        "Available"
+        if value >= 0
+        else EFFICIENCY_STATUS.get(int(value), f"Unknown ({int(value)})")
+    )
+
+
 # ---------------------------------------------------------------------------
 # Individual register descriptors
 # (also used to build REGISTER_MAP and as fallback for individual reads)
@@ -44,6 +104,14 @@ REGISTERS: list[dict] = [
         "address": 0x0000,
         "count": 2,
         "type": "uint32",
+        "scale": 1,
+    },
+    # UPSStatusChangeCause_EN (0x0002): reason for the current UPS status.
+    {
+        "key": "ups_status_change_cause",
+        "address": 0x0002,
+        "count": 1,
+        "type": "uint16",
         "scale": 1,
     },
     # GeneralError_BF (0x0013): miscellaneous system faults
@@ -255,6 +323,14 @@ REGISTERS: list[dict] = [
         "type": "uint16",
         "scale": 64,
     },
+    # Input.Efficiency_EN (0x009A): raw/128 = %; negative values are status codes.
+    {
+        "key": "input_efficiency",
+        "address": 0x009A,
+        "count": 1,
+        "type": "int16",
+        "scale": 1,
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -270,14 +346,14 @@ REGISTER_BLOCKS: list[dict] = [
         "name": "status",
         "start_address": 0x0000,
         "count": 23,
-        "registers": [0x0000, 0x0013, 0x0014, 0x0016],
+        "registers": [0x0000, 0x0002, 0x0013, 0x0014, 0x0016],
     },
     {
-        # Covers RunTimeRemaining (0x0080) through Input[2].VoltageAC (0x0099).
-        # count=26: addresses 0x0080-0x0099 inclusive (0x0099 is at offset 25).
+        # Covers RunTimeRemaining (0x0080) through Input.Efficiency_EN (0x009A).
+        # count=27: addresses 0x0080-0x009A inclusive (0x009A is at offset 26).
         "name": "measurements",
         "start_address": 0x0080,
-        "count": 26,
+        "count": 27,
         "registers": [
             0x0080,
             0x0082,
@@ -302,6 +378,7 @@ REGISTER_BLOCKS: list[dict] = [
             0x0097,
             0x0098,
             0x0099,
+            0x009A,
         ],
     },
 ]
@@ -334,6 +411,14 @@ SMARTCONNECT_UNSUPPORTED_SENSOR_KEYS = SMARTCONNECT_UNSUPPORTED_REGISTER_KEYS | 
 # ---------------------------------------------------------------------------
 
 SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
+    APCModbusSensorDescription(
+        key="ups_status_change_cause",
+        name="Last UPS Status Change Cause",
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        register_key="ups_status_change_cause",
+        value_map=UPS_STATUS_CHANGE_CAUSES,
+    ),
     APCModbusSensorDescription(
         key="runtime_remaining",
         name="Runtime Remaining",
@@ -489,6 +574,22 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         register_key="input_voltage_l3",
+    ),
+    APCModbusSensorDescription(
+        key="ups_efficiency",
+        name="UPS Efficiency",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        register_key="input_efficiency",
+        value_transform=_efficiency_percentage,
+    ),
+    APCModbusSensorDescription(
+        key="ups_efficiency_status",
+        name="UPS Efficiency Status",
+        device_class=SensorDeviceClass.ENUM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        register_key="input_efficiency",
+        value_transform=_efficiency_status,
     ),
     APCModbusSensorDescription(
         key="bypass_voltage",

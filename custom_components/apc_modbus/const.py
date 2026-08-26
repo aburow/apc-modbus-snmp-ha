@@ -4,8 +4,10 @@
 
 """Constants for the APC UPS Modbus integration."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -50,6 +52,7 @@ class APCModbusSensorDescription(SensorEntityDescription):
 
     register_key: str = ""
     value_map: dict[int, str] | None = None
+    value_transform: Callable[[Any], Any] | None = None
 
 
 @dataclass

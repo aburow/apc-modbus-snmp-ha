@@ -171,3 +171,97 @@ def test_smt_runtime_remaining_suggests_minutes_without_scaling_raw_seconds() ->
     assert '"scale": 1' in register
     assert "native_unit_of_measurement=UnitOfTime.SECONDS" in sensor
     assert "suggested_unit_of_measurement=UnitOfTime.MINUTES" in sensor
+
+
+def test_smt_efficiency_exposes_percentage_and_status_from_one_register() -> None:
+    source = MODULE_PATH.with_name("registers_smt_ups.py").read_text()
+
+    assert '"key": "input_efficiency"' in source
+    assert '"address": 0x009A' in source
+    assert '"type": "int16"' in source
+    assert 'key="ups_efficiency"' in source
+    assert 'key="ups_efficiency_status"' in source
+    assert "value_transform=_efficiency_percentage" in source
+    assert "value_transform=_efficiency_status" in source
+
+
+def test_smt_efficiency_transformations() -> None:
+    source = MODULE_PATH.with_name("registers_smt_ups.py")
+    tree = ast.parse(source.read_text())
+    nodes = [
+        node
+        for node in tree.body
+        if isinstance(node, (ast.Assign, ast.FunctionDef))
+        and getattr(node, "name", None)
+        in {"_efficiency_percentage", "_efficiency_status"}
+        or isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "EFFICIENCY_STATUS"
+            for target in node.targets
+        )
+    ]
+    namespace: dict[str, object] = {}
+    exec(compile(ast.Module(nodes, []), str(source), "exec"), namespace)
+
+    assert namespace["_efficiency_percentage"](12160) == 95
+    assert namespace["_efficiency_percentage"](-4) is None
+    assert namespace["_efficiency_status"](0) == "Available"
+    assert namespace["_efficiency_status"](-6) == "Battery Charging"
+
+
+def test_smt_status_change_cause_uses_documented_enum() -> None:
+    source = MODULE_PATH.with_name("registers_smt_ups.py")
+    source_text = source.read_text()
+    tree = ast.parse(source_text)
+    cause_map = next(
+        ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "UPS_STATUS_CHANGE_CAUSES"
+            for target in node.targets
+        )
+    )
+
+    assert cause_map == dict(
+        enumerate(
+            (
+                "System Initialization",
+                "High Input Voltage",
+                "Low Input Voltage",
+                "Distorted Input",
+                "Rapid Change of Input Voltage",
+                "High Input Frequency",
+                "Low Input Frequency",
+                "Frequency and/or Phase Difference",
+                "Acceptable Input",
+                "Automatic Test",
+                "Test Ended",
+                "Local UI Command",
+                "Protocol Command",
+                "Low Battery Voltage",
+                "General Error",
+                "Power System Error",
+                "Battery System Error",
+                "Error Cleared",
+                "Automatic Restart",
+                "Distorted Inverter Output",
+                "Inverter Output Acceptable",
+                "EPO Interface",
+                "Input Phase Delta Out of Range",
+                "Input Neutral Not Connected",
+                "ATS Transfer",
+                "Configuration Change",
+                "Alert Asserted",
+                "Alert Cleared",
+                "Plug Rating Exceeded",
+                "Outlet Group State Change",
+                "Failure Bypass Expired",
+            )
+        )
+    )
+    assert '"key": "ups_status_change_cause"' in source_text
+    assert '"address": 0x0002' in source_text
+    assert '"registers": [0x0000, 0x0002, 0x0013, 0x0014, 0x0016]' in source_text
+    assert 'key="ups_status_change_cause"' in source_text
+    assert "value_map=UPS_STATUS_CHANGE_CAUSES" in source_text
