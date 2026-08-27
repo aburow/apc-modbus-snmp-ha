@@ -1,6 +1,7 @@
 # APC UPS Modbus Integration for Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)
+[![Active installations](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.apc_modbus.total&label=active%20installations&suffix=%20reported&color=blue)](https://analytics.home-assistant.io/custom_integrations.json)
 ![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hacs.yaml/badge.svg)
 ![Hassfest](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hassfest.yaml/badge.svg)
 
