@@ -1,13 +1,14 @@
 # APC UPS Modbus Integration for Home Assistant
 
 ![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)
+[![Active installations](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.apc_modbus.total&label=active%20installations&suffix=%20reported&color=blue)](https://analytics.home-assistant.io/custom_integrations.json)
 ![HACS Validation](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hacs.yaml/badge.svg)
 ![Hassfest](https://github.com/aburow/apc-modbus-snmp-ha/actions/workflows/hassfest.yaml/badge.svg)
 
 A Home Assistant custom integration for APC UPS and Rack PDU monitoring over
 Modbus/TCP, with optional SNMP v2c enrichment.
 
-> **Write testing release:** `2.1.0` exposes experimental write controls through
+> **Write testing release:** `2.1.1` exposes experimental write controls through
 > both MODBUS and SNMP depending on the device profile. All write commands are
 > disabled by default. A user can enable these options in their own right and at
 > their own risk. If you test this capability, please report the exact model and
@@ -32,6 +33,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - Input/output frequency
 - Real-time power measurements
 - Status bits and fault indicators
+- UPS efficiency, last status-change cause, and shutdown-imminent indicators on SMT/SMX/SRT and SmartConnect devices
 - And more...
 
 ### Energy Counters
@@ -83,7 +85,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button
-  restores the device-family basic monitor set and disables all write controls.
+  restores the device-family basic monitor set, including disabling optional
+  self-test schedule day/time sensors, and disables all write controls.
 - **Connection Compatibility**: Devices that allow one request per TCP connection automatically use a safe per-request connection mode; it temporarily overrides `Keep Connection Open` without changing the user's preference
 - **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, Rack PDU capability discovery, and first refresh do not all hit at once
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
@@ -446,7 +449,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 ## Version
 
-Current version: `2.1.0`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.1`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

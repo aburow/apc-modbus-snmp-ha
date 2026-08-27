@@ -93,3 +93,10 @@ def test_reset_defaults_disables_current_and_retained_write_entities() -> None:
     assert 'entity_entry.domain in {"button", "switch"}' in source
     assert 'local_key.startswith("write_")' in source
     assert "should_enable = False" in source
+
+
+def test_reset_defaults_reapplies_sensor_visibility_defaults() -> None:
+    source = (MODULE.parent / "entity_defaults.py").read_text()
+
+    assert 'entity_entry.domain == "sensor"' in source
+    assert "is_sensor_enabled_by_default(local_key, device_family)" in source

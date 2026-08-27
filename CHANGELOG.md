@@ -4,6 +4,24 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-08-27
+
+### Added
+- Added documented SMT/SMX/SRT and SmartConnect **UPS Efficiency** and
+  **UPS Efficiency Status** sensors from `Input.Efficiency_EN`, including the
+  documented unavailable-state reasons.
+- Added **Last UPS Status Change Cause**, using APC's documented 31-value
+  `UPSStatusChangeCause_EN` enum.
+- Added **Shutdown Imminent** from `SimpleSignalingStatus_BF` bit 1.
+
+### Changed
+- Changed SMT/SMX/SRT and SmartConnect **UPS On Battery** to Home Assistant's
+  power binary-sensor class, matching the legacy Smart-UPS representation.
+
+### Fixed
+- **Reset Monitor Defaults** reapplies the disabled-by-default state for the
+  optional automatic self-test schedule day and time sensors.
+
 ## [2.1.0] - 2026-08-25
 
 ### Added
