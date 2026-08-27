@@ -4,6 +4,12 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.1-dev.1] - 2026-08-27
+
+### Fixed
+- **Reset Monitor Defaults** now reapplies the disabled-by-default state for
+  the optional automatic self-test schedule day and time sensors.
+
 ## [2.1.1-dev.0] - 2026-08-27
 
 ### Added

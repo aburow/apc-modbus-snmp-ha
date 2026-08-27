@@ -84,7 +84,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button
-  restores the device-family basic monitor set and disables all write controls.
+  restores the device-family basic monitor set, including disabling optional
+  self-test schedule day/time sensors, and disables all write controls.
 - **Connection Compatibility**: Devices that allow one request per TCP connection automatically use a safe per-request connection mode; it temporarily overrides `Keep Connection Open` without changing the user's preference
 - **Startup Load Smoothing**: Large fleets are staggered deterministically during startup so initial SNMP metadata, Modbus detection, Rack PDU capability discovery, and first refresh do not all hit at once
 - **Fleet-Aware Poll Guard**: Large fleets automatically apply a safer effective scan interval at runtime to reduce recorder/database write pressure
@@ -447,7 +448,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 ## Version
 
-Current version: `2.1.1-dev.0` (pre-release). See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.1-dev.1` (pre-release). See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 
