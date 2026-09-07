@@ -4,6 +4,29 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.2-bugs] - 2026-09-07
+
+### Added
+- Added independent **Battery Lifetime** status sensors for normal, near-end,
+  exceeded, acknowledged, and measured near-end states on SMT/SMX/SRT and
+  SmartConnect UPS profiles.
+- Added the remaining documented **Battery System Error** sensors, including
+  critical overtemperature, charger, communication, battery-frame, and pack
+  faults.
+- Added the disabled-by-default **Acknowledge Battery Alarms** command button
+  for documented SMT and SmartConnect testing. It issues the fixed,
+  one-shot Modbus command at `0x0607` with value `0x0020`.
+
+### Fixed
+- Poll `Battery.LifeTimeStatus_BF` so an exceeded battery lifetime no longer
+  reports only the unrelated replace-battery test state.
+- Expose critical and warning battery overtemperature as separate states.
+
+### Testing
+- This is a HACS prerelease for supervised, noncritical-load testing. Command
+  buttons remain disabled by default; report the exact device model and
+  firmware with every result.
+
 ## [2.1.1] - 2026-08-27
 
 ### Added

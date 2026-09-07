@@ -146,6 +146,14 @@ REGISTERS: list[dict] = [
         "type": "uint16",
         "scale": 1,
     },
+    # Battery.LifeTimeStatus_BF (0x0019): predictive battery maintenance state
+    {
+        "key": "battery_lifetime_status_bf",
+        "address": 0x0019,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
     # --- Measurement registers ---
     # RunTimeRemaining (0x0080): seconds until output off on battery.
     {
@@ -349,12 +357,12 @@ REGISTERS: list[dict] = [
 
 REGISTER_BLOCKS: list[dict] = [
     {
-        # Covers UPSStatus_BF (0x0000) through BatterySystemError_BF (0x0016).
-        # count=23: addresses 0x0000-0x0016 inclusive (0x0016 is at offset 22).
+        # Covers UPSStatus_BF (0x0000) through Battery.LifeTimeStatus_BF (0x0019).
+        # count=26: addresses 0x0000-0x0019 inclusive (0x0019 is at offset 25).
         "name": "status",
         "start_address": 0x0000,
-        "count": 23,
-        "registers": [0x0000, 0x0002, 0x0012, 0x0013, 0x0014, 0x0016],
+        "count": 26,
+        "registers": [0x0000, 0x0002, 0x0012, 0x0013, 0x0014, 0x0016, 0x0019],
     },
     {
         # Covers RunTimeRemaining (0x0080) through Input.Efficiency_EN (0x009A).
@@ -630,6 +638,7 @@ SMARTCONNECT_SENSOR_DESCRIPTIONS = [
 # 2 Modbus registers. Bit indices 0-31 are valid.
 #
 # BatterySystemError_BF (register key "battery_system_error_bf") is a UINT16.
+# Battery.LifeTimeStatus_BF (register key "battery_lifetime_status_bf") is a UINT16.
 # ---------------------------------------------------------------------------
 
 BINARY_SENSOR_DESCRIPTIONS: list[APCModbusBinarySensorDescription] = [
@@ -698,6 +707,56 @@ BINARY_SENSOR_DESCRIPTIONS: list[APCModbusBinarySensorDescription] = [
         register_key="simple_signaling_status_bf",
         bit_index=1,  # ShutdownImminent: UPS committed to disconnect output power
     ),
+    # --- Battery.LifeTimeStatus_BF bits (register 0x0019, UINT16) ---
+    APCModbusBinarySensorDescription(
+        key="battery_lifetime_ok",
+        name="Battery Lifetime OK",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=0,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_lifetime_near_end",
+        name="Battery Lifetime Near End",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=1,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_lifetime_exceeded",
+        name="Battery Lifetime Exceeded",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=2,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_lifetime_near_end_acknowledged",
+        name="Battery Lifetime Near End Acknowledged",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=3,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_lifetime_exceeded_acknowledged",
+        name="Battery Lifetime Exceeded Acknowledged",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=4,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_measured_lifetime_near_end",
+        name="Battery Measured Lifetime Near End",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=5,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_measured_lifetime_near_end_acknowledged",
+        name="Battery Measured Lifetime Near End Acknowledged",
+        device_class=BinarySensorDeviceClass.BATTERY,
+        register_key="battery_lifetime_status_bf",
+        bit_index=6,
+    ),
     # --- BatterySystemError_BF bits (register 0x0016, UINT16) ---
     APCModbusBinarySensorDescription(
         key="battery_disconnected",
@@ -707,6 +766,13 @@ BINARY_SENSOR_DESCRIPTIONS: list[APCModbusBinarySensorDescription] = [
         bit_index=0,  # Disconnected: battery electrically disconnected
     ),
     APCModbusBinarySensorDescription(
+        key="battery_overvoltage",
+        name="Battery Overvoltage",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=1,
+    ),
+    APCModbusBinarySensorDescription(
         key="battery_needs_replacement",
         name="Battery Needs Replacement",
         device_class=BinarySensorDeviceClass.BATTERY,
@@ -714,10 +780,80 @@ BINARY_SENSOR_DESCRIPTIONS: list[APCModbusBinarySensorDescription] = [
         bit_index=2,  # NeedsReplacement: battery at end of service life
     ),
     APCModbusBinarySensorDescription(
+        key="battery_overtemperature_critical",
+        name="Battery Overtemperature Critical",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=3,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_charger_fault",
+        name="Battery Charger Fault",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=4,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_temperature_sensor_fault",
+        name="Battery Temperature Sensor Fault",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=5,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_bus_soft_start_fault",
+        name="Battery Bus Soft-Start Fault",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=6,
+    ),
+    APCModbusBinarySensorDescription(
         key="battery_overtemperature",
-        name="Battery Overtemperature",
+        name="Battery Overtemperature Warning",
         device_class=BinarySensorDeviceClass.PROBLEM,
         register_key="battery_system_error_bf",
         bit_index=7,  # OvertemperatureWarning: battery temp exceeded warning level
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_general_error",
+        name="Battery General Error",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=8,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_communication_error",
+        name="Battery Communication Error",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=9,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_disconnected_frame",
+        name="Battery Frame Disconnected",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=10,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_firmware_mismatch",
+        name="Battery Firmware Mismatch",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=11,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_voltage_sense_error",
+        name="Battery Voltage Sense Error",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=12,
+    ),
+    APCModbusBinarySensorDescription(
+        key="battery_incompatible_pack",
+        name="Battery Incompatible Pack",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        register_key="battery_system_error_bf",
+        bit_index=13,
     ),
 ]

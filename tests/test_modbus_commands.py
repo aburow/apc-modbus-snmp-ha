@@ -26,10 +26,13 @@ def test_documented_static_commands_include_bypass() -> None:
         "calibration_abort",
         "alarm_mute",
         "alarm_cancel_mute",
+        "battery_alarm_acknowledge",
     }
     assert commands.COMMANDS["bypass_enter"].address == 0x0600
     assert commands.COMMANDS["bypass_enter"].words == (0, 0x0010)
     assert commands.COMMANDS["bypass_exit"].words == (0, 0x0020)
+    assert commands.COMMANDS["battery_alarm_acknowledge"].address == 0x0607
+    assert commands.COMMANDS["battery_alarm_acknowledge"].words == (0x0020,)
 
 
 def test_outlet_command_is_fixed_to_a_documented_target_and_source() -> None:

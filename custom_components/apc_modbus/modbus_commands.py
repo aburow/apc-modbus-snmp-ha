@@ -27,6 +27,12 @@ COMMANDS = {
         ModbusCommand("calibration_abort", "Abort runtime calibration", 0x0606, (2,)),
         ModbusCommand("alarm_mute", "Mute alarms", 0x0607, (4,)),
         ModbusCommand("alarm_cancel_mute", "Cancel alarm mute", 0x0607, (8,)),
+        ModbusCommand(
+            "battery_alarm_acknowledge",
+            "Acknowledge battery alarms",
+            0x0607,
+            (1 << 5,),
+        ),
     )
 }
 

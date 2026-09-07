@@ -65,3 +65,9 @@ def test_smartconnect_exposes_the_smt_command_set_for_testing() -> None:
     assert (
         "command_operations=SMT_UPS_PROFILE.command_operations" in smartconnect_profile
     )
+    assert (
+        '"battery_alarm_acknowledge"'
+        in profiles.split("SMT_UPS_PROFILE =", 1)[1].split(
+            "SMARTCONNECT_UPS_PROFILE =", 1
+        )[0]
+    )

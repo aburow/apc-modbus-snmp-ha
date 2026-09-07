@@ -63,6 +63,7 @@ SMT_UPS_PROFILE = DeviceProfile(
             "calibration_abort",
             "alarm_mute",
             "alarm_cancel_mute",
+            "battery_alarm_acknowledge",
             "outlet_cancel",
             "outlet_on",
             "outlet_off",
