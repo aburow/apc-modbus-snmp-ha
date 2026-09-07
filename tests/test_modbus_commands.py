@@ -93,7 +93,8 @@ def test_reset_defaults_disables_current_and_retained_write_entities() -> None:
 
     assert "set(COMMANDS)" in source
     assert "set(LEGACY_SNMP_COMMANDS)" in source
-    assert 'entity_entry.domain in {"button", "switch"}' in source
+    assert 'entity_entry.domain in {"button", "switch", "date"}' in source
+    assert '"battery_installation_date"' in source
     assert 'local_key.startswith("write_")' in source
     assert "should_enable = False" in source
 

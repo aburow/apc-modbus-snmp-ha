@@ -8,7 +8,7 @@
 A Home Assistant custom integration for APC UPS and Rack PDU monitoring over
 Modbus/TCP, with optional SNMP v2c enrichment.
 
-> **Write testing release:** `2.1.2-bugs` exposes experimental write controls through
+> **Write testing release:** `2.1.2-bugs.1` exposes experimental write controls through
 > both MODBUS and SNMP depending on the device profile. All write commands are
 > disabled by default. A user can enable these options in their own right and at
 > their own risk. If you test this capability, please report the exact model and
@@ -34,6 +34,8 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - Real-time power measurements
 - Status bits and fault indicators
 - UPS efficiency, last status-change cause, and shutdown-imminent indicators on SMT/SMX/SRT and SmartConnect devices
+- Battery Replacement Date on SMT/SMX/SRT and SmartConnect devices (a
+  theoretical estimate, accurate to about a month)
 - And more...
 
 ### Energy Counters
@@ -64,6 +66,10 @@ If you do not have a Modbus enabled APC device the project at https://github.com
   SmartConnect profiles; legacy Smart-UPS uses documented PowerNet SNMP `SET`
   commands with a separate write community. Commands are sent once with no
   automatic retry or replay. Rack PDUs remain monitoring-only.
+- **Battery installation date setting**: SMT/SMX/SRT and SmartConnect devices
+  have a disabled-by-default native date entity for the documented persistent
+  battery installation date. Record the existing value and restore it after
+  testing; this setting is not a replacement-date timer.
 - **Maintenance Bypass Validation**: Where the exact device documents bypass,
   enter/return commands are maintenance-only. Use an approved maintenance
   window, verify prerequisites and the return path, and restore normal output
@@ -449,7 +455,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 ## Version
 
-Current version: `2.1.2-bugs`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.2-bugs.1`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

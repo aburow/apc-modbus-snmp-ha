@@ -11,10 +11,13 @@ Addresses are Modbus wire addresses (Absolute Starting Register Address 0 = Modi
 Scale: raw register value divided by scale gives the engineering-unit value.
   e.g. StateOfCharge_Pct scale=512: raw 51200 / 512 = 100.0 %
 
-All registers listed here are ReadOnly and supported on SMT/SMX and SRT.
+The map is read during polling; `Battery.DateSetting` is the one documented
+read/write configuration register exposed by the native date platform.
 """
 
 from __future__ import annotations
+
+from datetime import date, timedelta
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
@@ -75,6 +78,16 @@ UPS_STATUS_CHANGE_CAUSES = {
     29: "Outlet Group State Change",
     30: "Failure Bypass Expired",
 }
+
+BATTERY_DATE_EPOCH = date(2000, 1, 1)
+
+
+def _battery_date(value: int | float) -> date | None:
+    """Decode APC's documented day count whose zero is 2000-01-01."""
+    try:
+        return BATTERY_DATE_EPOCH + timedelta(days=int(value))
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _efficiency_percentage(value: int | float) -> float | None:
@@ -187,10 +200,18 @@ REGISTERS: list[dict] = [
         "type": "int16",
         "scale": 32,
     },
-    # Battery.Date (0x0085): replacement date, days since 1999-01-01
+    # Battery.Date (0x0085): theoretical replacement date, days since 2000-01-01.
     {
         "key": "battery_replacement_date_days",
         "address": 0x0085,
+        "count": 1,
+        "type": "uint16",
+        "scale": 1,
+    },
+    # Battery.DateSetting (0x0253): installation date, days since 2000-01-01.
+    {
+        "key": "battery_installation_date_days",
+        "address": 0x0253,
         "count": 1,
         "type": "uint16",
         "scale": 1,
@@ -365,6 +386,12 @@ REGISTER_BLOCKS: list[dict] = [
         "registers": [0x0000, 0x0002, 0x0012, 0x0013, 0x0014, 0x0016, 0x0019],
     },
     {
+        "name": "battery_date_setting",
+        "start_address": 0x0253,
+        "count": 1,
+        "registers": [0x0253],
+    },
+    {
         # Covers RunTimeRemaining (0x0080) through Input.Efficiency_EN (0x009A).
         # count=27: addresses 0x0080-0x009A inclusive (0x009A is at offset 26).
         "name": "measurements",
@@ -451,6 +478,14 @@ SENSOR_DESCRIPTIONS: list[APCModbusSensorDescription] = [
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         register_key="battery_state_of_charge",
+    ),
+    APCModbusSensorDescription(
+        key="battery_replacement_date",
+        name="Battery Replacement Date",
+        device_class=SensorDeviceClass.DATE,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        register_key="battery_replacement_date_days",
+        value_transform=_battery_date,
     ),
     APCModbusSensorDescription(
         key="battery_voltage",

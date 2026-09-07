@@ -4,6 +4,20 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.2-bugs.1] - 2026-09-07
+
+### Added
+- Added the diagnostic **Battery Replacement Date** sensor for SMT/SMX/SRT and
+  SmartConnect UPS profiles from documented register `0x0085`.
+- Added the disabled-by-default **Battery Installation Date** native date
+  setting for documented register `0x0253`. It writes one bounded date value
+  through the existing serialized Modbus command transport.
+
+### Testing
+- This HACS prerelease requires a comparison between the reported replacement
+  date and the UPS LCD, plus a recorded set/readback and restoration of the
+  installation-date setting on each tested model and firmware.
+
 ## [2.1.2-bugs] - 2026-09-07
 
 ### Added

@@ -111,7 +111,13 @@ def _get_expected_entity_unique_ids(
         getattr(coordinator, "_snmp_probe_detection", None),
     )
 
-    all_keys = sensor_keys | binary_keys
+    date_keys = (
+        {"battery_installation_date"}
+        if coordinator.device_type
+        in (APCDeviceType.SMT_UPS, APCDeviceType.SMARTCONNECT_UPS)
+        else set()
+    )
+    all_keys = sensor_keys | binary_keys | date_keys
     expected = {f"{DOMAIN}_{entry_id}_{key}" for key in all_keys}
     return expected
 
@@ -129,7 +135,7 @@ async def _async_cleanup_stale_entities(
     removed_count = 0
 
     for entity_entry in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
-        if entity_entry.domain not in {"sensor", "binary_sensor"}:
+        if entity_entry.domain not in {"sensor", "binary_sensor", "date"}:
             continue
         if not entity_entry.unique_id or not entity_entry.unique_id.startswith(prefix):
             continue

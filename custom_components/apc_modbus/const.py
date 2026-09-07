@@ -43,7 +43,7 @@ CONF_OUTPUT_ENERGY_COMPLETED_ROLLOVERS = "output_energy_completed_rollovers"
 KEY_CLIENT = "modbus_client"
 KEY_COORDINATOR = "coordinator"
 
-SUPPORTED_PLATFORMS = ["sensor", "binary_sensor", "button", "switch"]
+SUPPORTED_PLATFORMS = ["sensor", "binary_sensor", "button", "switch", "date"]
 
 
 @dataclass

@@ -19,6 +19,7 @@ from .snmp_commands import LEGACY_SNMP_COMMANDS
 WRITE_ENTITY_KEYS = (
     set(COMMANDS)
     | set(LEGACY_SNMP_COMMANDS)
+    | {"battery_installation_date"}
     | {
         f"{action}_{target}"
         for action in OUTLET_ACTION_BITS
@@ -55,7 +56,7 @@ async def async_reset_entry_monitors_to_defaults(
             should_enable = is_binary_sensor_enabled_by_default(
                 local_key, device_family
             )
-        elif entity_entry.domain in {"button", "switch"} and (
+        elif entity_entry.domain in {"button", "switch", "date"} and (
             local_key in WRITE_ENTITY_KEYS or local_key.startswith("write_")
         ):
             should_enable = False
