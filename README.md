@@ -8,7 +8,7 @@
 A Home Assistant custom integration for APC UPS and Rack PDU monitoring over
 Modbus/TCP, with optional SNMP v2c enrichment.
 
-> **Write testing release:** `2.1.2-bugs.1` exposes experimental write controls through
+> **Write testing release:** `2.1.2-bugs.2` exposes experimental write controls through
 > both MODBUS and SNMP depending on the device profile. All write commands are
 > disabled by default. A user can enable these options in their own right and at
 > their own risk. If you test this capability, please report the exact model and
@@ -87,7 +87,7 @@ If you do not have a Modbus enabled APC device the project at https://github.com
 - **Manual Diagnostics Button**: Per-device `Run plugin diagnostics` captures
   redacted SNMP and Modbus data, the runtime detection probes, and a derived
   detection summary in a persistent notification
-- **Schema-Based Detection**: Modbus probes distinguish legacy Smart-UPS, SMT/SMX/SRT (including SmartConnect-compatible SMT schema), and Rack PDU register families without SNMP
+- **Schema-Based Detection**: Modbus probes distinguish legacy Smart-UPS, SMT/SMX/SRT (including SmartConnect-compatible SMT schema), and Rack PDU register families without SNMP. SmartConnect devices that drop the Rack-PDU capability probe still resolve from their complete live SMT and legacy-sentinel signature.
 - **No Re-detect On Connection Loss**: Temporary Modbus connectivity failures do not trigger automatic family rediscovery for already classified devices
 - **Manual Re-detect Button**: Per-device `Re-detect Device Type` button reruns Modbus family probing and reloads the integration entry only when the stored type or detection metadata actually changes
 - **Reset Monitor Defaults Button**: Per-device `Reset Monitor Defaults` button
@@ -272,7 +272,9 @@ do not expose a documented software-bypass command through this integration.
   Modbus schema.
 - **SMT/SMX/SRT**: devices that expose the supported SMT Modbus schema.
 - **SmartConnect**: devices with the SmartConnect sentinel pattern and the
-  supported SMT schema.
+  supported SMT schema. No SNMP setting is required; a Rack-PDU capability
+  probe that times out does not prevent this otherwise complete signature from
+  resolving.
 
 The integration does not maintain a model-number allowlist for monitoring.
 Successful schema detection is the compatibility requirement. Experimental
@@ -449,13 +451,16 @@ For device-family correction without deleting and re-adding an entry, use the bu
 ### Device Type Not Detected
 - **Issue**: Auto-detection picks the wrong device family or setup fails
 - **Solution**:
+  - Update to `2.1.2-bugs.2` in HACS, then reload the integration. Existing
+    entries automatically re-probe under the new detection version; **Re-detect
+    Device Type** is an equivalent immediate option.
   - Review Home Assistant debug logs for the Modbus probe results
   - Confirm the device responds on Modbus/TCP port 502
   - Use the external dump/debug tooling to capture SNMP and Modbus responses for analysis
 
 ## Version
 
-Current version: `2.1.2-bugs.1`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.2-bugs.2`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

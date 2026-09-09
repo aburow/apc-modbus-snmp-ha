@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping
 
-DETECTION_VERSION = 4
+DETECTION_VERSION = 5
 
 
 class APCDeviceType(Enum):
@@ -160,7 +160,7 @@ def classify_device_type(probes: Mapping[str, ProbeOutcome]) -> APCDeviceType | 
         and any(r != 0xFFFF for r in smt.registers)
         and smt_status.kind == ProbeKind.RESPONSE
         and any(r != 0 for r in smt_status.registers)
-        and capabilities.unsupported
+        and not _coherent_rack_pdu(capabilities, measurements)
         and legacy_sentinel
     ):
         return APCDeviceType.SMARTCONNECT_UPS

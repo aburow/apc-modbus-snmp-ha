@@ -4,6 +4,21 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.2-bugs.2] - 2026-09-09
+
+### Fixed
+- Resolve a Modbus-only SmartConnect UPS when it returns live SMT status and
+  measurements plus the documented all-`0xFFFF` legacy sentinel, but drops the
+  Rack-PDU capability probe instead of returning an illegal-address exception.
+  A coherent Rack PDU schema still takes precedence.
+- Bumped detection metadata so existing entries re-probe after updating; reload
+  the entry or use **Re-detect Device Type** to apply the correction.
+
+### Testing
+- HACS testers with a Modbus-only SmartConnect UPS should report the exact
+  model and firmware, whether setup/re-detection resolved successfully, and a
+  redacted diagnostics dump if it remains ambiguous.
+
 ## [2.1.2-bugs.1] - 2026-09-07
 
 ### Added
