@@ -8,7 +8,7 @@
 A Home Assistant custom integration for APC UPS and Rack PDU monitoring over
 Modbus/TCP, with optional SNMP v2c enrichment.
 
-> **Write testing release:** `2.1.2-bugs.2` exposes experimental write controls through
+> **Release 2.1.2:** This release exposes experimental write controls through
 > both MODBUS and SNMP depending on the device profile. All write commands are
 > disabled by default. A user can enable these options in their own right and at
 > their own risk. If you test this capability, please report the exact model and
@@ -460,7 +460,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 
 ## Version
 
-Current version: `2.1.2-bugs.2`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+Current version: `2.1.2`. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Support
 

@@ -4,7 +4,7 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
-## [2.1.2-bugs.2] - 2026-09-09
+## [2.1.2] - 2026-09-12
 
 ### Fixed
 - Resolve a Modbus-only SmartConnect UPS when it returns live SMT status and
