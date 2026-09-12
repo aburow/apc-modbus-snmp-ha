@@ -80,6 +80,18 @@ def test_live_schema_signatures_are_definitive() -> None:
         )
         == APCDeviceType.SMARTCONNECT_UPS
     )
+    assert (
+        module.classify_device_type(
+            probes(
+                pdu_caps=ProbeOutcome(ProbeKind.TRANSPORT_FAILURE),
+                pdu_measurements=response(*([0xFFFF] * 6)),
+                legacy=response(*([0xFFFF] * 1)),
+                smt=response(0, 5036, 51200, 844, *([0xFFFF] * 22)),
+                smt_status=response(0, 8194, 8, 0, 1, *([0] * 18)),
+            )
+        )
+        == APCDeviceType.SMARTCONNECT_UPS
+    )
 
 
 def test_ambiguous_and_incoherent_evidence_never_guesses() -> None:
@@ -116,6 +128,10 @@ def test_detection_version_and_selection_keep_ambiguous_stored_type() -> None:
     )
     assert not module.should_probe_device_type(
         APCDeviceType.SMART_UPS, stored_detection_version=DETECTION_VERSION
+    )
+    assert module.should_probe_device_type(
+        APCDeviceType.SMARTCONNECT_UPS,
+        stored_detection_version=DETECTION_VERSION - 1,
     )
     assert (
         module.choose_device_type(

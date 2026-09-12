@@ -4,6 +4,58 @@ All notable changes to the APC UPS Modbus integration will be documented in this
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-09-12
+
+### Fixed
+- Resolve a Modbus-only SmartConnect UPS when it returns live SMT status and
+  measurements plus the documented all-`0xFFFF` legacy sentinel, but drops the
+  Rack-PDU capability probe instead of returning an illegal-address exception.
+  A coherent Rack PDU schema still takes precedence.
+- Bumped detection metadata so existing entries re-probe after updating; reload
+  the entry or use **Re-detect Device Type** to apply the correction.
+
+### Testing
+- HACS testers with a Modbus-only SmartConnect UPS should report the exact
+  model and firmware, whether setup/re-detection resolved successfully, and a
+  redacted diagnostics dump if it remains ambiguous.
+
+## [2.1.2-bugs.1] - 2026-09-07
+
+### Added
+- Added the diagnostic **Battery Replacement Date** sensor for SMT/SMX/SRT and
+  SmartConnect UPS profiles from documented register `0x0085`.
+- Added the disabled-by-default **Battery Installation Date** native date
+  setting for documented register `0x0253`. It writes one bounded date value
+  through the existing serialized Modbus command transport.
+
+### Testing
+- This HACS prerelease requires a comparison between the reported replacement
+  date and the UPS LCD, plus a recorded set/readback and restoration of the
+  installation-date setting on each tested model and firmware.
+
+## [2.1.2-bugs] - 2026-09-07
+
+### Added
+- Added independent **Battery Lifetime** status sensors for normal, near-end,
+  exceeded, acknowledged, and measured near-end states on SMT/SMX/SRT and
+  SmartConnect UPS profiles.
+- Added the remaining documented **Battery System Error** sensors, including
+  critical overtemperature, charger, communication, battery-frame, and pack
+  faults.
+- Added the disabled-by-default **Acknowledge Battery Alarms** command button
+  for documented SMT and SmartConnect testing. It issues the fixed,
+  one-shot Modbus command at `0x0607` with value `0x0020`.
+
+### Fixed
+- Poll `Battery.LifeTimeStatus_BF` so an exceeded battery lifetime no longer
+  reports only the unrelated replace-battery test state.
+- Expose critical and warning battery overtemperature as separate states.
+
+### Testing
+- This is a HACS prerelease for supervised, noncritical-load testing. Command
+  buttons remain disabled by default; report the exact device model and
+  firmware with every result.
+
 ## [2.1.1] - 2026-08-27
 
 ### Added
