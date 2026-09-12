@@ -451,7 +451,7 @@ For device-family correction without deleting and re-adding an entry, use the bu
 ### Device Type Not Detected
 - **Issue**: Auto-detection picks the wrong device family or setup fails
 - **Solution**:
-  - Update to `2.1.2-bugs.2` in HACS, then reload the integration. Existing
+  - Update to `2.1.2` in HACS, then reload the integration. Existing
     entries automatically re-probe under the new detection version; **Re-detect
     Device Type** is an equivalent immediate option.
   - Review Home Assistant debug logs for the Modbus probe results
